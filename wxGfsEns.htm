@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="de">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <script src="http://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/highcharts-more.js"></script>
+    <script src="gfsEns.js"></script>
+    <style type="text/css">
+        html,
+        body {
+            margin: 0px;
+            padding: 0px;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #log {
+            color: gray;
+            font-family: monospace;
+        }
+        
+        #log p {
+            margin: 0px;
+        }
+    </style>
+    <title>Wxcharts Ensemble Data</title>
+</head>
+
+<body>
+    <div id="diagram"></div>
+    <div id="log"></div>
+</body>
+
+</html>
+
+<script type="text/javascript">
+    Highcharts.setOptions({
+        lang: {
+            months: ['Jänner', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'],
+            shortWeekdays: ['SO', 'MO', 'DI', 'MI', 'DO', 'FR', 'SA'],
+            weekdays: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
+        }
+    });
+
+    GfsEns.onLoaded = function (source, site, run, count, lastTime) {
+        $("#log").append($("<p>").text("Lauf " + run.getIsoDate() + " von " + site + " geladen: " + count + " Datensätze bis " + lastTime.getIsoDate()));
+    };
+
+    GfsEns.onError = function (source, message, url) {
+        if (url === undefined) { url = ""; }
+        $("#log").append($("<p>").addClass("error").text("Fehler beim Laden von " + url + " " + message));
+        window.setTimeout(function () { location.reload(); }, 2000);
+    };
+
+    GfsEns.onReady = function (source) {
+        console.log(source.parsedData);
+        Highcharts.chart('diagram', {
+            chart: { height: "50%" },
+            title: { text: 'GFS 4 runs overview 48° NB, 16.5° ÖL' },
+            subtitle: { text: 'Alle Zeitangaben in Lokalzeit' },
+            xAxis: {
+                type: 'datetime', tickInterval: 24 * 3600e3, minorTickInterval: 6 * 3600e3,
+                minorGridLineColor: "#cccccc", gridLineColor: "#999999", gridLineWidth: 2, minorGridLineWidth: 1,
+                dateTimeLabelFormats: {
+                    day: '%a, %e. %b', hour: '%H h'
+                }
+            },
+            yAxis: [
+                {
+                    labels: { format: '{value}°C' }, title: { text: null },
+                    tickPositions: [-20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30, 35, 40],
+                    minorTickInterval: 1, minorGridLineColor: "#cccccc", gridLineColor: "#999999"
+                },
+                {
+                    labels: { format: '{value}hPa' }, title: { text: null }, gridLineWidth: 0, opposite: true,
+                    tickPositions: [920, 985, 990, 995, 1000, 1005, 1010, 1015, 1020, 1025, 1030, 1035, 1040],
+                    plotLines: [{
+                        color: '#009612',
+                        dashStyle: 'ShortDash',
+                        width: 1.5,
+                        value: 1013,
+                        zIndex: 99
+                    }]
+                },
+                {
+                    labels: { format: '{value}mm' }, title: { text: null }, gridLineWidth: 0,
+                    tickPositions: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24]
+                },
+                {
+                    labels: { format: '{value}°' }, title: { text: null }, gridLineWidth: 0, opposite: true,
+                    tickPositions: [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330, 360]
+                },
+                {
+                    labels: { format: '{value}°C' }, title: { text: null }, gridLineWidth: 0,
+                    tickPositions: [-45, -40, -35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 15]
+                }
+            ],
+            tooltip: { crosshairs: true, shared: true },
+            legend: {},
+            series: [
+                {
+                    name: '2m Temperatur',
+                    type: 'line',
+                    marker: { enabled: false },
+                    data: source.getData("TMP_2").values,
+                    tooltip: { valueSuffix: '°C', valueDecimals: 0 },
+                    color: "#920000",
+                    zIndex: 10
+                },
+                {
+                    name: '2m Temperatur (letzte 4 Läufe)',
+                    data: source.getData("TMP_2").ranges,
+                    enableMouseTracking: false,
+                    type: 'arearange',
+                    lineWidth: 0,
+                    linkedTo: ':previous',
+                    color: "#920000",
+                    fillOpacity: 0.3,
+                    zIndex: 5
+                },
+                {
+                    name: '850hpa Temperatur CFSR Mean (1981-2010)',
+                    type: 'spline',
+                    dashStyle: 'ShortDash',
+                    width: 1.5,
+                    enableMouseTracking: false,                    
+                    marker: { enabled: false },
+                    tooltip: { valueSuffix: '°C', valueDecimals: 0 },
+                    data: source.getData("TMP_850_30YR").values,
+                    color: "#000000",
+                    zIndex: 20
+                },
+                {
+                    name: '850hpa Temperatur',
+                    type: 'line',
+                    marker: { enabled: false },
+                    tooltip: { valueSuffix: '°C', valueDecimals: 0 },
+                    data: source.getData("TMP_850").values,
+                    color: "#000000",
+                    zIndex: 20
+                },
+                {
+                    name: '850hpa Temperatur (letzte 4 Läufe)',
+                    enableMouseTracking: false,
+                    data: source.getData("TMP_850").ranges,
+                    type: 'arearange',
+                    tooltip: { enabled: false },
+                    lineWidth: 0,
+                    linkedTo: ':previous',
+                    color: "#000000",
+                    fillOpacity: 0.3,
+                    zIndex: 5
+                },
+                {
+                    name: '500hpa Temperatur',
+                    type: 'line',
+                    marker: { enabled: false },
+                    tooltip: { valueSuffix: '°C', valueDecimals: 0 },
+                    data: source.getData("TMP_500").values,
+                    color: "#5C2E00",
+                    zIndex: 30,
+                    yAxis: 4
+                },
+                {
+                    name: '500hpa Temperatur (letzte 4 Läufe)',
+                    enableMouseTracking: false,
+                    data: source.getData("TMP_500").ranges,
+                    type: 'arearange',
+                    tooltip: { enabled: false },
+                    lineWidth: 0,
+                    linkedTo: ':previous',
+                    color: "#5C2E00",
+                    fillOpacity: 0.3,
+                    zIndex: 5,
+                    yAxis: 4
+                },
+                {
+                    name: 'Luftdruck (MSL)',
+                    marker: { enabled: false },
+                    tooltip: { valueSuffix: 'hPa', valueDecimals: 0 },
+                    data: source.getData("PRMSL_0").values,
+                    color: "#009612",
+                    zIndex: 40,
+                    yAxis: 1,
+                },
+                {
+                    name: 'Luftdruck (MSL) (letzte 4 Läufe)',
+                    data: source.getData("PRMSL_0").ranges,
+                    enableMouseTracking: false,
+                    type: 'arearange',
+                    lineWidth: 0,
+                    linkedTo: ':previous',
+                    color: "#009612",
+                    fillOpacity: 0.3,
+                    zIndex: 5,
+                    yAxis: 1
+                },
+                {
+                    name: 'Niederschlag',
+                    data: source.getData("APCP_0").values,
+                    type: "column",
+                    color: "#001ed6",
+                    zIndex: 1,
+                    yAxis: 2,
+                    tooltip: { valueSuffix: 'mm', valueDecimals: 0 },
+                },/*
+                {
+                    name: 'Niederschlag (letzte 4 Läufe)',
+                    data: source.getData("APCP_0").ranges,
+                    enableMouseTracking: false,
+                    type: 'errorbar',
+                    linkedTo: ':previous',
+                    color: "#929cd6",
+                    zIndex: 0,
+                    yAxis: 2
+                },*/
+                {
+                    name: '10m Wind',
+                    type: "scatter",
+                    data: source.getWindData("VGRD_10"),
+                    marker: { radius: 4, symbol: "square" },
+                    zIndex: 40,
+                    yAxis: 3,
+                    findNearestPointBy: 'x',
+                    tooltip: {
+                        enabled: true,
+                        pointFormat: '<span style="color:{point.color}">\u25CF</span> {series.name}: <b>{point.speed} km/h</b> ({point.y}°, {point.sector})<br/>',
+                        valueDecimals: 0
+                    }
+                }
+            ]
+        });
+        /* forEach braucht bei diesem sparsed Array rd. 30 Sekunden! */
+        /*var data = source.parsedData["TMP_2"];
+        for(var time in data) {
+            timeData = data[time];
+            var row = "" + timeData.lastRun.getIsoDate() + "\t" + timeData.time.getIsoDate() + "\t" + timeData.val + "\t" + timeData.count;
+            $("#log").append($("<p>").text(row));
+        }*/
+    }
+    $("#log").append($("<p>").text("Lade Läufe..."));
+    GfsEns.loadData();
+
+</script>

@@ -1,0 +1,172 @@
+<!--
+  Zeigt die GFS500 Karten von Meteociel als Panel an.
+-->
+<!doctype html>
+<html lang="de">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style type="text/css">
+    html,
+    body,
+    #imgContainer {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0px;
+      padding: 0px;
+      width: 1920px;
+    }
+
+    #imgContainer img {
+      margin: 0px;
+      width: 480px;
+      height: 355px;
+      box-sizing: border-box;
+      border: 2px solid gray;
+      image-rendering: crisp-edges;
+      image-rendering: -webkit-optimize-contrast;
+      vertical-align: top;
+      background-color: lightgray;
+    }
+
+    #imgContainer .date {
+      padding: 10px 0px 5px 15px;
+      margin-bottom: -5px;
+      font-weight: bold;
+    }
+
+    #imgContainer .date:first-of-type {
+      padding-top: 0px;
+    }
+
+    .leftCol {
+      clear: both;
+    }
+  </style>
+  <script src="dateMethods.js" type="text/javascript"></script>
+  <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+  <script type="text/javascript">
+    "use strict";
+    var lastGfsRun = Date.fromRunParam(6, 5);
+    var lastEcmwfRun = Date.fromRunParam(12, 7);
+    //var lastEcmwfEnsRun = Date.fromRunParam(12, 9);
+    var ecmwfDelay = (lastGfsRun.getTime() - lastEcmwfRun.getTime()) / 3600e3;
+    /**
+     * Gibt die URL einer Wetterkarte zurück.
+     * 
+     * @param {string} type Die Daten der Wetterkarte (z. B. 0 für 500hpa Geopot Hoehe)
+     * @param {number} time Die Stunden seit dem Beginn des Laufes (12 für Run+12h)
+     * 
+     * @returns Die URL des Bildes.
+     */
+    function getWxchartslUrl(model, type, time, run) {
+      if (time < 0) { time = 0; }
+      var url = "http://wxcharts.eu/charts/{$model}/euratl/{$run}/{$type}_{$time}.jpg";
+      var runHour = run.getUTCHours();
+
+      return url.replace("{$run}", ("00" + runHour).slice(-2))
+        .replace("{$model}", model)
+        .replace("{$type}", type)
+        .replace("{$time}", ("000" + time).slice(-3));
+    };
+
+    function getWzUrl(model, type, time, run) {
+      if (time < 0) { time = 0; }
+      var url = "http://www.wetterzentrale.de/maps/{$model}{$run}_{$time}_{$type}.png";
+      var runHour = run.getUTCHours();
+
+      return url.replace("{$run}", ("00" + runHour).slice(-2))
+        .replace("{$model}", model)
+        .replace("{$type}", type)
+        .replace("{$time}", time)
+    };
+
+    function getMeteocielUrl(model, type, time, run) {
+      //http://modeles.meteociel.fr/modeles/gfs/runs/2018042200/gfseu-0-240.png?0
+      //http://www.meteociel.fr/modeles/ecmwf/runs/2018042200/ECE1-240.GIF?22-12
+      var url = "http://modeles.meteociel.fr/modeles/gfs/runs/{$run}/{$type}-{$time}.png?{$rand}";
+      if (model == "ecmwf") {
+        url = "http://www.meteociel.fr/modeles/ecmwf/runs/{$run}/{$type}-{$time}.GIF?{$rand}";
+      }
+
+      return url.replace("{$run}", run.getUTCymdh())
+        .replace("{$type}", type)
+        .replace("{$time}", time)
+        .replace("{$rand}", Date.now());
+    }
+
+    function getTidbitsUrl(model, type, time, run) {
+      // MLSP 24h GFS:     https://www.tropicaltidbits.com/analysis/models/gfs/2018031100/gfs_mslpaNorm_eu_5.png
+      // MLSP 24h ECMWF:   https://www.tropicaltidbits.com/analysis/models/ecmwf/2018031100/ecmwf_mslpaNorm_eu_2.png
+
+      // 500hPa 24h GFS:   https://www.tropicaltidbits.com/analysis/models/gfs/2018031100/gfs_z500aNorm_eu_5.png
+      // 500hPa 24h ECMWF: https://www.tropicaltidbits.com/analysis/models/ecmwf/2018031100/ecmwf_z500aNorm_eu_2.png
+      if (time < 0) { time = 0; }
+      if (model == "ecmwf") { time = time / 24 + 1; }
+      else if (model == "gfs") { time = time / 6 + 1; }
+
+      var url = "https://www.tropicaltidbits.com/analysis/models/{$model}/{$run}/{$model}_{$type}_eu_{$time}.png";
+
+      return url.replace("{$run}", run.getUTCymdh())
+        .replace("{$model}", model)
+        .replace("{$model}", model)
+        .replace("{$type}", type)
+        .replace("{$time}", time);
+    };
+
+    function getMeteogiornaleUrl(model, type, region, time, run) {
+      if (model === undefined) { model = "gfs"; }
+      if (type === undefined) { type = "z500"; }
+      if (region === undefined) { region = "centroeuropa"; }
+      return "http://maps.meteogiornale.it/" + model + "/" + region + "/" + type + "_" + time + ".png";
+    };
+
+
+    function createImages() {
+      var time = 0, gfsTime;
+      var divElem = null, imageElem = null;
+      $("#imgContainer").empty();
+
+      for (time = 24; time <= 240; time += 24) {
+        gfsTime = time - (lastGfsRun.getTime() - lastEcmwfRun.getTime()) / 3600e3;
+        $("<div>").addClass("date").html("ECMWF: " + new Date(lastEcmwfRun.getTime() + time * 3600e3).getGermanStr(true) + "&nbsp;&nbsp;&nbsp;"
+          + "GFS: " + new Date(lastGfsRun.getTime() + gfsTime * 3600e3).getGermanStr(true))
+          .appendTo($("#imgContainer"));
+
+        divElem = $("<div>").addClass("images");
+        // 500 hPa Karten von Tropical Tidbits
+        // ECMWF
+        imageElem = $("<img>").attr("src", getTidbitsUrl("ecmwf", "z500aNorm", time, lastEcmwfRun)).addClass("ecmwf");
+        imageElem.appendTo(divElem);
+        // GFS
+        imageElem = $("<img>").attr("src", getTidbitsUrl("gfs", "z500aNorm", gfsTime, lastGfsRun)).addClass("gfs");
+        imageElem.appendTo(divElem);
+
+        // 850 hPa Anomalie Karten von Meteogiornale
+        // ECMWF        
+        imageElem = $("<img>").attr("src", getMeteogiornaleUrl("ecmwf", "t850anom", "centroeuropa", time, lastEcmwfRun)).addClass("ecmwf").addClass("t850");        
+        imageElem.appendTo(divElem);
+        // GFS
+        imageElem = $("<img>").attr("src", getMeteogiornaleUrl("gfs", "t850anom", "centroeuropa", time, lastGfsRun)).addClass("gfs").addClass("t850");        
+        imageElem.appendTo(divElem);
+        divElem.appendTo("#imgContainer");
+      }
+    }
+
+    function handleResize() {
+      var newXPos = Math.max(15, window.pageXOffset | 0);
+      $("#imgContainer .date").css("padding-left", newXPos + "px")
+    }
+  </script>
+  <title>Z500 Overview</title>
+</head>
+
+<body onresize="handleResize()" onscroll="handleResize()" onload="createImages()">
+  <div id="imgContainer">
+
+  </div>
+
+
+</body>
+
+</html>

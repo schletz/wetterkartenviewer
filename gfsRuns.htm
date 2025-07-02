@@ -1,0 +1,128 @@
+<!--
+  Zeigt die letzten 4 Läufe von GFS von Wetter3 an.
+  
+  Aufruf:   gfsRuns.htm?(StepSize)&(MapType)
+  Beispiel: gfsRuns.htm?24&1 zeigt alle 24h den Kartentyp 1 von Wetter3 (500 hPa ReTop) an.
+  Beispiel: gfsRuns.htm?24   zeigt alle 24h den Kartentyp 8 (Standardwert) von Wetter3 (300 hPa Height) an.
+  Beispiel: gfsRuns.htm      zeigt alle 24h (Standardwert) den Kartentyp 8 (Standardwert) von Wetter3 (300 hPa Height) an.
+-->
+<!doctype html>
+<html lang="de">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style type="text/css">
+        html,
+        body,
+        #container {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0px;
+            padding: 0px;
+            width: 100%;
+            height: 100%;
+        }
+
+        #container {
+            white-space: nowrap;
+        }
+
+        .panelLine {
+            width: 100%;
+        }
+
+        .dateDiv p {
+            margin: 0px;
+            padding: 0px;
+            font-weight: bold;
+        }
+
+        .panelDiv {
+            width: 25%;
+            display: inline-block;
+        }
+
+
+        .panelImage {
+            margin: 0px;
+            width: 100%;
+            height: auto;
+
+            image-rendering: crisp-edges;
+            image-rendering: -webkit-optimize-contrast;
+            background-color: lightgray;
+        }
+    </style>
+    <script src="dateMethods.js" type="text/javascript"></script>
+    <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <script type="text/javascript">
+        "use strict";
+        var lastRun = Date.fromRunParam(6, 5);
+        var lastRunHour = lastRun.getUTCHours();
+
+        /**
+         * Gibt die URL einer Wetterkarte zurück.
+         * 
+         * @param {string} type Die Daten der Wetterkarte (z. B. 0 für 500hpa Geopot Hoehe)
+         * @param {number} time Die Stunden seit dem Beginn des Laufes (12 für Run+12h)
+         * 
+         * @returns Die URL des Bildes.
+         */
+        function getW3Url(type, time, runHour) {
+            type = type || 1;
+            time = time || 0;
+            runHour = runHour || 0;
+
+            var url = "http://www1.wetter3.de/Animation_{$run}_UTC/{$time}_{$type}.gif";
+
+            return url.replace("{$run}", ("00" + runHour).slice(-2))
+                .replace("{$type}", type)
+                .replace("{$time}", time < 10 ? "0" + time : time);
+        };
+
+
+        function createImages(containerId) {
+            var time = 0, runBehind = 0, newTime = 0, newRunHour = 0, url = "";
+            var currentDate = null, dateStr = "", params = [];
+            var $container = $(containerId), $img = null, $line = null;
+            var $rows = [];
+            var stepSize = 24, mapType = 27;
+
+            try {
+                params = window.location.href.substring(window.location.href.indexOf("?") + 1).split("&");
+
+                stepSize = Math.max(1, (1 * params[0]) || 24);
+                // GFS Karten gibt es nur in 3 Stunden Intervallen.
+                if (stepSize % 3 != 0) { stepSize += 3 - (stepSize % 3) }
+                mapType = params[1] || "27";
+            }
+            catch (e) { }
+            $container.empty();
+            for (time = 0; time <= 240; time += stepSize) {
+                $line = $("<div>").addClass("panelLine").appendTo($container);
+                currentDate = new Date(lastRun.getTime() + time * 3600e3);
+                dateStr = currentDate.getGermanStr() + " " + currentDate.getUTCHours() + "h";
+                $line.append($("<div>").addClass("dateDiv").append($("<p>").text(dateStr)));
+                for (runBehind = 0; runBehind < 4; runBehind++) {
+                    newTime = time + 6 * runBehind;
+                    newRunHour = (lastRunHour - 6 * runBehind + 24) % 24;
+                    url = newTime <= 240 ? getW3Url(mapType, newTime, newRunHour) : "nopic.png";
+                    $img = $("<img>").attr("src", url).addClass("panelImage");
+                    $line.append($("<div>").addClass("panelDiv").addClass("col" + runBehind).append($img));
+                }
+
+            }
+        }
+    </script>
+    <title>GFS Runs</title>
+</head>
+
+<body onload="createImages('#container')">
+    <div id="container">
+
+    </div>
+
+
+</body>
+
+</html>

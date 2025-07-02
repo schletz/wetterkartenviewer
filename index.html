@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="de">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.css" />
+    <script type="text/javascript" src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+    <script type="text/javascript" src="https://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.js"></script>
+    <script type="text/javascript" src="dateMethods.min.js"></script>
+    <script type="text/javascript" src="modelChooser.js"></script>
+    <script type="text/javascript" src="weathermap.js"></script>
+    <link rel="stylesheet" type="text/css" href="main.css">
+    <title>Wetterkarten Client</title>
+</head>
+
+<body ondragover="event.preventDefault();" ondrop="ImageDetailWindow.drop(event);">
+    <div id="panelsPage">
+        <div id="slidebar">
+            <div id="slider">
+                <input type="range" name="timeSlider" id="timeSlider" min="0" max="240" step="1" value="0">
+            </div>
+            <div id="buttons">
+                <a href="#" class="ui-btn ui-btn-inline" onclick="Weathermap.lock = !Weathermap.lock;">LOCK</a>
+                <a href="#" class="ui-btn ui-btn-inline" onclick="Weathermap.time = Weathermap.time - 12;">-12 h</a>
+                <a href="#" class="ui-btn ui-btn-inline" onclick="Weathermap.time = Weathermap.time - 3;">-3 h</a>
+                <a href="#" class="ui-btn ui-btn-inline" onclick="Weathermap.time = Weathermap.time + 3;">+3 h</a>
+                <a href="#" class="ui-btn ui-btn-inline" onclick="Weathermap.time = Weathermap.time + 12;">+12 h</a>
+            </div>
+        </div>
+
+        <div id="panels">
+            <div id="imageDetails" title="Kartenansicht" draggable="true" ondragstart="ImageDetailWindow.drag(event);">
+                <a href="#" onclick="Weathermap.fullsizePanel = null">X</a>
+            </div>
+        </div>
+    </div>
+    <div id="modelChooserPage">
+        <h1>Wählen Sie je einen Modelllauf aus, um das Programm zu starten.</h1>
+        <div class="model" data-model="gfs">
+        </div>
+
+    </div>
+    <!-- GFS ENS Diagramme zur schnellen Üersicht, ohne die App zu laden -->
+    <div id="diagramPage">
+        <!-- src als Data, da hier noch die Zufallszahl zum Umgehen des Servercaches angehängt wird. -->
+        <!-- Kachelmann Super HD 1 x 1km -->
+        <!-- <img data-src0="https://kachelmannwetter.com/images/data/cache/kompakt1x1/kompakt1x1_2763460_.png">    -->
+        <!-- Meteomedia Vorhersagediagramm der Station Gumpoldskirchen (MOS) -->
+        <!-- <img data-src0="http://wetterstationen.meteomedia.at/messnetz/vorhersagegrafik/110820.png?id=f3f2c00f-4a57-4f5f-949b-09ff229e5703"> -->
+        <!-- Kachelmann Europa HD 7x7 km -->
+        <!-- <img  width="740" height="700" data-src0="https://kachelmannwetter.com/images/data/cache/kompakt/kompakt_2763460_.png"> -->
+
+        <!-- Arpege Ensemble T2m -->
+        <!-- <img width="740" height="700"
+            data-src0="http://modeles12.meteociel.fr/modeles/gens/pearp/graphe.php?mode=1&lat=48&lon=16.3"
+            data-src1="http://modeles12.meteociel.fr/modeles/gens/pearp/graphe.php?mode=16&lat=48&lon=16.3"
+            data-src2="http://modeles12.meteociel.fr/modeles/gens/pearp/graphe.php?mode=6&lat=48&lon=16.3"> -->
+
+        <img width="650" height="916" id="ecmwf_forecast_2m_15d" src="diagram_load.png">
+        <img width="650" height="916" id="ecmwf_forecast_plume" src="diagram_load.png">
+        <img width="650" height="916" id="ecmwf_forecast_2m" src="diagram_load.png">
+        <img width="650" height="916" id="ecmwf_forecast_prec" src="diagram_load.png">
+
+        <!-- Z500 -->
+        <img width="740" height="700"
+            data-src0="http://modeles16.meteociel.fr/modeles/gens/graphe_ens4.php?temp=2&clim=1&ext=2&multi=0&lat=48&lon=16.5"
+            data-src1="http://modeles16.meteociel.fr/modeles/gens/graphe_ens4.php?temp=2&clim=1&ext=2&multi=1&lat=48&lon=16.5">
+
+        <!-- T850, T500 mit Klimamittel und Precip -->
+        <img width="740" height="700"
+            data-src0="http://modeles16.meteociel.fr/modeles/gens/graphe_ens3.php?clim=1&ext=2&multi=0&lat=48&lon=16.5"
+            data-src1="http://modeles16.meteociel.fr/modeles/gens/graphe_ens3.php?clim=1&ext=2&multi=1&lat=48&lon=16.5">
+
+        <!-- SLP -->
+        <img width="740" height="700"
+            data-src0="http://modeles16.meteociel.fr/modeles/gens/graphe_ens4.php?clim=1&ext=2&multi=0&lat=48&lon=16.5"
+            data-src1="http://modeles16.meteociel.fr/modeles/gens/graphe_ens4.php?clim=1&ext=2&multi=1&lat=48&lon=16.5">
+
+        <!-- T2m + Precip -->
+        <img width="740" height="700"
+            data-src0="http://modeles16.meteociel.fr/modeles/gens/graphe_ens4.php?clim=1&ext=2&multi=0&lat=48&lon=16.5&temp=1"
+            data-src1="http://modeles16.meteociel.fr/modeles/gens/graphe_ens4.php?clim=1&ext=2&multi=1&lat=48&lon=16.5&temp=1">
+
+        <!-- 0° Isotherme -->
+        <img width="740" height="700"
+            data-src0="http://modeles16.meteociel.fr/modeles/gens/graphe_ens4.php?clim=1&ext=2&multi=0&lat=48&lon=16.5&temp=3"
+            data-src1="http://modeles16.meteociel.fr/modeles/gens/graphe_ens4.php?clim=1&ext=2&multi=1&lat=48&lon=16.5&temp=3">
+
+        <!-- 10m Rafales -->
+        <img width="740" height="700"
+            data-src0="http://modeles16.meteociel.fr/modeles/gens/graphe_ens7.php?rafales=1&ext=2&lat=48&lon=16.5"
+            data-src1="http://modeles16.meteociel.fr/modeles/gens/graphe_ens7.php?rafales=1&ext=2&multi=1&lat=48&lon=16.5">
+
+    </div>
+    <script type="text/javascript">
+        var ImageDetailWindow = DraggableWindow("#imageDetails");
+        ModelChooserViewModel.initUi("modelChooserPage");
+    </script>
+
+
+
+    <script>
+        const maxWidth = window.innerWidth / 2 - 30;
+        window.addEventListener("load", async () => {
+            const ecmwf_requests = {
+                "ecmwf_forecast_2m": "classical_10d",
+                "ecmwf_forecast_2m_15d": "classical_15d_with_climate",
+                "ecmwf_forecast_prec": "epsgram_ptype",
+                "ecmwf_forecast_plume": "classical_plume",
+            };
+            for (const key in ecmwf_requests) {
+                const img = document.getElementById(key);
+                const body = JSON.stringify({
+                        //"location": { "type": "latlon", "lat": 48.0167, "lon": 16.2833, "station_name": "Traiskirchen" },
+                        "location": { "type": "latlon", "lat": 48, "lon": 16.4, "station_name": "Traiskirchen" },
+                        "axis": {},
+                        "epsgrams": ecmwf_requests[key]
+                    });
+                fetch("https://charts.ecmwf.int/opencharts-api/v1/features/epsgrams/", {
+                    "body": body,
+                    "method": "POST",
+                    "mode": "cors"
+                })
+                    .then(res => {
+                        if (res.ok) {
+                            res.json().then(data => {
+                                if (img.width > maxWidth) {
+                                    img.height = img.height * maxWidth / img.width;
+                                    img.width = maxWidth;
+                                }
+                                img.src = data.result.url;
+                            })
+                        }
+                    });
+            }
+        })
+    </script>
+
+</body>
+
+</html>

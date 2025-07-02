@@ -1,0 +1,836 @@
+/* jshint strict:global */
+/* globals $, Image, window, console */
+
+"use strict";
+/**
+ * Repräsentiert das einzelne Panel. Ein Pabel beinhaltet mehrere Zeitschritte, ein Zeitschritte
+ * beinhaltet mehrere Layer.
+ * Compressor: https://jscompress.com/
+ */
+function Panel() {
+    this.images = [];
+    this.imageDictionary = {};        // Damit nur 1 Bild pro URL erzeugt wird.
+    this.defaultImage = new Image();
+    this.currentImage = null;         // Wird von getImage gesetzt.
+    this.currentLayer = 0;            // Wird von getImage gesetzt.
+    this.maxLayer = 0;                // Wird von createImages gesetzt.
+
+    this.defaultImage.src = "notAvailable.jpg";
+}
+
+Panel.clone = function (oldPanel) {
+    if (oldPanel === null) { return null; }
+    var p = new Panel();
+
+    p.images = oldPanel.images;
+    p.imageDictionary = oldPanel.imageDictionary;
+    p.defaultImage = oldPanel.defaultImage;
+    p.currentImage = oldPanel.currentImage;
+    p.currentLayer = oldPanel.currentLayer;
+    p.maxLayer = oldPanel.maxLayer;
+    return p;
+};
+
+/**
+ * Erzeugt ein Imageobjekt und setzt die Quelle auf die übergebene URL. Zusätzlich wird die URL
+ * als Key für das Imagedirectory verwendet. Wurde diese URL schon geladen, wird aus dem 
+ * Directory das Imageobjekt zurückgegeben.
+ * 
+ * @param {string} url
+ * @returns
+ */
+Panel.prototype.loadImage = function (url) {
+    if (this.imageDictionary[url] !== undefined) {
+        return this.imageDictionary[url];
+    }
+
+    var img = new Image();
+    this.imageDictionary[url] = img;
+    /* Der URL wird der GET Parameter rnd mit der aktuellen Stunde angefügt, damit das Bild 
+     * mindestens 1x pro Stunde neu geladen wird, auch wenn es im Cache ist */
+    //var d = new Date();
+    //url = url + ((url.indexOf("?") === -1) ? "?" : "&") + "rnd=" + d.getUTCymdh();
+    img.src = url;
+    return img;
+};
+
+/**
+ * Legt die leere Arraystruktur des Panels an:
+ * images
+ *   |_ time
+ *        |_ layer
+ *             |_ {url, image}
+ * 
+ * @param {object} timestep Die Konfiguration des Panels in der Form 
+ * {start: number, step: number, stop: number, layer:number, preload:boolean, urlGenerator:function}
+ * start/stop gibt den untersten/pbersten Zeitwert in h (inklusive) an, step die Schrittweite in h.
+ * layer gibt die Ebene an. Bei jedem Klick wird um 1 Ebene weitergeschalten.
+ * Bei preload = true werden alle Bilder vorgeladen. Sonst wird als Imageobjekt null erzeugt und 
+ * erst bei Bedarf erzeugt.
+ * Die Funktion urlGenerator wird automatisch mit 1 Parameter (der Zeit in h) aufgerufen. Die 
+ * zurückgegebene URL wird zum Laden des Bildes verwendet.
+ */
+Panel.prototype.createImages = function (timestep) {
+    var time = 0;
+    if (timestep === undefined) { timestep = {}; }
+    if (isNaN(timestep.start)) { timestep.start = 0; }
+    if (isNaN(timestep.step)) { timestep.step = 1; }
+    if (isNaN(timestep.stop)) { timestep.stop = timestep.start; }
+    if (isNaN(timestep.layer)) { timestep.layer = 0; }
+
+    if (timestep.layer > this.maxLayer) {
+        this.maxLayer = timestep.layer;
+    }
+    for (time = timestep.start; time <= timestep.stop; time += timestep.step) {
+        if (this.images[time] === undefined) {
+            this.images[time] = [];
+        }
+        this.images[time][timestep.layer] = {
+            url: timestep.urlGenerator(time),
+            image: null
+        };
+    }
+    if (timestep.preload || timestep.layer === 0) {
+        this.preloadImages(timestep.layer);
+    }
+};
+
+/**
+ * Lädt alle Bilder der entsprechenden Ebene des Panels vor. Dies kann am Anfang durch die Option
+ * preload:true erfolgen. Wird ein Panel vergrößert, dann werden alle Bilder vorgeladen.
+ * 
+ * @param {number} layer
+ */
+Panel.prototype.preloadImages = function (layer) {
+    if (isNaN(layer)) { layer = this.currentLayer; }
+
+    var self = this, time = 0, imgElem = null;
+    for (time in this.images) {
+        time *= 1;                                             // for...in liefert einen string key!
+        imgElem = this.images[time][layer];
+        // Nicht alle Ebenen haben bei jedem Zeitschritt einen Eintrag (6h Bilder vs 3h Bilder).
+        if (imgElem !== undefined && imgElem.image === null) {
+            imgElem.image = this.loadImage(imgElem.url);
+        }
+    }
+};
+
+/**
+ * Liefert ein Imageobjekt aus dem Panel zurück.
+ * 
+ * @param {number} time Der Zeitpunkt, welches Bild gewählt werden soll.
+ * @param {object} options Besteht aus {seek:number, layer:number}. Seek gibt an, wie viel Stunden
+ * in der Zukunft nach einem Bild gesucht werden soll (bei 12h Intervallen gibt es keine Bilder für
+ * 3h, 6h und 9h. Daher ist das notwendig). Der Defaultwert ist unendlich.
+ * Layer gibt die Ebene an. Der Defaultwert ist die aktuell angezeigte Ebene.
+ * @returns Das gefundene und geladene Imageobjekt.
+ */
+Panel.prototype.getImage = function (time, options) {
+    try {
+        var imgElem = null, t = 0;
+        if (isNaN(time)) { time = 0; }
+        if (options === undefined) { options = {}; }
+        if (isNaN(options.seek)) { options.seek = this.images.length; }
+        if (isNaN(options.layer)) { options.layer = this.currentLayer; }
+
+        this.currentLayer = options.layer > this.maxLayer ? 0 : options.layer;
+        // Vom aktuellen Zeitpunkt an in der Zukunft nach dem ersten Bild suchen.
+        for (t = time; t <= time + options.seek; t++) {
+            if (this.images[t] !== undefined && this.images[t][this.currentLayer] !== undefined) {
+                imgElem = this.images[t][this.currentLayer];
+                if (imgElem.image === null) {
+                    // Wenn das Bild nicht vorgeladen wurde, laden wir es jetzt.
+                    imgElem.image = this.loadImage(imgElem.url);
+                }
+                this.currentImage = imgElem.image;
+                return this.currentImage;
+            }
+        }
+        this.currentImage = this.defaultImage;
+    }
+    catch (err) {
+        this.currentImage = this.defaultImage;
+    }
+    return this.currentImage;
+};
+
+/**
+ * View Model Weathermap
+ */
+var Weathermap = {
+    container: null,
+    minTime: 0,
+    maxTime: 240,
+    lock: false,                      // Ob ein Klick auf die Karte weiterschalten soll.
+    lastRun: {
+        gfs: Date.fromRunParam(6, 5),
+        arpege: Date.fromRunParam(6, 5),
+        gfsEns: Date.fromRunParam(6, 6),
+        icon: Date.fromRunParam(3, 3.5),
+        ecmwf: Date.fromRunParam(6, 7),
+        iconFlugwetter: Date.fromRunParam(12, 5.5),
+        cosmoDe: Date.fromRunParam(3, 1)
+    },        // null in index.html gesetzt.    
+    _time: 0,
+    get time() {
+        return this._time;
+    },
+    set time(newTime) {
+        this._time = Math.min(this.maxTime, Math.max(this.minTime, newTime));
+        var self = this;
+
+        if ($("#timeSlider").val() != this.time) {
+            $("#timeSlider").val(this.time);
+            $('#timeSlider').slider('refresh');
+        }
+
+        $(".weatherPanel").each(function () {
+            var panelObj = $(this).data("panel");
+            var image = panelObj.getImage(self.time);
+            $(this).empty().append(image);
+        });
+
+        if (this.fullsizePanel !== null) {
+            var fullsizeImage = this.fullsizePanel.getImage(self.time);
+            $("#imageDetails img").remove();
+            $("#imageDetails").append($(fullsizeImage).clone());
+        }
+    },
+
+    _fullsizePanel: null,
+    get fullsizePanel() {
+        return this._fullsizePanel;
+    },
+    set fullsizePanel(newPanel) {
+        this._fullsizePanel = Panel.clone(newPanel);
+        if (newPanel !== null) {
+            this.showFullsizePanel();
+        }
+        else {
+            $("#imageDetails img").remove();
+            $("#imageDetails").hide();
+        }
+    },
+
+
+    getWxcUrlGenerator: function (type, region, model) {
+        var runParam = "";
+        if (region === undefined) {
+            region = "euratl";
+        }
+        if (model === undefined) {
+            model = "gfs";
+        }
+
+        var runDiff = 0;
+        /* ECMWF wird alle 12 Stunden mit 7 Stunden Verzögerung bereitgestellt. */
+        if (model === "ecmwf") {
+            runDiff = (this.lastRun.ecmwf.getTime() - this.lastRun.gfs.getTime()) / 3600000;
+            runParam = this.lastRun.ecmwf.getUTCymdh();
+        }
+        // Zwischenläufe von ARPEGE gehen nur bis 60/72h. Wir nehmen nur die 0h und 12h Läufe.
+        else if (model === "arpege") {
+            runDiff = (this.lastRun.arpege.getTime() - this.lastRun.gfs.getTime()) / 3600000;
+            runParam = this.lastRun.arpege.getUTCymdh();
+        }
+        else { runParam = Weathermap.lastRun.gfs.getUTCymdh(); }
+
+        // Den in der URL verwendeten Datumsstring (YYYYMMDD_HH) erzeugen
+        runParam = runParam.slice(0, 8) + "_" + runParam.slice(-2);
+
+        return function (time) {
+            time = Math.max(0, time - runDiff);
+            return "http://wxcharts.com/charts/{$model}/{$region}/charts/{$type}_{$run}_{$time}.jpg"
+                .replace("{$run}", runParam)
+                .replace("{$time}", ("000" + time).slice(-3))
+                .replace("{$type}", type)
+                .replace("{$region}", region)
+                .replace("{$model}", model);
+        };
+    },
+    getWzUrlGenerator: function (type, model, region) {
+        type = type || "1";
+        model = model || "GFSOP";
+        region = region || "EU";
+        const runDiff = model === "ECMOP" ? (this.lastRun.ecmwf.getTime() - this.lastRun.gfs.getTime()) / 3_600_000 : 0;
+        let runHour = model === "ECMOP" ? this.lastRun.ecmwf.getUTCHours() : this.lastRun.gfs.getUTCHours();
+
+        return function (time) {
+            time = Math.max(0, time - runDiff);
+            // Die Zwischenläufe um 6Z und 18Z gehen nur bis 90h. Danach gehen wir zum letzten Lauf.
+            if (model == "ECMOP" && runHour % 12 != 0 && time > 90) {
+                time += 6;
+                runHour -= 6;
+            }
+            // Ab 144h gibt es nur alle 6h Karten.
+            if (model == "ECMOP" && time > 144 && time % 6 != 0) {
+                time = Math.ceil(time / 6) * 6;
+            }
+
+            return `http://www.wetterzentrale.de/maps/${model}${region}${("00" + runHour).slice(-2)}_${time}_${type}.png`;
+        };
+    },
+    getW3UrlGenerator: function (type, model, region, postfix) {
+        var self = this;
+        var runDiff = 0, modelParam = "";
+        var runHour = Weathermap.lastRun.gfs.getUTCHours();
+
+        model = model || "GFS";
+        region = region || "";
+        postfix = postfix || "";
+        modelParam = model === "GFS" ? "" : ("_" + model);
+
+        if (model == "GEFS") {
+            runHour = Weathermap.lastRun.gfsEns.getUTCHours();
+            runDiff = (this.lastRun.gfsEns.getTime() - this.lastRun.gfs.getTime()) / 3600000;
+        }
+
+        return function (time) {
+            time = Math.max(0, time - runDiff);
+            //if (model === "GEFS") { time = Math.max(6, Math.ceil(time / 6) * 6); }
+            var runParam = runHour < 10 ? "0" + runHour : runHour;
+            var timeParam = time < 10 ? "0" + time : time;
+            var regionParam = region === "" ? "" : "_" + region;
+            var postfixParam = postfix === "" ? "" : "_" + postfix;
+            return "http://www.wetter3.de/Animation_" + runParam + "_UTC" + regionParam + modelParam + "/" + timeParam + "_" + type + postfixParam + ".gif";
+        };
+    },
+
+    getW3SchnitteUrlGenerator: function (lat) {
+        lat = lat | 48;
+        // Die Vertikalschnitte stehen 2 Stunden später als die Karten des Laufes zur Verfügung.
+        var runDiff = (this.lastRun.gfs.getTime() - Date.fromRunParam(6, 7)) / 3600000;
+
+        return function (time) {
+            time += runDiff;
+            return "http://www.wetter3.de/Schnitte/2_{$time}_L_-16_31_B_{$lat}_{$lat}.gif"
+                .replace("{$lat}", lat)
+                .replace("{$lat}", lat)
+                .replace("{$time}", time < 100 ? ("00" + time).slice(-2) : time);
+        };
+    },
+
+    getMzUrlGenerator: function (type, model) {
+        model = model || "GFS";
+
+        return function (time) {
+            var timeParam = time < 100 ? ("00" + time).slice(-2) : time;
+            return "http://www.karstenhaustein.com/Janek/maps/{$model}/eu/{$time}h/{$type}.png"
+                .replace("{$time}", timeParam)
+                .replace("{$type}", type)
+                .replace("{$model}", model);
+        };
+    },
+
+    getMeteocielUrlCenerator: function (model, type, map) {
+        if (model === undefined) { model = "gfs"; }
+        if (type === undefined) { type = "0"; }
+        if (map === undefined) { map = "gfseu"; }
+
+        if (model == "arpege") {
+            const maxArpegeTime = { "0": 102, "6": 72, "12": 114, "18": 60 }
+            // http://modeles7.meteociel.fr/modeles/arpege/runs/2019080600/arpegede-24-27-0.png
+            return function (time) {
+                let lastRun = Weathermap.lastRun.arpege;
+                while (time <= 114 && time > maxArpegeTime[lastRun.getUTCHours()]) {
+                    time += 6;
+                    lastRun = new Date(lastRun.getTime() - 6 * 3600000);
+                }
+                if (time > 114) { return ""; }
+                return "http://modeles7.meteociel.fr/modeles/arpege/runs/{$run}/{$map}-{$type}-{$time}-0.png"
+                    .replace("{$time}", time)
+                    .replace("{$map}", map)
+                    .replace("{$run}", lastRun.getUTCymdh())
+                    .replace("{$type}", type);
+            }
+        }
+        else if (model == "ecmwf") {
+            return function (time) {
+                let lastRun = Weathermap.lastRun.ecmwf;
+                if (lastRun.getUTCHours() % 12 != 0 && time > 90) {
+                    time += 6;
+                    lastRun = new Date(lastRun.getTime() - 6 * 3_600_000);
+                }
+                if (time > 144 && time % 6 != 0) {
+                    time = Math.ceil(time / 6) * 6;
+                }
+
+                return "http://modeles3.meteociel.fr/modeles/ecmwf/runs/{$run}/{$map}-{$type}-{$time}.png"
+                    .replace("{$time}", time)
+                    .replace("{$map}", map)
+                    .replace("{$run}", lastRun.getUTCymdh())
+                    .replace("{$type}", type);
+            }
+        }
+
+        // Default: GFS URL
+        return function (time) {
+            var stepParam = "";
+            /* GFS berücksichtigt keinen Timestamp für den Lauf, es wird der Letzte geliefert. */
+            if (model === "gfs") {
+                /* Die 3h Zwischenkarten haben ein Prefix, da sie nicht gespeichert werden. */
+                /* http://modeles.meteociel.fr/modeles/gfs/run/gfseu-0-6.png */
+                if ((time + 3) % 6 === 0) {
+                    stepParam = "-3h";
+                }
+                return "http://modeles16.meteociel.fr/modeles/" + model + "/run/" + map + "-" + type + "-" + time + ".png";
+            }
+        };
+    },
+
+    getMeteoBelgiumUrlGenerator: function (model, type, region) {
+        if (model === undefined) { model = "gfs"; }
+        if (type === undefined) { type = "tmp500"; }
+        if (region === undefined) { type = "eu"; }
+
+        return function (time) {
+            return "https://map.meteobelgium.be/{$model}/{$region}/{$type}_{$time}.png"
+                .replace("{$model}", model.toLowerCase())
+                .replace("{$type}", type.toLowerCase())
+                .replace("{$region}", region.toLowerCase())
+                .replace("{$time}", ("000" + time).slice(-3));
+        };
+    },
+
+    getMeteoredUrlGeneratur: function (model, type, region) {
+        if (model === undefined) { model = "ECMWF"; }
+        if (type === undefined) { type = "G50"; }
+        if (region === undefined) { type = "EU"; }
+
+        return function (time) {
+            return "https://services.meteored.com/img/models/{$model}/{$MODEL}_{$time}_{$REGION}_{$TYPE}_de-DE_de.png"
+                .replace("{$model}", model.toLowerCase())
+                .replace("{$MODEL}", model.toUpperCase())
+                .replace("{$TYPE}", type.toUpperCase())
+                .replace("{$REGION}", region.toUpperCase())
+                .replace("{$time}", ("000" + time).slice(-3));
+        };
+    },
+
+    getMeteogiornaleUrlGenerator: function (model, type, region) {
+        if (model === undefined) { model = "gfs"; }
+        if (type === undefined) { type = "z500"; }
+        if (region === undefined) { region = "centroeuropa"; }
+        return function (time) {
+            return "http://maps.meteogiornale.it/" + model + "/" + region + "/" + type + "_" + time + ".png";
+        };
+    },
+
+    getKartenhausteinUrlGenerator: function (type, region) {
+        if (type === undefined) { type = "ANOM2m"; }
+        if (region === undefined) { region = "europe"; }
+        return function (time) {
+            var timeParam = time < 10 ? "0" + time : time;
+            return "http://www.karstenhaustein.com/reanalysis/gfs0p5/" + type + "_" + region + "/" + type + "_f" + timeParam + "_" + region + ".png";
+        };
+    },
+
+    getTempsUrlGenerator: function (type) {
+        type = type || 1;
+
+        var gfsRunHour = Weathermap.lastRun.gfs.getUTCHours();
+        var latestTemp = Date.fromRunParam(12, 1);             // Meteociel Aufstiegsdaten der Hohen Warte
+
+        return function (time) {
+            // Für t = 0 wird der letzte Aufstieg der Hohen Warte auf Meteociel angezeigt.
+            if (time === 0) {
+                return "http://www.meteociel.fr/obs/sondage/images/11035_{$type}_{$date}11.png"
+                    .replace("{$type}", type)
+                    .replace("{$date}", latestTemp.getUTCymdh().slice(-8));
+            }
+
+            // Unter 72h die WRF Daten von Wetterzentrale (rechnet bis 72 Stunden)
+            else if (time <= 72) {
+                return "http://www.wetterzentrale.de/maps/WRFOP{$run}_48_16_{$time}_120.png"
+                    .replace("{$run}", ("00" + gfsRunHour).slice(-2))
+                    .replace("{$time}", time);
+            }
+            // Danach die GFS Daten von Wetterzentrale (rechnet bis 189 Stunden)            
+            else if (time <= 189) {
+                time = Math.ceil(time / 3.0) * 3;
+                return "http://www.wetterzentrale.de/maps/GFSOP{$run}_48_16_{$time}_120.png"
+                    .replace("{$run}", ("00" + gfsRunHour).slice(-2))
+                    .replace("{$time}", time);
+            }
+            else {
+                return "";
+            }
+        };
+    },
+
+    getMeteocielTempsUrlGenerator: function (type, model) {
+        var latestTemp = Date.fromRunParam(12, 1);
+        // 0 = Klassisches Skew-T, 1 = besser lesbares Skew T, 2 = Hodograph
+        if (type === undefined) { type = 1; }
+        if (model === undefined) { model = "gfs"; }
+
+        return function (time) {
+            /*if (time === 0) {
+                return "http://www.meteociel.fr/obs/sondage/images/11035_{$type}_{$date}11.png"
+                    .replace("{$type}", type)
+                    .replace("{$date}", latestTemp.getUTCymdh().slice(-8));
+            }*/
+
+            /*
+            * Meteociel rendert die Bilder erst bei Bedarf. Daher wird zuerst der Request gesetzt, dann wird
+            * die Bild URL geliefert.
+            var preload = new Image();
+            preload.src = "https://www.meteociel.com/modeles/sondage2.php?ech={$time}&map=1&lat=48&lon=16.25"
+                .replace("{$time}", time);
+            preload = null;
+
+            return "https://www.meteociel.com/modeles/sondagegfs/sondagegfs_16.25_48_{$time}_1.png"
+                .replace("{$time}", time);
+            */
+            // Dies ist die Generator URL. Mit dieser Url erspart man sich den vorigen Request.
+            // Dieser Link wird als Warning beim Skript sondage2.php mit ungültigen Parametern
+            // ausgegeben.
+            // http://modeles7.meteociel.fr/cgi-bin/wrfsonde?dummy=44&lon=16.3&lat=48&map=1&pays=arpegefr
+            var url = "http://modeles.meteociel.fr/cgi-bin/newsonde2?dummy=42&lon=16.5&lat=48&ech={$time}&map={$type}";
+            if (model == "arpege") {
+                url = "http://modeles7.meteociel.fr/cgi-bin/wrfsonde?dummy=44&lon=16.3&lat=48&ech={$time}&map={$type}&pays=arpegefr";
+            }
+            return url
+                .replace("{$time}", time)
+                .replace("{$type}", type);
+        };
+    },
+
+    getWetterNetUrlGeneratur: function (type, region) {
+        if (type === undefined) { type = "500hpa-bodendruck"; }
+        if (region === undefined) { region = "eu"; }
+        var runHour = Weathermap.lastRun.gfs.getUTCHours();
+
+        return function (time) {
+            // Replace von JS ersetzt nur das erste Vorkommen.
+            //return "http://www.wetter.net/profikarten/lauf{$run}/{$type}-{$region}/images/{$type2}-{$region2}-{$time}.gif"
+            return "http://www.wetterdata.de/img/{$run}UhrLauf/{$type}_{$time}.gif"
+                .replace("{$run}", ("00" + runHour).slice(-2))
+                .replace("{$type}", type.toLowerCase())
+                .replace("{$type2}", type.toLowerCase())
+                .replace("{$region}", region.toLowerCase())
+                .replace("{$region2}", region.toLowerCase())
+                .replace("{$time}", time);
+        };
+    },
+
+    getTidbitsUrlGenerator: function (model, type) {
+        // MLSP 24h GFS:     https://www.tropicaltidbits.com/analysis/models/gfs/2018031100/gfs_mslpaNorm_eu_5.png
+        // MLSP 24h ECMWF:   https://www.tropicaltidbits.com/analysis/models/ecmwf/2018031100/ecmwf_mslpaNorm_eu_2.png
+
+        // 500hPa 24h GFS:   https://www.tropicaltidbits.com/analysis/models/gfs/2018031100/gfs_z500aNorm_eu_5.png
+        // 500hPa 24h ECMWF: https://www.tropicaltidbits.com/analysis/models/ecmwf/2018031100/ecmwf_z500aNorm_eu_2.png
+
+        // Sounding: https://www.tropicaltidbits.com/analysis/models/sounding/images/gfs_2020041300_fh6_sounding_48.00N_16.50E.png
+
+
+        var url = "https://www.tropicaltidbits.com/analysis/models/{$model}/{$run}/{$model}_{$type}_eu_{$time}.png";
+        var soundingUrl = "https://www.tropicaltidbits.com/analysis/models/sounding/images/gfs_{$run}_fh{$time}_sounding_48.00N_16.50E.png";
+
+        return function (time) {
+            let lastRun = model == "ecmwf" ? Weathermap.lastRun.ecmwf : Weathermap.lastRun.gfs;
+            if (time < 0) { time = 0; }
+            if (model == "sounding") {
+                return soundingUrl.replace("{$run}", lastRun.getUTCymdh())
+                    .replace("{$time}", time);
+            }
+            if (model == "ecmwf") {
+                // Die Zwischenläufe um 6Z und 18Z gehen nur bis 90h.
+                if (time > 90 && lastRun.getUTCHours() % 12 != 0) {
+                    lastRun = new Date(lastRun.getTime() - 6 * 3600000);
+                    time += 6;
+                }
+                if (type == "T2ma")
+                    time = time / 6 + 1;
+                else
+                    time = time <= 144 ? time / 3 + 1 : 49 + Math.floor((time - 144) / 6);
+            }
+            else if (model == "gfs") {
+                time = time / 6 + 1;
+            }
+            // Manche Karten starten erst ab +6h und beginnen mit der Nummer 1 erst dort.
+            if (type == "mslp_pcpn_frzn" || type == "ir" || type == "mslp_pcpn") { time -= 1; }
+            return url.replace("{$run}", lastRun.getUTCymdh())
+                .replace("{$model}", model)
+                .replace("{$model}", model)
+                .replace("{$type}", type)
+                .replace("{$time}", time);
+        };
+    },
+
+    getFlugwetterUrlGenerator: function (type) {
+        var self = this;
+
+        var delay = (self.lastRun.iconFlugwetter.getTime() - self.lastRun.gfs.getTime()) / 3600000;
+        var runParam = ("00" + self.lastRun.iconFlugwetter.getUTCHours()).slice(-2) + "00";
+        var MIN_TIME = 6;
+
+        return function (time) {
+            time -= delay;
+            if (time < MIN_TIME) { time = MIN_TIME; }
+            var timeParam = ("000" + time).slice(-3);
+            //return "https://schletzm:Tuwofa90@www.flugwetter.de/fw/scripts/getchart.php?src={$type}_{$time}_{$run}.png"
+            return "https://www.flugwetter.de/fw/scripts/getchart.php?src={$type}_{$time}_{$run}.png"
+                .replace("{$run}", runParam)
+                .replace("{$type}", type)
+                .replace("{$time}", timeParam);
+        };
+    },
+
+    createPanels: function (panelsToLoad) {
+        var p = null, panelDiv = null, i = 0;
+        var self = this;
+        panelsToLoad.forEach(function (panel) {
+            p = new Panel();
+            panel.forEach(function (panelData) {
+                p.createImages(panelData);
+            });
+            panelDiv = $("<div>").addClass("weatherPanel").attr("id", "panel" + i);
+            if (i % 2 === 0) { panelDiv.addClass("col-2"); }
+            if (i % 3 === 0) { panelDiv.addClass("col-3"); }
+            if (i % 4 === 0) { panelDiv.addClass("col-4"); }
+            if (i % 5 === 0) { panelDiv.addClass("col-5"); }
+
+            panelDiv.data("panel", p);
+            panelDiv.data("layer", 0);
+            panelDiv.on("click", function () { self.onPanelClick(this); });
+            panelDiv.on("contextmenu", function () { self.fullsizePanel = $(this).data("panel"); });
+            self.container.find("#panels").append(panelDiv);
+            i += 1;
+        });
+    },
+
+    onPanelClick: function (panel) {
+        if (Weathermap.lock) { return; }
+        var panelObj = $(panel).data("panel");
+        var image = panelObj.getImage(this.time, { layer: panelObj.currentLayer + 1 });
+        $(panel).empty().append(image);
+    },
+
+    showFullsizePanel: function () {
+        var leftPos = 0, topPos = 0, width = 600, height = 400;
+        // Wenn ein Panel maximiert wird, werden alle Bilder dieses Layers vorgeladen.
+        this.fullsizePanel.preloadImages();
+        var image = this.fullsizePanel.currentImage;
+        if (image.naturalWidth && image.naturalHeight) {
+            width = image.naturalWidth;
+            height = image.naturalHeight;
+            /* Bild ist sehr klein? Mindestens mit 2/3 der Bildschirmbreite anzeigen. */
+            if (width < 0.5 * $(window).width()) {
+                width = 0.5 * $(window).width();
+                height = width * image.naturalHeight / image.naturalWidth;
+            }
+            // Bild ist größer als 90% der Breite? Dann runterslakieren.
+            if ($(window).width() * 0.9 < width) {
+                width = 0.9 * $(window).width();
+                height = width * image.naturalHeight / image.naturalWidth;
+            }
+            /*if ($(window).height() * 0.9 < height) {
+                height = 0.9 * $(window).height();
+                width = height * image.naturalWidth / image.naturalHeight;
+            }*/
+        }
+        leftPos = ($(window).width() - width) / 2;
+        $("#imageDetails img").remove();
+        $("#imageDetails").css("left", leftPos + "px");
+        $("#imageDetails").css("width", width + "px");
+        $("#imageDetails").css("height", height + "px");
+        $("#imageDetails").append($(image).clone());
+        $("#imageDetails").show();
+    }
+};
+
+Weathermap.initUi = function (container) {
+    this.container = $("#" + container);
+    this.container.show();
+    $("#timeSlider").on("change", function (event, ui) {
+        Weathermap.time = $("#timeSlider").val();
+    });
+    Weathermap.createPanels([
+        // *****************************************************************************************
+        // 0.0 Surface Layer, Mixed Layers
+        // *****************************************************************************************
+        [
+            // W3 GFS 500hPa/ReTop/MSLP EU
+            { start: 0, step: 3, stop: 240, layer: 0, urlGenerator: Weathermap.getW3UrlGenerator(1, "GFS", "") },
+
+            // Tropical Tidbits 2m Temp Anomaly EU
+            { start: 0, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getTidbitsUrlGenerator("ecmwf", "T2ma") },
+
+            // Meteociel und Tidbits ARPEGE/GFS Surroundings
+            { start: 3, step: 3, stop: 72, layer: 2, urlGenerator: Weathermap.getMeteocielTempsUrlGenerator(1, "arpege") },
+            { start: 78, step: 6, stop: 96, layer: 2, urlGenerator: Weathermap.getMeteocielTempsUrlGenerator(1, "arpege") },
+            { start: 102, step: 6, stop: 192, layer: 2, urlGenerator: Weathermap.getMeteocielTempsUrlGenerator() },
+            //{ start: 198, step: 6, stop: 240, layer: 2, urlGenerator: Weathermap.getTidbitsUrlGenerator("sounding") },
+        ],
+        // *****************************************************************************************
+        // 0.1 500 hpa Layer
+        // *****************************************************************************************
+        [
+            // Tropical Tidbits ECMWF Z500 & Anomaly
+            { start: 0, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getTidbitsUrlGenerator("gfs", "z500aNorm") },
+
+            // Wxcharts GFS 500 hPa Anomaly GFS
+            // { start: 0, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getWxcUrlGenerator("gph500_anom", "europe") },
+            // { start: 0, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getWxcUrlGenerator("gph500_anom", "euratl") },
+
+            // W3 500 hpa Height + Temp EU
+            // { start: 0, step: 3, stop: 240, layer: 2, urlGenerator: Weathermap.getW3UrlGenerator(27, "GFS", "") },
+
+            // W3 500 hpa ReTop ME
+            { start: 0, step: 3, stop: 240, layer: 1, urlGenerator: Weathermap.getW3UrlGenerator(1, "GFS", "05Grad") },
+
+            // Meteociel 500 hpa Height + Temp Nordhalbkugel
+            { start: 6, step: 6, stop: 240, layer: 2, urlGenerator: Weathermap.getMeteocielUrlCenerator("gfs", 13, "gfseu") },
+        ],
+        // *****************************************************************************************
+        // 0.2 850 hPa Layer
+        // *****************************************************************************************        
+        [
+            // // Wxcharts GFS 850 hPa Anomaly GFS
+            // { start: 0, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getWxcUrlGenerator("850temp_anom", "europe") },
+            // { start: 0, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getWxcUrlGenerator("850temp_anom", "euratl") },
+
+            // // W3 850 hpa Height + Temp EU
+            // { start: 0, step: 3, stop: 240, layer: 2, urlGenerator: Weathermap.getW3UrlGenerator(25, "GFS", "") },
+
+            // Tropical Tidbits GFS T850 Anomaly
+            { start: 0, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getTidbitsUrlGenerator("gfs", "T850a") },
+
+            // W3 GFS 850 hpa Height + Temp ME
+            { start: 0, step: 3, stop: 240, layer: 1, urlGenerator: Weathermap.getW3UrlGenerator(3, "GFS", "05Grad") },
+
+            // Meteociel 850 hpa Anomaly Nordhalbkugel
+            { start: 6, step: 6, stop: 240, layer: 2, urlGenerator: Weathermap.getMeteocielUrlCenerator("gfs", 15, "gfseu") },
+
+        ],
+        // *****************************************************************************************
+        // 1.0 700hPa
+        // *****************************************************************************************
+        [
+
+            // Wetterzentrale ECMWF 500hPa EU
+            // { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getWzUrlGenerator(1, "ECMOP", "EU") },
+            // { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getWzUrlGenerator(1, "ECMOP", "EU") },
+
+            // Meteociel ECMWF 500hPa EU
+            { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 0, "ecmwfeu") },
+            { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 0, "ecmwfeu") },
+
+            // Tropical Tidbits ECMWF Z500, Vorticity
+            { start: 0, step: 3, stop: 141, layer: 1, urlGenerator: Weathermap.getTidbitsUrlGenerator("ecmwf", "z500_vort") },
+            { start: 144, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getTidbitsUrlGenerator("ecmwf", "z500_vort") },
+
+
+            // Tropical Tidbits 700 - 300 hPa rel Humidity
+            { start: 0, step: 3, stop: 141, layer: 2, urlGenerator: Weathermap.getTidbitsUrlGenerator("ecmwf", "midRH") },
+            { start: 144, step: 6, stop: 240, layer: 2, urlGenerator: Weathermap.getTidbitsUrlGenerator("ecmwf", "midRH") },
+
+            // W3 GFS 700 hPa Feuchte EU
+            { start: 0, step: 3, stop: 240, layer: 3, urlGenerator: Weathermap.getW3UrlGenerator(2, "GFS", "") },
+
+            // Meteociel GFS 1.5 PVU EU
+            { start: 6, step: 6, stop: 240, layer: 4, urlGenerator: Weathermap.getMeteocielUrlCenerator("gfs", 4, "gfseu") },
+        ],
+        // *****************************************************************************************        
+        // 1.1 Divergenz, CAPE
+        // ******************************************************************************************        
+        [
+            // Tropical Tidbits ECMWF Z500 & Anomaly
+            { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getTidbitsUrlGenerator("ecmwf", "z500aNorm") },
+            { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getTidbitsUrlGenerator("ecmwf", "z500aNorm") },
+
+            // // Wxcharts GFS 500 hPa Anomaly ECMWF
+            // { start: 0, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getWxcUrlGenerator("gph500_anom", "europe", "ecmwf") },
+            // { start: 0, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getWxcUrlGenerator("gph500_anom", "euratl", "ecmwf") },
+
+            // W3 850 hpa ThetaE
+            { start: 0, step: 3, stop: 240, layer: 1, urlGenerator: Weathermap.getW3UrlGenerator(5, "GFS", "") },
+
+            // W3 850 hpa ThetaE ME
+            { start: 0, step: 3, stop: 240, layer: 2, urlGenerator: Weathermap.getW3UrlGenerator(5, "GFS", "05Grad") },
+        ],
+        // *****************************************************************************************
+        // 1.2 Wind
+        // *****************************************************************************************
+        [
+            // Wxcharts GFS 850 hPa Anomaly ECMWF
+            // { start: 0, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getWxcUrlGenerator("850temp_anom", "europe", "ecmwf") },  
+            // { start: 0, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getWxcUrlGenerator("850temp_anom", "euratl", "ecmwf") },  
+
+            // Tropical Tidbits ECMWF Z500 & Anomaly
+            { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getTidbitsUrlGenerator("ecmwf", "T850a") },
+            { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getTidbitsUrlGenerator("ecmwf", "T850a") },
+
+            // Wetterzentrale ECMWF 850hPa Temp EU
+            { start: 0, step: 3, stop: 141, layer: 1, urlGenerator: Weathermap.getWzUrlGenerator(2, "ECMOP", "EU") },
+            { start: 144, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getWzUrlGenerator(2, "ECMOP", "EU") },
+
+            // Wetterzentrale ECMWF 850hPa Temp ME
+            { start: 0, step: 3, stop: 141, layer: 2, urlGenerator: Weathermap.getWzUrlGenerator(2, "ECMOP", "ME") },
+            { start: 144, step: 6, stop: 240, layer: 2, urlGenerator: Weathermap.getWzUrlGenerator(2, "ECMOP", "ME") },
+
+            // Wetterzentrale ECMWF 10m Wind
+            { start: 0, step: 3, stop: 141, layer: 3, urlGenerator: Weathermap.getWzUrlGenerator(9, "ECMOP", "ME") },
+            { start: 144, step: 6, stop: 240, layer: 3, urlGenerator: Weathermap.getWzUrlGenerator(9, "ECMOP", "ME") },
+
+            // Wetterzentrale ECMWF 300 hPa Wind
+            { start: 0, step: 3, stop: 141, layer: 4, urlGenerator: Weathermap.getWzUrlGenerator(21, "ECMOP", "EU") },
+            { start: 144, step: 6, stop: 240, layer: 4, urlGenerator: Weathermap.getWzUrlGenerator(21, "ECMOP", "EU") },
+
+            // Tropical Tidbits ECMWF 300 hpa Wind, Divergenz EU
+            // { start: 0, step: 3, stop: 141, layer: 4, urlGenerator: Weathermap.getTidbitsUrlGenerator("ecmwf", "uv250") },
+            // { start: 144, step: 6, stop: 240, layer: 4, urlGenerator: Weathermap.getTidbitsUrlGenerator("ecmwf", "uv250") },
+
+            // Meteociel ARPEGE DE Windböen
+            { start: 1, step: 1, stop: 114, layer: 5, urlGenerator: Weathermap.getMeteocielUrlCenerator("arpege", 11, "arpegede") },
+        ],
+        // *****************************************************************************************        
+        // 2.0 Niderschlag
+        // *****************************************************************************************        
+        [
+            // Tropical Tidbits MLSP + Precip Simulation
+            { start: 3, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getTidbitsUrlGenerator("ecmwf", "mslp_pcpn") },
+            { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getTidbitsUrlGenerator("ecmwf", "mslp_pcpn") },
+
+            // Meteogiornale Thunderstorm Index EU
+            { start: 3, step: 3, stop: 240, layer: 1, urlGenerator: Weathermap.getMeteogiornaleUrlGenerator("gfs", "tsi", "centroeuropa") },
+        ],
+        // *****************************************************************************************
+        // 2.1 ARPEGE Modell
+        // *****************************************************************************************
+        [
+            // Meteociel ARPEGE DE
+            { start: 1, step: 1, stop: 114, layer: 0, urlGenerator: Weathermap.getMeteocielUrlCenerator("arpege", 24, "arpegede") },
+
+            // Meteociel ARPEGE DE
+            { start: 1, step: 1, stop: 114, layer: 1, urlGenerator: Weathermap.getMeteocielUrlCenerator("arpege", 38, "arpegede") },
+
+            // Meteociel 10 hpa Temp Nordhalbkugel
+            { start: 6, step: 6, stop: 240, layer: 2, urlGenerator: Weathermap.getMeteocielUrlCenerator("gfs", 10, "gfsnh") },
+        ]
+    ]);
+    Weathermap.time = 0;  // Panels zum Zeitpunkt t=0 anzeigen.
+};
+
+Weathermap.destroyUi = function () {
+    this.container.hide();
+};
+
+var DraggableWindow = function (container) {
+    return {
+        offsetX: 0,
+        offsetY: 0,
+        drag: function (ev) {
+            this.offsetX = ev.pageX;
+            this.offsetY = ev.pageY;
+        },
+        drop: function (ev) {
+            this.offsetX = ev.pageX - this.offsetX;
+            this.offsetY = ev.pageY - this.offsetY;
+            var pos = $(container).position();
+            $(container).css("left", pos.left + this.offsetX);
+            $(container).css("top", pos.top + this.offsetY);
+        }
+    };
+};

@@ -1,0 +1,6 @@
+<Jobs delay="60" outDir = "C:/Users/Michael/Desktop/">
+    <Job title="mc_wrf12Z" url="http://modeles.meteociel.fr/modeles/wrfnmm-eur/runs/2018112012/nmm-21-120-0.png" />
+    <Job title="mc_wrf18Z" url="http://modeles.meteociel.fr/modeles/wrfnmm-eur/runs/2018112018/nmm-21-120-0.png" />
+    <Job title="mc_wrf00Z" url="http://modeles.meteociel.fr/modeles/wrfnmm-eur/runs/2018112100/nmm-21-120-0.png" />
+    <Job title="mc_wrf06Z" url="http://modeles.meteociel.fr/modeles/wrfnmm-eur/runs/2018112106/nmm-21-120-0.png" />
+</Jobs>
