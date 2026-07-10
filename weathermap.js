@@ -1,5 +1,5 @@
 /* jshint strict:global */
-/* globals $, Image, window, console */
+/* globals $, Image, window, console, fetch */
 
 "use strict";
 /**
@@ -46,6 +46,11 @@ Panel.prototype.loadImage = function (url) {
 
     var img = new Image();
     this.imageDictionary[url] = img;
+    /* Open-Charts-URLs liefern JSON und müssen erst asynchron zur PNG-Adresse aufgelöst werden. */
+    if (EcmwfChartResolver.isApiUrl(url)) {
+        EcmwfChartResolver.resolve(url, img);
+        return img;
+    }
     /* Der URL wird der GET Parameter rnd mit der aktuellen Stunde angefügt, damit das Bild
      * mindestens 1x pro Stunde neu geladen wird, auch wenn es im Cache ist */
     //var d = new Date();
@@ -155,6 +160,123 @@ Panel.prototype.getImage = function (time, options) {
 };
 
 /**
+ * Resolves ECMWF Open-Charts API URLs to their rendered image addresses.
+ * Verwendet wird der Packages-Endpunkt (/packages/opencharts/products/.../axis/valid_time/),
+ * der mehrere valid_time-Werte pro Request annimmt. Alle wartenden Jobs mit gleichem
+ * URL-Prefix (Produkt, Projektion, Level, base_time) werden zu Requests mit je maximal
+ * batchSize Werten gebündelt. Bei zu vielen Werten pro Request antwortet der Server mit
+ * HTTP 504 (Gateway Timeout), daher die Begrenzung.
+ * Die Requests der einzelnen Batches werden parallel gesendet. Ein fehlgeschlagener
+ * Request wird nicht wiederholt; die betroffenen Bilder erhalten das notAvailable-Bild.
+ * Nicht verfügbare valid_times meldet die API in-band (HTTP 200, Eintrag mit url=null und
+ * error-Feld), deshalb wird pro Ergebnis auf results[validTime].url geprüft.
+ */
+var EcmwfChartResolver = {
+    apiBase: "https://charts.ecmwf.int/opencharts-api/v1",
+    batchSize: 6,                     // Werte pro Request; mehr führt zu HTTP 504 (Gateway Timeout).
+    pending: [],
+
+    /**
+     * Determines whether a URL points to the Open-Charts API and needs async resolution.
+     *
+     * @param {string} url
+     * @returns {boolean}
+     */
+    isApiUrl: function (url) {
+        return typeof url === "string" && url.indexOf(this.apiBase) === 0;
+    },
+
+    /**
+     * Queues the API URL for resolution. Once resolved, the image address is assigned to
+     * the passed image object. On failure the notAvailable image is assigned instead.
+     *
+     * @param {string} url Die Packages-URL der Open-Charts-API mit genau einem values-Wert.
+     * @param {Image} img Das Imageobjekt, dessen src gesetzt wird.
+     */
+    resolve: function (url, img) {
+        var self = this;
+        var parts = url.split("&values=");
+        this.pending.push({ batchKey: parts[0], value: parts[1], img: img });
+        // Die Queue erst nach dem aktuellen Durchlauf starten, damit alle synchron
+        // eingereihten Jobs eines Layers im selben Batch landen.
+        window.setTimeout(function () { self.processQueue(); }, 0);
+    },
+
+    /**
+     * Erzeugt aus den in-band gelieferten Metadaten die Kopfzeile (Lauf und Gültigkeit)
+     * und die Legende als DOM-Elemente und merkt sie am Imageobjekt vor.
+     * Weathermap.showImage hängt sie beim Anzeigen über bzw. unter das Bild. Ist das Bild
+     * gerade sichtbar, werden die Elemente sofort eingehängt.
+     *
+     * @param {Image} img Das aufgelöste Imageobjekt.
+     * @param {object} entry Der Eintrag results[validTime] der API-Antwort.
+     */
+    attachChartInfo: function (img, entry) {
+        var header = EcmwfChartHeader.createElement(entry.values);
+        if (header !== null) {
+            img.headerElement = header;
+            if (img.parentNode) { img.parentNode.insertBefore(header, img); }
+        }
+        var legend = EcmwfChartLegend.createElement(entry.legend);
+        if (legend !== null) {
+            img.legendElement = legend;
+            if (img.parentNode) { img.parentNode.appendChild(legend); }
+        }
+    },
+
+    /**
+     * Fasst wartende Jobs mit gleichem Batch-Key zu Requests mit je maximal batchSize
+     * Werten zusammen und sendet die Requests parallel ab.
+     */
+    processQueue: function () {
+        while (this.pending.length > 0) {
+            var batch = [this.pending.shift()];
+            var i = 0;
+            while (i < this.pending.length && batch.length < this.batchSize) {
+                if (this.pending[i].batchKey === batch[0].batchKey) {
+                    batch.push(this.pending.splice(i, 1)[0]);
+                }
+                else { i++; }
+            }
+            this.resolveBatch(batch);
+        }
+    },
+
+    /**
+     * Sendet einen Request für den Batch und weist die aufgelösten Bild-URLs den
+     * Imageobjekten zu. Bei einem Fehler wird das notAvailable-Bild gesetzt.
+     *
+     * @param {Array} batch Jobs mit gleichem Batch-Key ({batchKey, value, img}).
+     */
+    resolveBatch: async function (batch) {
+        var self = this;
+        var requestUrl = batch[0].batchKey + "&values=" +
+            batch.map(function (j) { return j.value; }).join(",");
+        try {
+            var response = await fetch(requestUrl);
+            if (response.status !== 200) {
+                throw new Error("HTTP " + response.status);
+            }
+            var body = await response.json();
+            var results = body && body.results ? body.results : {};
+            batch.forEach(function (j) {
+                var entry = results[j.value];
+                if (entry && entry.url) {
+                    j.img.src = entry.url;
+                    self.attachChartInfo(j.img, entry);
+                }
+                else {
+                    j.img.src = "notAvailable.jpg";
+                }
+            });
+        }
+        catch (err) {
+            batch.forEach(function (j) { j.img.src = "notAvailable.jpg"; });
+        }
+    }
+};
+
+/**
  * View Model Weathermap
  */
 var Weathermap = {
@@ -187,13 +309,12 @@ var Weathermap = {
         $(".weatherPanel").each(function () {
             var panelObj = $(this).data("panel");
             var image = panelObj.getImage(self.time);
-            $(this).empty().append(image);
+            self.showImage(this, image);
         });
 
         if (this.fullsizePanel !== null) {
             var fullsizeImage = this.fullsizePanel.getImage(self.time);
-            $("#imageDetails img").remove();
-            $("#imageDetails").append($(fullsizeImage).clone());
+            this.showFullsizeImage(fullsizeImage);
         }
     },
 
@@ -208,6 +329,8 @@ var Weathermap = {
         }
         else {
             $("#imageDetails img").remove();
+            $("#imageDetails .chartHeader").remove();
+            $("#imageDetails .chartLegend").remove();
             $("#imageDetails").hide();
         }
     },
@@ -375,6 +498,49 @@ var Weathermap = {
                 }
                 return "http://modeles16.meteociel.fr/modeles/" + model + "/run/" + map + "-" + type + "-" + time + ".png";
             }
+        };
+    },
+
+    /**
+     * Erzeugt einen URL Generator für die ECMWF Open-Charts API. Die zurückgegebene URL zeigt
+     * auf den Packages-Endpunkt (JSON) mit genau einem valid_time-Wert; EcmwfChartResolver
+     * fasst beim Laden alle URLs mit gleichem Prefix (Produkt, Projektion, Level, base_time)
+     * zu einem einzigen Request zusammen und löst so alle Bild-URLs eines Layers auf einmal auf.
+     * Die 06/18 UTC Läufe rechnen nur bis T+144. Danach werden die Karten des 6 h älteren
+     * 00/12 UTC Laufes mit angepasstem Zeitschritt angezeigt.
+     *
+     * @param {string} product Der Produktname, z. B. "medium-z500-t850".
+     * @param {string} projection Der Kartenausschnitt, z. B. "opencharts_europe".
+     * @param {number} [level] Optionale Druckfläche in hPa, z. B. 700.
+     * @returns Der URL Generator.
+     */
+    getEcmwfChartUrlGenerator: function (product, projection, level) {
+        if (product === undefined) { product = "medium-z500-t850"; }
+        if (projection === undefined) { projection = "opencharts_europe"; }
+
+        return function (time) {
+            let lastRun = Weathermap.lastRun.ecmwf;
+            if (lastRun.getUTCHours() % 12 != 0 && time > 144) {
+                time += 6;
+                lastRun = new Date(lastRun.getTime() - 6 * 3_600_000);
+            }
+            // Ab 144h gibt es nur alle 6h Karten.
+            if (time > 144 && time % 6 != 0) {
+                time = Math.ceil(time / 6) * 6;
+            }
+            // Auch die 00/12 UTC Läufe enden bei T+240.
+            if (time > 240) { return ""; }
+
+            // Die Packages-API erwartet base_time und valid_time im Format YYYYMMDDHHMM.
+            const baseTime = lastRun.getUTCymdh() + "00";
+            const validTime = new Date(lastRun.getTime() + time * 3_600_000).getUTCymdh() + "00";
+            // values muss der letzte Parameter sein, damit der Resolver die URL am
+            // Trennzeichen "&values=" in Batch-Key und valid_time zerlegen kann.
+            return EcmwfChartResolver.apiBase + "/packages/opencharts/products/" + product +
+                "/axis/valid_time/?base_time=" + baseTime +
+                "&projection=" + projection +
+                (level ? "&level=" + level : "") +
+                "&values=" + validTime;
         };
     },
 
@@ -604,7 +770,21 @@ var Weathermap = {
         if (Weathermap.lock) { return; }
         var panelObj = $(panel).data("panel");
         var image = panelObj.getImage(this.time, { layer: panelObj.currentLayer + 1 });
-        $(panel).empty().append(image);
+        this.showImage(panel, image);
+    },
+
+    /**
+     * Zeigt das Bild im Panel-Div an und hängt – falls vom EcmwfChartResolver geliefert –
+     * die Kopfzeile über und die Legende unter das Bild.
+     *
+     * @param {HTMLElement} panelDiv Das .weatherPanel Div.
+     * @param {Image} image Das anzuzeigende Imageobjekt.
+     */
+    showImage: function (panelDiv, image) {
+        $(panelDiv).empty();
+        if (image.headerElement) { $(panelDiv).append(image.headerElement); }
+        $(panelDiv).append(image);
+        if (image.legendElement) { $(panelDiv).append(image.legendElement); }
     },
 
     showFullsizePanel: function () {
@@ -631,12 +811,33 @@ var Weathermap = {
             }*/
         }
         leftPos = ($(window).width() - width) / 2;
-        $("#imageDetails img").remove();
         $("#imageDetails").css("left", leftPos + "px");
         $("#imageDetails").css("width", width + "px");
-        $("#imageDetails").css("height", height + "px");
-        $("#imageDetails").append($(image).clone());
+        // Die Höhe ergibt sich aus Bild plus Legende; min-height hält das Fenster als
+        // Platzhalter offen, solange das Bild noch nicht geladen ist.
+        $("#imageDetails").css("height", "auto");
+        $("#imageDetails").css("min-height", height + "px");
+        this.showFullsizeImage(image);
         $("#imageDetails").show();
+    },
+
+    /**
+     * Zeigt das Bild samt Kopfzeile und Legende im Vollbildfenster (#imageDetails) an.
+     * Alle Elemente werden geklont, da die Originale im Panel-Div eingehängt bleiben.
+     *
+     * @param {Image} image Das anzuzeigende Imageobjekt.
+     */
+    showFullsizeImage: function (image) {
+        $("#imageDetails img").remove();
+        $("#imageDetails .chartHeader").remove();
+        $("#imageDetails .chartLegend").remove();
+        if (image.headerElement) {
+            $("#imageDetails").append($(image.headerElement).clone());
+        }
+        $("#imageDetails").append($(image).clone());
+        if (image.legendElement) {
+            $("#imageDetails").append($(image.legendElement).clone());
+        }
     }
 };
 
@@ -651,7 +852,7 @@ Weathermap.initUi = function (container) {
         // 0.0 500 hPa
         // *****************************************************************************************
         [
-           // Meteociel ECMWF 500hPa EU
+            // Meteociel ECMWF 500hPa EU
             { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 0, "ecmwfeu") },
             { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 0, "ecmwfeu") },
 
@@ -663,16 +864,20 @@ Weathermap.initUi = function (container) {
         // 0.1 850 hPa Layer
         // *****************************************************************************************
         [
+            // ECMWF Open-Charts 500 hPa geopotential height + 850 hPa temperature
+            { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-z500-t850", "opencharts_europe") },
+            { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-z500-t850", "opencharts_europe") },
+
             // Wetterzentrale ECMWF 850hPa Temp EU
-            { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getWzUrlGenerator(2, "ECMOP", "EU") },
-            { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getWzUrlGenerator(2, "ECMOP", "EU") },
+            { start: 0, step: 3, stop: 141, layer: 1, urlGenerator: Weathermap.getWzUrlGenerator(2, "ECMOP", "EU") },
+            { start: 144, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getWzUrlGenerator(2, "ECMOP", "EU") },
 
             // Wetterzentrale ECMWF 850hPa Temp ME
-            { start: 0, step: 3, stop: 141, layer: 1, urlGenerator: Weathermap.getWzUrlGenerator(2, "ECMOP", "ME") },
-            { start: 144, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getWzUrlGenerator(2, "ECMOP", "ME") },
+            { start: 0, step: 3, stop: 141, layer: 2, urlGenerator: Weathermap.getWzUrlGenerator(2, "ECMOP", "ME") },
+            { start: 144, step: 6, stop: 240, layer: 2, urlGenerator: Weathermap.getWzUrlGenerator(2, "ECMOP", "ME") },
 
-            // Meteociel 80hPa anom
-            { start: 0, step: 6, stop: 240, layer: 2, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 15, "ecmwfeu") },
+            // Meteociel 850hPa anom
+            { start: 0, step: 6, stop: 240, layer: 3, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 15, "ecmwfeu") },
         ],
         // *****************************************************************************************
         // 0.2 Wind
@@ -694,13 +899,17 @@ Weathermap.initUi = function (container) {
         // 1.0 300hPa
         // *****************************************************************************************
         [
+            // ECMWF Open-Charts 700 hPa geopotential height + temperature
+            { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-t-z", "opencharts_europe", 700) },
+            { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-t-z", "opencharts_europe", 700) },
+
             // Meteociel 500 hpa Height + Temp
-            { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 13, "ecmwfeu") },
-            { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 13, "ecmwfeu") },
+            { start: 0, step: 3, stop: 141, layer: 1, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 13, "ecmwfeu") },
+            { start: 144, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 13, "ecmwfeu") },
 
             // Wetterzentrale ECMWF 300 hPa Wind
-            { start: 0, step: 3, stop: 141, layer: 1, urlGenerator: Weathermap.getWzUrlGenerator(21, "ECMOP", "EU") },
-            { start: 144, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getWzUrlGenerator(21, "ECMOP", "EU") },
+            { start: 0, step: 3, stop: 141, layer: 2, urlGenerator: Weathermap.getWzUrlGenerator(21, "ECMOP", "EU") },
+            { start: 144, step: 6, stop: 240, layer: 2, urlGenerator: Weathermap.getWzUrlGenerator(21, "ECMOP", "EU") },
         ],
         // *****************************************************************************************
         // 1.1 Niederschlag
