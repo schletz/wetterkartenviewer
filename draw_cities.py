@@ -14,17 +14,37 @@ Forward model (image coordinates, origin top left, y pointing down):
 
 Usage:
     python draw_cities.py europe.png 2026072312
+    python draw_cities.py europe.png chart.png 2026072312
+    python draw_cities.py 2026072312
 
-The second argument is the valid time of the map in YYYYMMDDHH
+The last argument is the valid time of the map in YYYYMMDDHH
 format (hour in UTC); it is rendered into the top left corner.
-The input image is overwritten in place.
+If a chart image is given as well, the meteogram strip is cut out of
+it and stacked on top of the map. The map image is overwritten in
+place in both cases.
+Without any image argument both the map and the meteogram are
+downloaded from charts.ecmwf.int and the result is written to
+DEFAULT_OUTPUT. In that mode the bare map is offered in
+ANNOTATION_FILE first and the script waits, so it can be annotated in
+an image editor before the overlays are rendered on top of those
+annotations.
 """
 
 import math
+import os
 import sys
 from datetime import datetime
 
+try:
+    import msvcrt
+except ImportError:  # not running on Windows
+    msvcrt = None
+
+import requests
 from PIL import Image, ImageDraw, ImageFont
+
+import ecmwf_api
+from upscale import magic_kernel_sharp_resize
 
 # Polar stereographic projection parameters: image position of the
 # north pole and radial scale factor.
@@ -35,6 +55,31 @@ SCALE_K = 1320.8
 # Target size after cropping the source image; the crop keeps the top
 # left corner, so the projection parameters remain valid.
 CROP_SIZE = (1000, 600)
+
+# Region of the chart image holding the temperature meteogram
+# (left, upper, right, lower).
+METEOGRAM_BOX = (25, 547, 605, 680)
+
+# File the combined image is written to when no map path is given on
+# the command line.
+DEFAULT_OUTPUT = "map.webp"
+
+# Working file the bare map is offered in for manual annotation and
+# that is removed once it has been read back. PNG is used deliberately:
+# an image editor writes it back without loss, so no encoding
+# generation is added between download and final rendering.
+ANNOTATION_FILE = "map.png"
+
+# Layout of the combined image: the meteogram is scaled to the map
+# width and sits on top, separated from the map by this gap. The gap
+# is chosen so that the total height stays a multiple of eight, which
+# suits block based image formats.
+METEOGRAM_GAP = 11
+
+# Colours of the chart labels: a bright fill on a dark outline so the
+# text stays readable over every temperature shading.
+LABEL_FILL = (0, 190, 255)
+LABEL_STROKE = (30, 30, 200)
 
 # German weekday abbreviations (Monday first) and month names,
 # independent of the system locale.
@@ -110,12 +155,28 @@ def render_timestamp(draw, timestamp):
                  f"{MONTHS_DE[dt.month - 1]} {dt.year}")
     hour_line = f"{dt.hour}h UTC"
 
-    blue = (30, 30, 200)
-    cyan = (0, 190, 255)
     draw.text((10, 8), date_line, font=load_font(26),
-              fill=cyan, stroke_width=2, stroke_fill=blue)
+              fill=LABEL_FILL, stroke_width=2, stroke_fill=LABEL_STROKE)
     draw.text((10, 34), hour_line, font=load_font(26),
-              fill=cyan, stroke_width=2, stroke_fill=blue)
+              fill=LABEL_FILL, stroke_width=2, stroke_fill=LABEL_STROKE)
+
+
+def render_base_time(draw, base_time, height):
+    """Render the forecast run into the bottom left corner.
+
+    Args:
+        draw: ImageDraw instance of the target image.
+        base_time: run of the forecast as string in YYYYMMDDHHmm
+            format (UTC), as reported by the API.
+        height: image height in pixels.
+    """
+    dt = datetime.strptime(base_time, "%Y%m%d%H%M")
+    text = (f"Lauf: {WEEKDAYS_DE[dt.weekday()]}, {dt.day}. "
+            f"{MONTHS_DE[dt.month - 1]} {dt.year}, {dt.hour}h UTC")
+    # The font is small enough that even the longest month name keeps
+    # the line clear of the legend box in the opposite corner.
+    draw.text((10, height - 10), text, font=load_font(16), anchor="ls",
+              fill=LABEL_FILL, stroke_width=2, stroke_fill=LABEL_STROKE)
 
 
 def render_legend(draw, width, height):
@@ -155,10 +216,20 @@ def render_legend(draw, width, height):
                   font=label_font, fill="black", anchor="ms")
 
 
-def draw_cities(image_path, timestamp):
-    """Draw city markers and the valid time onto the map image."""
-    image = Image.open(image_path).convert("RGBA")
-    image = image.crop((0, 0, *CROP_SIZE))
+def draw_cities(map_image, timestamp, base_time=None):
+    """Draw city markers and the valid time onto the map image.
+
+    Args:
+        map_image: source map image as published by ECMWF.
+        timestamp: valid time as string in YYYYMMDDHH format (UTC).
+        base_time: run the forecast was computed from, in YYYYMMDDHHmm
+            format (UTC). Only known for downloaded maps; if None, no
+            run is rendered.
+
+    Returns:
+        The cropped map image with all annotations, not yet saved.
+    """
+    image = map_image.convert("RGBA").crop((0, 0, *CROP_SIZE))
     draw = ImageDraw.Draw(image)
     font = load_font(13)
 
@@ -169,23 +240,158 @@ def draw_cities(image_path, timestamp):
                      fill="black", outline="white", width=1)
         draw.text((x + r + 3, y), name, font=font, anchor="lm",
                   fill="black")
-        print(f"  {name}: ({x:.0f}, {y:.0f})")
 
     render_timestamp(draw, timestamp)
+    if base_time is not None:
+        render_base_time(draw, base_time, image.height)
     render_legend(draw, *image.size)
+    return image
 
-    image.save(image_path)
-    print(f"Bild gespeichert: {image_path}")
+
+def combine_with_meteogram(map_image, chart_image):
+    """Stack the meteogram of a chart image on top of the map.
+
+    The meteogram strip is upscaled to the map width; Magic Kernel
+    Sharp is used so the small axis labels stay legible.
+
+    Args:
+        map_image: annotated map image as returned by draw_cities().
+        chart_image: chart image containing the meteogram.
+
+    Returns:
+        A new image holding the meteogram strip and the map below it.
+    """
+    strip = chart_image.convert("RGBA").crop(METEOGRAM_BOX)
+    width = map_image.width
+    strip = magic_kernel_sharp_resize(
+        strip, (width, round(strip.height * width / strip.width)))
+
+    map_y = strip.height + METEOGRAM_GAP
+    combined = Image.new("RGBA", (width, map_y + map_image.height), "white")
+    combined.paste(strip, (0, 0))
+    combined.paste(map_image, (0, map_y))
+    return combined
+
+
+def load_sources(map_path, chart_path, timestamp):
+    """Provide the two source images, downloading them when necessary.
+
+    Args:
+        map_path: path of the map image, or None to download both
+            images from charts.ecmwf.int.
+        chart_path: path of the chart image, or None if no meteogram
+            should be added to a locally supplied map.
+        timestamp: valid time as string in YYYYMMDDHH format (UTC).
+
+    Returns:
+        A tuple of map image, chart image and forecast run. The chart
+        image is None if the map was read locally without a chart; the
+        run is None for local maps, as it is not part of the image.
+    """
+    if map_path is not None:
+        chart_image = Image.open(chart_path) if chart_path is not None \
+            else None
+        return Image.open(map_path), chart_image, None
+
+    print("Lade Karte und Meteogramm von charts.ecmwf.int ...")
+    chart = ecmwf_api.fetch_map(timestamp)
+    return chart.image, ecmwf_api.fetch_meteogram(), chart.base_time
+
+
+def wait_for_keypress():
+    """Block until the user presses a key.
+
+    Terminals without the Windows console API fall back to reading a
+    line, where the key has to be confirmed with Enter.
+    """
+    if msvcrt is not None:
+        msvcrt.getch()
+    else:
+        input()
+
+
+def pause_for_annotations(map_image, image_path):
+    """Write out the bare map and wait for the user to annotate it.
+
+    Lows, fronts and similar marks are drawn by hand in an image
+    editor. They have to be added before draw_cities() runs, so that
+    the city markers, the labels and the legend end up on top of them
+    rather than being covered.
+
+    Args:
+        map_image: freshly downloaded map image.
+        image_path: working file the map is written to, read back from
+            and removed again.
+
+    Returns:
+        The image as the editor left it on disk.
+    """
+    # Crop before saving so nothing is annotated in the strip that the
+    # final crop would discard; draw_cities() crops again, which then
+    # has no further effect.
+    map_image.crop((0, 0, *CROP_SIZE)).save(image_path)
+    print(f"Wetterkarte für die Bearbeitung in {image_path} geladen. "
+          "Drücke eine Taste um fortzusetzen.")
+    wait_for_keypress()
+
+    # copy() decodes the file completely, so the working copy can be
+    # removed right away.
+    with Image.open(image_path) as annotated:
+        image = annotated.copy()
+    try:
+        os.remove(image_path)
+    except OSError as error:
+        # A still open editor can keep the file locked. That must not
+        # discard the rendering the user has just worked for.
+        print(f"Zwischendatei {image_path} nicht gelöscht: {error}",
+              file=sys.stderr)
+    return image
+
+
+def main(argv):
+    """Run the requested mode and write the annotated map to disk."""
+    if len(argv) == 2:
+        map_path, chart_path, timestamp = None, None, argv[1]
+    elif len(argv) == 3:
+        map_path, chart_path, timestamp = argv[1], None, argv[2]
+    elif len(argv) == 4:
+        map_path, chart_path, timestamp = argv[1], argv[2], argv[3]
+    else:
+        print("Aufruf: python draw_cities.py [<karte> [<diagramm>]] "
+              "<YYYYMMDDHH>", file=sys.stderr)
+        return 1
+
+    # Validate before any download so a typo does not cost a request.
+    try:
+        datetime.strptime(timestamp, "%Y%m%d%H")
+    except ValueError:
+        print(f"Ungültige Zeitangabe: {timestamp} (erwartet YYYYMMDDHH)",
+              file=sys.stderr)
+        return 1
+
+    try:
+        map_image, chart_image, base_time = load_sources(
+            map_path, chart_path, timestamp)
+    except (requests.RequestException, LookupError) as error:
+        print(f"Abruf von charts.ecmwf.int fehlgeschlagen: {error}",
+              file=sys.stderr)
+        return 1
+
+    output_path = map_path if map_path is not None else DEFAULT_OUTPUT
+    if map_path is None:
+        map_image = pause_for_annotations(map_image, ANNOTATION_FILE)
+
+    image = draw_cities(map_image, timestamp, base_time)
+    if chart_image is not None:
+        image = combine_with_meteogram(image, chart_image)
+
+    # WebP defaults to lossy encoding, which frays the thin contour
+    # lines and the small meteogram labels; the argument is ignored by
+    # formats that are lossless anyway.
+    image.save(output_path, lossless=True)
+    print(f"Bild gespeichert: {output_path}")
+    return 0
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Aufruf: python draw_cities.py <bild.png> <YYYYMMDDHH>",
-              file=sys.stderr)
-        sys.exit(1)
-    try:
-        draw_cities(sys.argv[1], sys.argv[2])
-    except ValueError:
-        print(f"Ungültige Zeitangabe: {sys.argv[2]} (erwartet YYYYMMDDHH)",
-              file=sys.stderr)
-        sys.exit(1)
+    sys.exit(main(sys.argv))
