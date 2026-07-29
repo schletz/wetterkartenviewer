@@ -22,6 +22,10 @@ format (hour in UTC); it is rendered into the top left corner.
 If a chart image is given as well, the meteogram strip is cut out of
 it and stacked on top of the map. The map image is overwritten in
 place in both cases.
+The temperature legend is taken from the API response of a downloaded
+map, so it always matches its shading; locally supplied maps carry no
+such metadata and are rendered with FALLBACK_LEGEND without issuing a
+request.
 Without any image argument both the map and the meteogram are
 downloaded from charts.ecmwf.int and the result is written to
 DEFAULT_OUTPUT. In that mode the bare map is offered in
@@ -44,6 +48,8 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 
 import ecmwf_api
+from ecmwf_api import MapChart
+from legend import FALLBACK_LEGEND
 from upscale import magic_kernel_sharp_resize
 
 # Polar stereographic projection parameters: image position of the
@@ -86,22 +92,6 @@ LABEL_STROKE = (30, 30, 200)
 WEEKDAYS_DE = ["MO", "DI", "MI", "DO", "FR", "SA", "SO"]
 MONTHS_DE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
              "August", "September", "Oktober", "November", "Dezember"]
-
-# Temperature legend: boundary values in deg C between adjacent colour
-# bands, i.e. len(LEGEND_COLORS) == len(LEGEND_VALUES) + 1. The colours
-# are approximated from the reference chart.
-LEGEND_TITLE = "850 hPa temperature (C)"
-LEGEND_VALUES = [-80, -70, -60, -52, -48, -44, -40, -36, -32, -28, -24,
-                 -20, -16, -12, -8, -4, 0, 4, 8, 12, 16, 20, 24, 28,
-                 32, 36, 40, 44, 48, 52, 56]
-LEGEND_COLORS = [
-    "#e6e6e6", "#d7d7d7", "#c6c6c6", "#b4b4b4", "#a2a2a2", "#8f8f8f",
-    "#7d7d7d", "#8a7794", "#71589e", "#5a3d9e", "#46299e", "#3333cc",
-    "#3366ff", "#3399ff", "#00ccff", "#00b2a0", "#00a651", "#66cc33",
-    "#b3e34b", "#ffff00", "#ffcc00", "#ff9900", "#ff6600", "#ff2a00",
-    "#cc0000", "#990022", "#7a1040", "#cc3399", "#ff00ff", "#ff66ff",
-    "#ffb3e6", "#ffe6f5",
-]
 
 # Cities: name -> (latitude deg N, longitude deg E)
 CITIES = {
@@ -179,7 +169,7 @@ def render_base_time(draw, base_time, height):
               fill=LABEL_FILL, stroke_width=2, stroke_fill=LABEL_STROKE)
 
 
-def render_legend(draw, width, height):
+def render_legend(draw, width, height, legend):
     """Render the temperature colour legend into the bottom right corner.
 
     A white box contains the title, one colour patch per temperature
@@ -189,34 +179,37 @@ def render_legend(draw, width, height):
         draw: ImageDraw instance of the target image.
         width: image width in pixels.
         height: image height in pixels.
+        legend: colour bar to render, either delivered by the API for
+            this very map or FALLBACK_LEGEND.
     """
     sw = 19        # width of one colour patch
     bar_h = 22     # height of the colour bar
     pad = 10       # inner padding of the white box
-    bar_w = sw * len(LEGEND_COLORS)
+    bar_w = sw * len(legend.colors)
     box_w = bar_w + 2 * pad
     box_h = pad + 18 + 14 + bar_h + pad  # title, labels, colour bar
     x0 = width - box_w
     y0 = height - box_h
     draw.rectangle([x0, y0, width, height], fill="white")
 
-    draw.text((x0 + box_w / 2, y0 + pad), LEGEND_TITLE,
+    draw.text((x0 + box_w / 2, y0 + pad), legend.title,
               font=load_font(14, bold=False), fill="black", anchor="ma")
 
     bar_x = x0 + pad
     bar_y = y0 + box_h - pad - bar_h
-    for i, color in enumerate(LEGEND_COLORS):
+    for i, color in enumerate(legend.colors):
         draw.rectangle([bar_x + i * sw, bar_y,
                         bar_x + (i + 1) * sw, bar_y + bar_h], fill=color)
 
     # Boundary values sit exactly between adjacent colour patches.
     label_font = load_font(10, bold=False)
-    for j, value in enumerate(LEGEND_VALUES):
-        draw.text((bar_x + (j + 1) * sw, bar_y - 4), str(value),
+    for j, value in enumerate(legend.values):
+        draw.text((bar_x + (j + 1) * sw, bar_y - 4), value,
                   font=label_font, fill="black", anchor="ms")
 
 
-def draw_cities(map_image, timestamp, base_time=None):
+def draw_cities(map_image, timestamp, base_time=None,
+                legend=FALLBACK_LEGEND):
     """Draw city markers and the valid time onto the map image.
 
     Args:
@@ -225,6 +218,8 @@ def draw_cities(map_image, timestamp, base_time=None):
         base_time: run the forecast was computed from, in YYYYMMDDHHmm
             format (UTC). Only known for downloaded maps; if None, no
             run is rendered.
+        legend: colour bar of the temperature shading, delivered by the
+            API together with the map.
 
     Returns:
         The cropped map image with all annotations, not yet saved.
@@ -244,7 +239,7 @@ def draw_cities(map_image, timestamp, base_time=None):
     render_timestamp(draw, timestamp)
     if base_time is not None:
         render_base_time(draw, base_time, image.height)
-    render_legend(draw, *image.size)
+    render_legend(draw, *image.size, legend)
     return image
 
 
@@ -284,18 +279,19 @@ def load_sources(map_path, chart_path, timestamp):
         timestamp: valid time as string in YYYYMMDDHH format (UTC).
 
     Returns:
-        A tuple of map image, chart image and forecast run. The chart
-        image is None if the map was read locally without a chart; the
-        run is None for local maps, as it is not part of the image.
+        A tuple of map chart and chart image. The chart image is None
+        if the map was read locally without a chart. A local map is
+        reported without a run and with FALLBACK_LEGEND, as neither is
+        part of the image and no request is made for it.
     """
     if map_path is not None:
         chart_image = Image.open(chart_path) if chart_path is not None \
             else None
-        return Image.open(map_path), chart_image, None
+        return MapChart(Image.open(map_path), None, FALLBACK_LEGEND), \
+            chart_image
 
     print("Lade Karte und Meteogramm von charts.ecmwf.int ...")
-    chart = ecmwf_api.fetch_map(timestamp)
-    return chart.image, ecmwf_api.fetch_meteogram(), chart.base_time
+    return ecmwf_api.fetch_map(timestamp), ecmwf_api.fetch_meteogram()
 
 
 def wait_for_keypress():
@@ -370,18 +366,19 @@ def main(argv):
         return 1
 
     try:
-        map_image, chart_image, base_time = load_sources(
-            map_path, chart_path, timestamp)
+        map_chart, chart_image = load_sources(map_path, chart_path, timestamp)
     except (requests.RequestException, LookupError) as error:
         print(f"Abruf von charts.ecmwf.int fehlgeschlagen: {error}",
               file=sys.stderr)
         return 1
 
     output_path = map_path if map_path is not None else DEFAULT_OUTPUT
+    map_image = map_chart.image
     if map_path is None:
         map_image = pause_for_annotations(map_image, ANNOTATION_FILE)
 
-    image = draw_cities(map_image, timestamp, base_time)
+    image = draw_cities(map_image, timestamp, map_chart.base_time,
+                        map_chart.legend)
     if chart_image is not None:
         image = combine_with_meteogram(image, chart_image)
 

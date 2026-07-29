@@ -14,6 +14,8 @@ from typing import NamedTuple
 import requests
 from PIL import Image
 
+from legend import FALLBACK_LEGEND, Legend, parse_legend
+
 API_BASE = "https://charts.ecmwf.int/opencharts-api/v1"
 
 # 500 hPa geopotential height and 850 hPa temperature, European window.
@@ -36,10 +38,11 @@ TIMEOUT = 60
 
 
 class MapChart(NamedTuple):
-    """A downloaded map together with the forecast run it belongs to."""
+    """A downloaded map with the run and the legend it belongs to."""
 
     image: Image.Image
     base_time: str | None  # run in YYYYMMDDHHmm format (UTC)
+    legend: Legend  # colour bar of the temperature shading
 
 
 def _download_image(url):
@@ -66,8 +69,10 @@ def fetch_map(timestamp):
         timestamp: valid time as string in YYYYMMDDHH format (UTC).
 
     Returns:
-        The uncropped map image as published by ECMWF and the run it
-        was computed from; base_time is None if the API omits it.
+        The uncropped map image as published by ECMWF, the run it was
+        computed from and the legend belonging to that image;
+        base_time is None if the API omits it, the legend falls back
+        to FALLBACK_LEGEND if the response carries none.
 
     Raises:
         LookupError: if the API knows no chart for that valid time.
@@ -87,7 +92,8 @@ def fetch_map(timestamp):
     if not result or not result.get("url"):
         raise LookupError(f"Keine Karte für den Zeitpunkt {value} verfügbar")
     base_time = document.get("values", {}).get("base_time")
-    return MapChart(_download_image(result["url"]), base_time)
+    legend = parse_legend(result) or FALLBACK_LEGEND
+    return MapChart(_download_image(result["url"]), base_time, legend)
 
 
 def fetch_meteogram(location=None):
