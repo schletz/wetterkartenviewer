@@ -173,7 +173,7 @@ Panel.prototype.getImage = function (time, options) {
  */
 var EcmwfChartResolver = {
     apiBase: "https://charts.ecmwf.int/opencharts-api/v1",
-    batchSize: 6,                     // Werte pro Request; mehr führt zu HTTP 504 (Gateway Timeout).
+    batchSize: 9,                     // Werte pro Request; mehr führt zu HTTP 504 (Gateway Timeout).
     pending: [],
 
     /**
@@ -852,13 +852,17 @@ Weathermap.initUi = function (container) {
         // 0.0 500 hPa
         // *****************************************************************************************
         [
+            // 500-1000 hPa thickness and mean sea level pressure
+            { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-thickness-mslp", "opencharts_europe") },
+            { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-thickness-mslp", "opencharts_europe") },
+
             // Meteociel ECMWF 500hPa EU
-            { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 0, "ecmwfeu") },
-            { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 0, "ecmwfeu") },
+            { start: 0, step: 3, stop: 141, layer: 1, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 0, "ecmwfeu") },
+            { start: 144, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 0, "ecmwfeu") },
 
             // Meteociel 500 hpa Height + Temp
-            { start: 0, step: 3, stop: 141, layer: 1, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 13, "ecmwfnh") },
-            { start: 144, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 13, "ecmwfnh") },
+            { start: 0, step: 3, stop: 141, layer: 2, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 13, "ecmwfnh") },
+            { start: 144, step: 6, stop: 240, layer: 2, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 13, "ecmwfnh") },
         ],
         // *****************************************************************************************
         // 0.1 850 hPa Layer
