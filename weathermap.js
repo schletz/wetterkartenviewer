@@ -173,7 +173,7 @@ Panel.prototype.getImage = function (time, options) {
  */
 var EcmwfChartResolver = {
     apiBase: "https://charts.ecmwf.int/opencharts-api/v1",
-    batchSize: 9,                     // Werte pro Request; mehr führt zu HTTP 504 (Gateway Timeout).
+    batchSize: 16,                     // Werte pro Request; mehr führt zu HTTP 504 (Gateway Timeout).
     pending: [],
 
     /**
@@ -903,17 +903,21 @@ Weathermap.initUi = function (container) {
         // 1.0 300hPa
         // *****************************************************************************************
         [
+            // ECMWF Open-Charts 700 hPa Wind and relative humidity
+            { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-uv-rh", "opencharts_europe", 700) },
+            { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-uv-rh", "opencharts_europe", 700) },
+
             // ECMWF Open-Charts 700 hPa geopotential height + temperature
-            { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-t-z", "opencharts_europe", 700) },
-            { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-t-z", "opencharts_europe", 700) },
+            { start: 0, step: 3, stop: 141, layer: 1, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-t-z", "opencharts_europe", 700) },
+            { start: 144, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-t-z", "opencharts_europe", 700) },
 
             // Meteociel 500 hpa Height + Temp
-            { start: 0, step: 3, stop: 141, layer: 1, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 13, "ecmwfeu") },
-            { start: 144, step: 6, stop: 240, layer: 1, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 13, "ecmwfeu") },
+            { start: 0, step: 3, stop: 141, layer: 2, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 13, "ecmwfeu") },
+            { start: 144, step: 6, stop: 240, layer: 2, urlGenerator: Weathermap.getMeteocielUrlCenerator("ecmwf", 13, "ecmwfeu") },
 
             // Wetterzentrale ECMWF 300 hPa Wind
-            { start: 0, step: 3, stop: 141, layer: 2, urlGenerator: Weathermap.getWzUrlGenerator(21, "ECMOP", "EU") },
-            { start: 144, step: 6, stop: 240, layer: 2, urlGenerator: Weathermap.getWzUrlGenerator(21, "ECMOP", "EU") },
+            { start: 0, step: 3, stop: 141, layer: 3, urlGenerator: Weathermap.getWzUrlGenerator(21, "ECMOP", "EU") },
+            { start: 144, step: 6, stop: 240, layer: 3, urlGenerator: Weathermap.getWzUrlGenerator(21, "ECMOP", "EU") },
         ],
         // *****************************************************************************************
         // 1.1 Niederschlag
@@ -941,14 +945,18 @@ Weathermap.initUi = function (container) {
         // 1.2 Arpege
         // *****************************************************************************************
         [
-            // Meteociel ARPEGE DE
-            { start: 1, step: 1, stop: 114, layer: 0, urlGenerator: Weathermap.getMeteocielUrlCenerator("arpege", 24, "arpegede") },
+            // ECMWF Open-Charts 700 hPa Wind and relative humidity
+            { start: 0, step: 3, stop: 141, layer: 0, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-uv-z", "opencharts_europe", 700) },
+            { start: 144, step: 6, stop: 240, layer: 0, urlGenerator: Weathermap.getEcmwfChartUrlGenerator("medium-uv-z", "opencharts_europe", 700) },
 
             // Meteociel ARPEGE DE
-            { start: 1, step: 1, stop: 114, layer: 1, urlGenerator: Weathermap.getMeteocielUrlCenerator("arpege", 11, "arpegede") },
+            { start: 1, step: 1, stop: 114, layer: 1, urlGenerator: Weathermap.getMeteocielUrlCenerator("arpege", 24, "arpegede") },
 
             // Meteociel ARPEGE DE
-            { start: 1, step: 1, stop: 114, layer: 2, urlGenerator: Weathermap.getMeteocielUrlCenerator("arpege", 38, "arpegede") },
+            { start: 1, step: 1, stop: 114, layer: 2, urlGenerator: Weathermap.getMeteocielUrlCenerator("arpege", 11, "arpegede") },
+
+            // Meteociel ARPEGE DE
+            { start: 1, step: 1, stop: 114, layer: 3, urlGenerator: Weathermap.getMeteocielUrlCenerator("arpege", 38, "arpegede") },
         ]
     ]);
     Weathermap.time = 0;  // Panels zum Zeitpunkt t=0 anzeigen.
