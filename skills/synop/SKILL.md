@@ -223,7 +223,7 @@ meist 8–14 Kontaktabzüge und 10–30 Einzelkarten, verteilt nach der Wetterla
      21 UTC, also Gewitter am Nachmittag und Nebel in der Nacht und am Morgen. Dazu `tmax` und
      `tmin`.
 2. **Die ersten zwei Tage mit ICON-D2:** Rund um Ereignisse (Front, Gewitter, Nebel, Föhn) stündliche
-   Einzelkarten `icon-d2/weather_summary`; welche Stunden, zeigt die ICON-Tabelle. `t2m_wind1000`
+   Einzelkarten `icon-d2/weather_summary`; welche Stunden, zeigt die ICON-Tabelle. `t2m_wind10m`
    und `wind10m` für Kaltluftseen und Talwind, `mountain_2000` fürs Bergwetter.
 3. **Ruhige, stationäre Lage** (Hoch, kaum Änderung in der Tabelle): pro Tag eine Karte
    `t850_mslp` und eine `inversion` zur Mittagszeit. Lass auch bei mehrtägigem Hoch keinen Tag aus.
