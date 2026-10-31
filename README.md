@@ -11,6 +11,10 @@ download_data.cmd      (Windows)
 ./download_data.sh     (macOS, Linux)
 ```
 
+Für den Dauerbetrieb (z. B. ein immer laufender Mac) setzt `./download_loop.sh` den Checkout alle
+10 Minuten per `git fetch` und `git reset --hard origin/main` auf den Stand von GitHub und ruft
+dann `download_data.sh` auf. Nach dem Start fragt es einmal nach, `--yes` überspringt die Frage.
+
 1. `scripts/update_maps.py` lädt den neuesten IFS-Lauf (GRIB mit abgeleiteten Feldern) und den
    neuesten ICON-D2-Lauf nach `data/` und rendert dort die Kartenfenster. Ältere Läufe werden
    gelöscht. Jedes Modell wird nur gerendert, wenn es einen neuen Lauf hat: ICON-D2 rechnet alle
