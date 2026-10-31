@@ -1,0 +1,3 @@
+# Private container URL and the data cache (several GB) that scripts/fetch_data.py fills
+download_url.txt
+.cache/
