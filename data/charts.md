@@ -354,7 +354,8 @@ Mitteleuropa, ab T+3. Grau: Gesamtbewölkung ab 40 %. Grün bis Rot: Niederschla
 Regen), Regen ohne Symbol. Schwarze Linien: Isobaren alle 4 hPa mit Hoch und Tief.
 
 - Bewölkung, Niederschlag und Niederschlagsart sind Bodenparameter des Modells mit allen Schwächen
-  der groben Auflösung. Wie du sie gewichtest, steht in SKILL.md unter „Zweck des Skills“.
+  der groben Auflösung. Wie du sie gewichtest, steht am Anfang von SKILL.md (Arbeitsteilung der
+  Modelle).
 - Der Niederschlag ist eine Summe über die Stunden vor dem Termin, die Niederschlagsart gilt zum
   Termin selbst.
 - Der Kontaktabzug zeigt die Phasen mit Wolken und Niederschlag über 10 Tage.
@@ -392,12 +393,16 @@ Die Karten lesen sich wie ihre IFS-Gegenstücke im Mitteleuropafenster, mit dies
 - [t2m_wind1000](#t2m_wind1000), [wind10m](#wind10m): gleich; Täler und Becken sind etwa viermal
   feiner aufgelöst, Kaltluftseen und Talwinde zeigen sich deshalb deutlich.
 - [mountain_2000](#mountain_2000): das Profil kommt nur aus 850 und 700 hPa (IFS: sechs Flächen).
-  2000 m liegen immer dazwischen, der Wert ist linear interpoliert. Schraffiert („in Wolken“) ist
-  nur, wo die Feuchte auf 2000 m ≥ 95 % ist **und** die Wolkenuntergrenze des Modells (`ceiling`)
-  nicht über 2000 m liegt. Die lineare Feuchte über 1500 m Höhenunterschied allein meldet sonst
-  Wolken, wo die Basis erst darüber beginnt. Die Schichtbedeckungen `clcl`/`clcm` helfen hier
-  nicht: Ihre Grenze bei 800 hPa liegt fast genau auf 2000 m, und Hochnebel (100 % `clcl`) lässt
-  die Gipfel frei.
+  2000 m liegen immer dazwischen, der Wert ist linear interpoliert. Eine Zelle ist „in Wolken“,
+  wo die Wolkenuntergrenze des Modells (`ceiling`) nicht über 2000 m liegt **und** die Feuchte auf
+  2000 m ≥ 90 % ist, 2000 m also noch in der feuchten Schicht liegt. 90 statt 95 %, weil die
+  Feuchte gegenüber Wasser gilt: In eisgesättigter Wolke sind es bei −5 °C nur etwa 95 %, bei
+  −10 °C 91 %. Schraffiert ist, wo mindestens die Hälfte der Fläche ringsum (etwa 10 km) in Wolken
+  liegt. Die Wolken des 2-km-Modells sind fleckig; eine einzelne Zelle am Ort kann in Wolken
+  liegen, ohne dass die Fläche schraffiert ist. Den Wert am Ort gibt die ICON-Zahlentabelle
+  (Wolkenuntergrenze, Feuchte auf 850 und 700 hPa). Die Schichtbedeckungen `clcl`/`clcm` helfen
+  hier nicht: Ihre Grenze bei 800 hPa liegt fast genau auf 2000 m, und Hochnebel (100 % `clcl`)
+  lässt die Gipfel frei.
 - [tmax, tmin](#tmax-tmin): Fenster wie bei IFS (06–18 UTC bzw. 18–06 UTC), meist ein Tmax-Tag und
   zwei Tmin-Nächte je Lauf. Bei Läufen um 03, 09, 15 und 21 UTC kommen die ersten drei Stunden
   eines Fensters aus der stündlichen 2-m-Temperatur statt aus den Modellextremen, ein Maximum am

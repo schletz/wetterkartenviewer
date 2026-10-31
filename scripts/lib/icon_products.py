@@ -47,17 +47,24 @@ class IconProducts(ChartProducts):
     def profile(self, step: int) -> HeightProfile:
         return HeightProfile(self.grib, step, "z", 1.0 / GRAVITY)
 
-    def summit_cloud(self, profile: HeightProfile, step: int, height: float) -> tuple[np.ndarray, str]:
-        """RH at the height only below the cloud base of the model.
+    def summit_cloud(self, profile: HeightProfile, step: int, height: float) -> tuple[np.ndarray, float, str]:
+        """Cells in cloud at the height (100) or not (0), hatched where at least half the area around is in cloud.
 
-        The humidity is interpolated over the 1500 m between 850 and 700 hPa,
-        the cloud base (lowest layer above 50 % cover, m above sea level) is
-        the model's own; a height below it cannot be in cloud. ICON's layer
-        covers (clcl/clcm) do not tell: their border at 800 hPa lies near 2000 m.
+        A cell is in cloud where the model's cloud base (lowest layer above
+        50 % cover, m above sea level) lies at or below the height, and the
+        humidity there, interpolated over the 1500 m between 850 and 700 hPa,
+        still reaches ICON_SUMMIT_CLOUD_RH, i.e. the height lies below the top
+        of the moist layer. ICON's layer covers (clcl/clcm) do not tell: their
+        border at 800 hPa lies near 2000 m. The cloud of the 2 km model is
+        patchy; smoothed as a 0/1 field it gives the share of the area in
+        cloud, whereas RH set to 0 outside and smoothed would need almost all
+        cells in cloud to reach a humidity threshold.
         """
-        humidity = np.where(self.grib.field("ceiling", step) <= height, profile.at_height("r", height), 0.0)
-        return humidity, (f"hatched: in cloud at {height:g} m (RH ≥ {styles.SUMMIT_CLOUD_RH:g} %, "
-                          f"cloud base ≤ {height:g} m)")
+        inside = ((self.grib.field("ceiling", step) <= height)
+                  & (profile.at_height("r", height) >= styles.ICON_SUMMIT_CLOUD_RH))
+        return (np.where(inside, 100.0, 0.0), styles.SUMMIT_CLOUD_AREA,
+                f"hatched: ≥ {styles.SUMMIT_CLOUD_AREA:g} % in cloud at {height:g} m "
+                f"(base below, RH ≥ {styles.ICON_SUMMIT_CLOUD_RH:g} %)")
 
     def extreme_days(self, kind: str) -> list:
         return IconExtremes(self.grib).days(kind)

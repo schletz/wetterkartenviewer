@@ -234,6 +234,11 @@ SNOW_LINE_BELOW_FREEZING_M = 350.0
 # relative humidity from which the summits are in cloud.
 MOUNTAIN_HEIGHT_M = 2000.0
 SUMMIT_CLOUD_RH = 95.0
+# ICON-D2: a cell is in cloud at the height where the model's cloud base lies below it and RH (over
+# water) reaches this; ice-saturated air has only about 95 % at -5 deg C and 91 % at -10 deg C. Hatched
+# where at least SUMMIT_CLOUD_AREA % of the cells around (10 km smoothing) are in cloud.
+ICON_SUMMIT_CLOUD_RH = 90.0
+SUMMIT_CLOUD_AREA = 50.0
 # The T850 palette at the mountain height, so one colour means one temperature on every chart.
 MOUNTAIN_T = ColourScale(f"Temperature at {MOUNTAIN_HEIGHT_M:g} m (°C)", T850.bands, legend_range=T850.legend_range)
 # Central Europe: values printed on a lattice of this spacing (about 250 km), over land only.

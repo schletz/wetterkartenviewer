@@ -348,8 +348,8 @@ class ChartProducts:
         canvas.shade(temperature, styles.MOUNTAIN_T, mask=below_ground, mask_colour=styles.MASK_RGB,
                      mask_label=f"grey: model ground above {height:g} m")
         canvas.outlines()
-        cloud, label = self.summit_cloud(profile, step, height)
-        canvas.hatch(self.pixels.resample(cloud, smooth_km=10), styles.SUMMIT_CLOUD_RH, "#303030", label)
+        cloud, at_least, label = self.summit_cloud(profile, step, height)
+        canvas.hatch(self.pixels.resample(cloud, smooth_km=10), at_least, "#303030", label)
         dx, dy = self.pixels.wind_vectors(self.pixels.resample(profile.at_height("u", height)),
                                           self.pixels.resample(profile.at_height("v", height)))
         canvas.arrows(np.where(below_ground, np.nan, dx), np.where(below_ground, np.nan, dy), spacing=30,
@@ -358,9 +358,13 @@ class ChartProducts:
                           where=self.land & ~below_ground)
         return canvas
 
-    def summit_cloud(self, profile: HeightProfile, step: int, height: float) -> tuple[np.ndarray, str]:
-        """Relative humidity at a height on the model grid, hatched from SUMMIT_CLOUD_RH, and its legend note."""
-        return profile.at_height("r", height), f"hatched: RH ≥ {styles.SUMMIT_CLOUD_RH:g} % (in cloud at {height:g} m)"
+    def summit_cloud(self, profile: HeightProfile, step: int, height: float) -> tuple[np.ndarray, float, str]:
+        """Field on the model grid hatched where it reaches the threshold (after smoothing), threshold, legend note.
+
+        Here the relative humidity at the height, hatched from SUMMIT_CLOUD_RH.
+        """
+        return (profile.at_height("r", height), styles.SUMMIT_CLOUD_RH,
+                f"hatched: RH ≥ {styles.SUMMIT_CLOUD_RH:g} % (in cloud at {height:g} m)")
 
     def freezing_level(self, step: int) -> ChartCanvas:
         canvas = ChartCanvas(self.base_map, "Freezing level (m, colours)", self.step_label(step))
