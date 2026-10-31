@@ -115,7 +115,8 @@ Zahl ist exakt, ein Farbband deckt 4 K oder 300 m ab. Für den Ort selbst nimm d
 extrapoliert oder gibt es nicht. Die Schwelle steht in der Legende.
 
 **Kontaktabzüge** (`sheets/<produkt>.webp`) zeigen die 12-UTC-Karte jedes Tages (Tmax/Tmin: jeden
-Tag) als Kacheln in halber Größe.
+Tag) als Kacheln in halber Größe. Bei `icon-d2` sind es die Karten um 03, 09, 15 und 21 UTC, also
+8 Kacheln über 48 h: Gewitter am Nachmittag und Nebel in der Nacht fielen bei 12 UTC durch.
 - **Lesbar:** Muster, Verlagerung von Trögen und Rücken, Trends.
 - **Nicht lesbar:** Beschriftungen und Linienwerte.
 - **Kosten:** Ein Abzug kostet etwa 2400 Tokens, eine Einzelkarte etwa 1100.
@@ -124,9 +125,14 @@ Tag) als Kacheln in halber Größe.
 Karten haben Grenzen, aber keine Ortsnamen, und ohne Markierung verschätzt man leicht, ob ein
 Feuchteband oder eine Warmluftzunge den Ort trifft.
 
-**Modellauflösung.** Das Gitter hat 0,1° (etwa 9 km). Effektiv aufgelöst sind Strukturen von
-einigen 10 km. Täler, die schmaler sind, gibt es im Modell nicht, die Gipfel sind abgeflacht
-(siehe [orography](#orography)).
+**Modellauflösung.**
+- **IFS:** Das Gitter hat 0,1° (etwa 9 km). Effektiv aufgelöst sind Strukturen von einigen 10 km.
+  Täler, die schmaler sind, gibt es im Modell nicht, die Gipfel sind abgeflacht (siehe
+  [orography](#orography)).
+- **ICON-D2:** Die Zellen liegen etwa 2,2 km auseinander, effektiv aufgelöst sind Strukturen ab
+  etwa 10 km. Größere Alpentäler und Becken sind damit im Modell, Kaltluftseen, Talwind, Nebel und
+  einzelne Gewitterzellen ebenfalls. Schmale Seitentäler und einzelne Gipfel bleiben geglättet
+  (`icon-d2/orography.webp`).
 
 ## z500_t850
 
