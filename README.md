@@ -93,7 +93,7 @@ Sommergewitter, Hagel, Nebel und Sturmböen, um deren Symbole zu prüfen (nie ve
 
 - `tiles`: pro Kachel die Layer als `fenster/produkt` (Ordner unter `maps/`). Linksklick schaltet
   zum nächsten Layer, Rechtsklick öffnet die Karte 1:1 in einem verschiebbaren Fenster.
-  Ein Layer kann auch ein Array sein, etwa `["icon-d2/t2m_wind1000", "opencharts_central_europe/t2m_wind1000"]`:
+  Ein Layer kann auch ein Array sein, etwa `["icon-d2/t2m_wind10m", "opencharts_central_europe/t2m_wind10m"]`:
   Zu jedem Termin zeigt die Kachel den ersten Pfad, der dafür eine Karte hat. So kommt ICON-D2 für
   seine 48 h und danach ECMWF, wie bei einem COALESCE.
 - `meteograms`: Namen der ECMWF-Meteogramme der Startseite.

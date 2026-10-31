@@ -27,7 +27,7 @@ class IconProducts(ChartProducts):
     TriangleGrid as pixel mapping.
     """
 
-    STEP = ("t2m_wind1000", "wind10m", "mountain_2000", "weather_summary")
+    STEP = ("t2m_wind10m", "wind10m", "mountain_2000", "weather_summary")
     DAY = {"tmax": "max", "tmin": "min"}
     STATIC = ("orography",)
     ALL = (*STEP, *DAY, *STATIC)

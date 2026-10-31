@@ -40,7 +40,7 @@ class ChartProducts:
     """
 
     STEP = ("z500_t850", "z700_t700", "z850_rh700", "thickness_mslp", "t850_mslp", "t850_anomaly", "rh700_wind700", "vt_rh700",
-            "dt850_24h", "t2m_wind1000", "wind10m", "inversion", "mountain_2000", "freezing_level", "snow_line", "weather_summary")
+            "dt850_24h", "t2m_wind10m", "wind10m", "inversion", "mountain_2000", "freezing_level", "snow_line", "weather_summary")
     DAY = {"tmax": "max", "tmin": "min"}
     STATIC = ("orography",)
     ALL = (*STEP, *DAY, *STATIC)
@@ -54,7 +54,7 @@ class ChartProducts:
         "opencharts_europe": ("z500_t850", "z700_t700", "z850_rh700", "thickness_mslp", "dt850_24h"),
         # T850 instead of the thickness under the isobars: the thickness is smooth at
         # this scale, while T850 shows the warm tongue of foehn in the lee of the Alps.
-        "opencharts_central_europe": ("t850_mslp", "t850_anomaly", "rh700_wind700", "vt_rh700", "t2m_wind1000",
+        "opencharts_central_europe": ("t850_mslp", "t850_anomaly", "rh700_wind700", "vt_rh700", "t2m_wind10m",
                                       "wind10m", "inversion", "mountain_2000", "freezing_level", "snow_line", "tmax", "tmin",
                                       "orography", "weather_summary"),
     }
@@ -121,12 +121,9 @@ class ChartProducts:
         """A field on the chart pixels, converted as (value + offset) * factor."""
         return self.pixels.resample((self.grib.field(name, step, level) + offset) * factor, smooth_km)
 
-    def wind_arrows(self, step: int, level: int, hide: np.ndarray | None = None) -> tuple:
-        """Pixel components (dx, dy) of the wind on a level; ``hide`` pixels get no arrow."""
-        dx, dy = self.pixels.wind_vectors(self.field("u", step, level), self.field("v", step, level))
-        if hide is not None:
-            dx, dy = np.where(hide, np.nan, dx), np.where(hide, np.nan, dy)
-        return dx, dy
+    def wind_arrows(self, step: int, level: int) -> tuple:
+        """Pixel components (dx, dy) of the wind on a level."""
+        return self.pixels.wind_vectors(self.field("u", step, level), self.field("v", step, level))
 
     def profile(self, step: int) -> HeightProfile:
         """Pressure level profile of one step."""
@@ -307,8 +304,9 @@ class ChartProducts:
         self.z500_lines(canvas, step)
         return canvas
 
-    def t2m_wind1000(self, step: int) -> ChartCanvas:
-        canvas = ChartCanvas(self.base_map, "2 m temperature (°C, colours) + 1000 hPa wind (arrows)",
+    def t2m_wind10m(self, step: int) -> ChartCanvas:
+        """2 m temperature with the 10 m wind as arrows."""
+        canvas = ChartCanvas(self.base_map, "2 m temperature (°C, colours) + 10 m wind (arrows)",
                              self.step_label(step))
         temperature = self.grib.field("2t", step) - KELVIN
         pixels = self.pixels.resample(temperature)
@@ -316,9 +314,8 @@ class ChartProducts:
         canvas.outlines()
         self.frost_line(canvas, temperature)
         self.print_values(canvas, pixels, "{:.0f}", "numbers: T2m in °C at the model height")
-        hide = self.height > styles.ABOVE_1000HPA_M
-        canvas.arrows(*self.wind_arrows(step, 1000, hide), spacing=30, px_per_ms=2.5, reference_ms=10,
-                      label=f"1000 hPa wind (none above {styles.ABOVE_1000HPA_M:g} m)")
+        dx, dy = self.pixels.wind_vectors(self.field("10u", step), self.field("10v", step))
+        canvas.arrows(dx, dy, spacing=30, px_per_ms=2.5, reference_ms=10, label="10 m wind")
         return canvas
 
     def wind10m(self, step: int) -> ChartCanvas:

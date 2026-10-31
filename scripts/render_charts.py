@@ -14,7 +14,7 @@ defined in lib/chart_products.py; one chart per step unless noted:
     rh700_wind700    700 hPa relative humidity (> 65 %), wind arrows, ascent/subsidence lines
     vt_rh700         vertical totals T850 - T500 (convective instability), RH700 lines
     dt850_24h        24 h change of T850 (warm/cold advection), Z500 contours; from T+24
-    t2m_wind1000     2 m temperature, 0 deg C line, 1000 hPa wind arrows
+    t2m_wind10m      2 m temperature, 0 deg C line, 10 m wind arrows
     wind10m          10 m wind speed in km/h (Beaufort bands), streamlines, isobars every 4 hPa
     inversion        temperature increase 1000-850 hPa, moist boundary layer hatched, 925 hPa wind line
     mountain_2000    temperature, wind and summits in cloud at 2000 m
@@ -29,7 +29,7 @@ An ICON-D2 file (unstructured grid, lib/icon_products.py) has its own products,
 hourly from T+1 to T+48 on the window icon-d2 (Austria and surroundings, Lambert,
 with the borders of the Austrian states):
 
-    t2m_wind1000     as above
+    t2m_wind10m      as above
     wind10m          as above
     mountain_2000    as above, the profile from 850 and 700 hPa
     weather_summary  as above with 1 h precipitation, plus thunderstorm, hail, fog and storm gusts

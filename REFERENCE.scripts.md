@@ -578,7 +578,7 @@ Fields stay on the icosahedral grid (542 040 cells, 1-D arrays; boundary zone wi
 | t_2m, u_10m, v_10m | `2t`, `10u`, `10v` | | 0…48 |
 | tmax_2m, tmin_2m | `tmax_2m`, `tmin_2m` | 2 m extreme since the last 6 h restart (K) | 0…48 |
 | ceiling | `ceiling` | base of the lowest layer with > 50 % cover, m above sea; ≈ 20 km where none | 0…48 |
-| u@1000, v@1000 | `u`, `v` level 1000 | for `t2m_wind1000` | 0…48 |
+| u@1000, v@1000 | `u`, `v` level 1000 | only for the location tables of the synop skill (`skills/synop`); no chart uses them | 0…48 |
 | t, relhum, fi, u, v @850 and @700 | `t`, `r`, `z`, `u`, `v` | profile for `mountain_2000`; no 925 hPa in ICON-D2 | 0…48 |
 
 Total 4 + 22 × 49 + 48 = 1130 messages. The aliases give ICON fields the IFS names, so `ChartProducts` methods work; units still differ and `IconProducts` handles them.
@@ -984,17 +984,17 @@ Keys `(kind, statistic, level, month, day)`: kind `HHz` (term hours present), `d
 Product registry: a product is a method with its name, `(self, step)` for STEP products, `(self)` for STATIC; DAY maps a name to `"max"`/`"min"` and draws `daily_extreme`.
 `draw` turns a `MissingFieldError` into a "No data available" chart (title = product, time line from `key_label`, note = the field from the error).
 Hooks for subclasses (data sources only): `profile`, `summit_cloud`, `extreme_days`, `daily_extreme_field`, `cloud_cover`, `precipitation`, `precipitation_type`.
-Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L window 121 px, H 181 px, `min_depth` 2 dam, 60 km pre-smoothing; MSLP centres (`isobars`) 81/161 px, 2 hPa, 60 km; arrows `rh700_wind700` 30 px, 1.2 px per m/s, reference 20 m/s; `t2m_wind1000` 30 px, 2.5, 10 m/s; `mountain_2000` 30 px, 1.5, 20 m/s.
+Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L window 121 px, H 181 px, `min_depth` 2 dam, 60 km pre-smoothing; MSLP centres (`isobars`) 81/161 px, 2 hPa, 60 km; arrows `rh700_wind700` 30 px, 1.2 px per m/s, reference 20 m/s; `t2m_wind10m` 30 px, 2.5, 10 m/s; `mountain_2000` 30 px, 1.5, 20 m/s.
 
 | Field | Meaning |
 | --- | --- |
-| `STEP` | `z500_t850`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `dt850_24h`, `t2m_wind1000`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `weather_summary` |
+| `STEP` | `z500_t850`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `dt850_24h`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `weather_summary` |
 | `DAY = {'tmax': 'max', 'tmin': 'min'}`, `STATIC = ('orography',)`, `ALL` | |
 | `CLIMATE = ('t850_anomaly',)` | products that need `climate` |
 | `MODEL = 'ECMWF IFS'` | legend and `geometry.json` |
 | `PRECIP_HOURS = 6` | interval of `weather_summary` (3 h at T+3) |
 | `SHEET_HOURS = (12,)` | valid hours on contact sheets |
-| `DEFAULTS` | europe: `z500_t850`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h`; central_europe: `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `t2m_wind1000`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `tmax`, `tmin`, `orography`, `weather_summary`; no `icon-d2` entry |
+| `DEFAULTS` | europe: `z500_t850`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h`; central_europe: `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `tmax`, `tmin`, `orography`, `weather_summary`; no `icon-d2` entry |
 | `CHANGE_HOURS = 24`, `TCC_PERCENT = 100.0` | `dt850_24h`; tcc 0–1 → % |
 | `detail` (instance) | `km_per_px(50)` smaller than Europe (central_europe, icon-d2): denser isobars, printed values |
 | `height`, `land` (instance) | model height and land ≥ 0.5 on the pixels |
@@ -1024,7 +1024,7 @@ A run gives 3 × 49 + 48 step charts, usually 1 `tmax` and 2 `tmin`, `orography`
 
 | Field | Meaning |
 | --- | --- |
-| `STEP = ('t2m_wind1000', 'wind10m', 'mountain_2000', 'weather_summary')`, `DAY`, `STATIC`, `CLIMATE = ()` | |
+| `STEP = ('t2m_wind10m', 'wind10m', 'mountain_2000', 'weather_summary')`, `DAY`, `STATIC`, `CLIMATE = ()` | |
 | `MODEL = 'ICON-D2'`, `PRECIP_HOURS = 1` | |
 | `SHEET_HOURS = (3, 9, 15, 21)` | 15 UTC for afternoon storms, 03/09 for fog |
 | `DEFAULTS = {'icon-d2': ALL}` | |
@@ -1116,7 +1116,7 @@ chart_styles.py holds every scale and threshold:
 | `T2M`, `MOUNTAIN_T` | bands of T850: one colour = one temperature on every chart |
 | `T850_ANOMALY` | σ bands; ≥ 1 notable, ≥ 2 unusual |
 | `ROUGH_TERRAIN_SDOR = 200` | real valley/summit heights differ by several 100 m |
-| `HIGH_GROUND_M = 700`, `ABOVE_1000HPA_M = 500`, `ABOVE_850HPA_M = 1300` | inversion chart grey, no 1000 hPa arrows, T850 areas masked or dashed line in `t850_mslp`/`z850_rh700`; `z500_t850`, `dt850_24h` colour T850 everywhere |
+| `HIGH_GROUND_M = 700`, `ABOVE_850HPA_M = 1300` | inversion chart grey, T850 areas masked or dashed line in `t850_mslp`/`z850_rh700`; `z500_t850`, `dt850_24h` colour T850 everywhere |
 | `PRECIPITATION`, `CLOUD_COVER` | after ogimet surface charts; uncoloured below 0.2 mm / 40 %; "6 h" in the title is replaced with the real interval |
 | `PRECIP_TYPES` | ptype 5 snow; 6/7 wet snow, sleet; 3/8/12 freezing rain, ice pellets; rain without symbol |
 | `OUTSIDE_RGB = (190, 190, 190)` | outside a limited area model |
@@ -1179,6 +1179,7 @@ No logging framework, no tests, no cleanup of `.part` files after an exception. 
 - **Non-default product on central Europe**: `WINDOWS['opencharts_central_europe']` = comma list or `"all"`, or extend `DEFAULTS`; update data/charts.md.
 - **New IFS product**: method named like the product in `ChartProducts`, name in `STEP`/`STATIC` (`DAY` maps to max/min), in `DEFAULTS` and in `CLIMATE` if it uses `climate`; new fields → extend the group in `RequestPlan.__init__` (`expected_total` follows, existing files are re-downloaded); other steps than the `t` steps → extend `keys`; scales in chart_styles.py; update render_charts.py docstring and data/charts.md.
 - **New ICON product**: existing product → add its name to `IconProducts.STEP`/`DAY`/`STATIC` if the ICON file has all fields; differing data source → add a hook in `ChartProducts` and override it; ICON-only → method in `IconProducts`. `ALL`/`DEFAULTS` follow. Update render_charts.py docstring, data/charts.md, and put it first in a chain.
+- **Renaming a product**: method name, `STEP`/`DAY`/`STATIC`, `DEFAULTS` (IFS) and `IconProducts.STEP`, render_charts.py docstring, viewer.config.json layers, data/charts.md (anchors too), README example, skills/synop/SKILL.md. Charts already rendered keep the old name until their window is rendered again (`data/<window>/` is emptied first, then blob_mirror and the `--delete` mirror follow): with the same run only windows with a tile layer of the new name (`stale_windows`), i.e. not `opencharts_europe`, which waits for the next ECMWF run or `--force`. The committed maps/manifest.json keeps the old name until then, so a deploy before that shows the layer without a video.
 - **New ICON parameter**: DWD folder in `FORECAST_PARAMS`/`STATIC_PARAMS` (`<folder>@<hPa>`, no 925 hPa), alias in `ICON_NAMES` if needed. It must reach step 48 and yield one message per file after the hour filter. Multi-level parameters need unique levels.
 - **New GRIB parameter (IFS)**: group in `RequestPlan.__init__`, a complete cartesian product of what Open Data publishes.
 - **New derived field**: entry in `jobs` of `step_messages`, adjust `PER_STEP` by hand; without WMO/ECMWF id the next free number in `LOCAL_NAMES` (never reuse numbers); one-off fields also in the `+ 1` of `expected_total` (request_plan.py).

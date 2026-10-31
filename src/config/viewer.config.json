@@ -25,8 +25,8 @@
     {
       "layers": [
         [
-          "icon-d2/t2m_wind1000",
-          "opencharts_central_europe/t2m_wind1000"
+          "icon-d2/t2m_wind10m",
+          "opencharts_central_europe/t2m_wind10m"
         ],
         [
           "icon-d2/mountain_2000",

@@ -117,9 +117,8 @@ OROGRAPHY = ColourScale("Model orography (m)", (
 # height of a valley or summit differs from the model height by several 100 m.
 ROUGH_TERRAIN_SDOR = 200.0
 # Model heights (m) above which the values of a level are extrapolated or no lowland values:
-# 2 m vs. 925/850 hPa on the inversion chart, 1000 hPa wind, 850 hPa on the vertical totals chart.
+# 2 m vs. 925/850 hPa on the inversion chart, 850 hPa on the vertical totals chart.
 HIGH_GROUND_M = 700.0
-ABOVE_1000HPA_M = 500.0
 ABOVE_850HPA_M = 1300.0
 
 # Sea on the orography chart; the spectral model orography oscillates around 0 m off the coasts.

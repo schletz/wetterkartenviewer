@@ -17,7 +17,7 @@ onto the chart pixels (lib/triangle_grid.py). Parameters, as named by DWD
     u_10m, v_10m                   10 m wind (m/s); 10u, 10v
     ceiling                        base of the lowest cloud layer above 50 % cover (m above sea level,
                                    about 20 km where there is none); ceil -> ceiling
-    u, v @1000 hPa                 wind (m/s) for t2m_wind1000
+    u, v @1000 hPa                 wind (m/s) for the location tables of the synop skill
     t, relhum, fi, u, v @850, 700  pressure levels for the values at 2000 m (mountain_2000): K, % (r),
                                    geopotential m2/s2 (z), m/s; ICON-D2 has no 925 hPa
 

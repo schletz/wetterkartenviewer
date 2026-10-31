@@ -12,7 +12,7 @@ liest. Lies nur die Abschnitte, die du gerade brauchst.
 - Großwetterlage (Europa): [z500_t850](#z500_t850), [z700_t700](#z700_t700), [z850_rh700](#z850_rh700),
   [thickness_mslp](#thickness_mslp), [dt850_24h](#dt850_24h)
 - Mitteleuropa: [t850_mslp](#t850_mslp), [t850_anomaly](#t850_anomaly), [rh700_wind700](#rh700_wind700),
-  [vt_rh700](#vt_rh700), [inversion](#inversion), [t2m_wind1000](#t2m_wind1000), [wind10m](#wind10m),
+  [vt_rh700](#vt_rh700), [inversion](#inversion), [t2m_wind10m](#t2m_wind10m), [wind10m](#wind10m),
   [tmax, tmin](#tmax-tmin), [weather_summary](#weather_summary)
 - Bergwetter (Mitteleuropa): [mountain_2000](#mountain_2000), [freezing_level](#freezing_level),
   [snow_line](#snow_line)
@@ -97,7 +97,7 @@ bei den IFS-Fenstern ist `cone` 1 und `lon0` 0.
 |---|---|---|---|
 | `opencharts_europe` | Atlantik bis Westrussland, Nordafrika bis Nordkap | 7,6 (35° N) bis 9,4 (70° N) | alle Produkte |
 | `opencharts_central_europe` | 35,7–57,4° N, 23° W–37° E (Irland bis Rumänien, Dänemark bis Sizilien) | etwa 3,2 | alle außer `z500_t850`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h` |
-| `icon-d2` | 45,3–49,6° N, 5,7–18,2° E (Burgund bis Bratislava, Mailand bis Würzburg) | 0,75 | `t2m_wind1000`, `wind10m`, `mountain_2000`, `weather_summary`, `tmax`, `tmin`, `orography` (ICON-D2) |
+| `icon-d2` | 45,3–49,6° N, 5,7–18,2° E (Burgund bis Bratislava, Mailand bis Würzburg) | 0,75 | `t2m_wind10m`, `wind10m`, `mountain_2000`, `weather_summary`, `tmax`, `tmin`, `orography` (ICON-D2) |
 
 Europa zeigt, was stromauf liegt und in den nächsten Tagen ankommt. Mitteleuropa zeigt Fronten
 etwa zwei Tage im Voraus und die Grenzschicht im Detail. Für einen Ort nördlich von 57° N oder
@@ -276,11 +276,10 @@ Schraffiert: RH auf 925 oder 1000 hPa ≥ 90 %, also eine feuchte Grenzschicht. 
 - Eine Inversion über trockener Luft heißt sonnig und in Becken kalt. Eine Inversion über feuchter
   Grenzschicht heißt grau und trüb.
 
-## t2m_wind1000
+## t2m_wind10m
 
 Mitteleuropa. Farben und Zahlen: T2m (Modellwert für die Modellhöhe), blaue Linie 0 °C. Pfeile: Wind
-auf 1000 hPa als Näherung für den Bodenwind. Keine Pfeile über 500 m Modellhöhe, dort liegt 1000 hPa
-im Boden.
+in 10 m über dem Modellboden, überall, auch im Gebirge.
 
 - T2m ist ein bodennaher Parameter mit allen Schwächen des groben Modells. Wie du ihn prüfst,
   steht in SKILL.md unter „T2m kritisch prüfen“.
@@ -396,7 +395,7 @@ Eine vom Server verlorene Datei steht wie bei IFS als Feld mit lauter fehlenden 
 ICON-D2 für Österreich und Umgebung, stündlich von T+1 (`weather_summary`) bzw. T+0 bis T+48.
 Die Karten lesen sich wie ihre IFS-Gegenstücke im Mitteleuropafenster, mit diesen Unterschieden:
 
-- [t2m_wind1000](#t2m_wind1000), [wind10m](#wind10m): gleich; Täler und Becken sind etwa viermal
+- [t2m_wind10m](#t2m_wind10m), [wind10m](#wind10m): gleich; Täler und Becken sind etwa viermal
   feiner aufgelöst, Kaltluftseen und Talwinde zeigen sich deshalb deutlich.
 - [mountain_2000](#mountain_2000): das Profil kommt nur aus 850 und 700 hPa (IFS: sechs Flächen).
   2000 m liegen immer dazwischen, der Wert ist linear interpoliert. Eine Zelle ist „in Wolken“,

@@ -176,7 +176,7 @@ The JSON is trusted, not validated.
 `src/config/viewer.config.json`, edited by hand, read by the app (bundled) and by `tile_chart_paths`.
 `meteograms`: epsgram names (`classical_10d`, `classical_15d_with_climate`, `classical_plume`).
 `tiles[].layers[]`: a layer is a path or a list of paths in order of preference (fallback chain, e.g. `["icon-d2/wind10m", "opencharts_central_europe/wind10m"]`).
-Currently 6 tiles; ICON is first in the chains of t2m_wind1000, mountain_2000, weather_summary and wind10m.
+Currently 6 tiles; ICON is first in the chains of t2m_wind10m, mountain_2000, weather_summary and wind10m.
 
 ## API: src/ (app)
 
