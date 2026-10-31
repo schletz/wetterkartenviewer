@@ -1,0 +1,21 @@
+.viewer {
+  padding: 0 var(--gap) var(--gap);
+}
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 4px;
+  background: var(--bg);
+}
+
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--gap);
+}

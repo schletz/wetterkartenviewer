@@ -1,0 +1,2 @@
+# The start scripts for macOS/Linux break with CRLF.
+*.sh text eol=lf

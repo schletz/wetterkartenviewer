@@ -1,0 +1,41 @@
+.window {
+  position: fixed;
+  z-index: 10;
+  border: 1px solid #5f6b78;
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+.titleBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  background: #2d3640;
+  color: #ffffff;
+  font-size: 13px;
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.close {
+  width: 26px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.close:hover {
+  background: #c42b1c;
+}
+
+/* 1:1 pixel size for the sharpest picture; the legend needs the full width anyway. */
+.chart {
+  width: 1200px;
+  cursor: pointer;
+}

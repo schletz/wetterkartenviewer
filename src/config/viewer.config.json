@@ -1,0 +1,43 @@
+{
+  "meteograms": [
+    "classical_10d",
+    "classical_15d_with_climate",
+    "classical_plume"
+  ],
+  "tiles": [
+    {
+      "layers": [
+        "opencharts_europe/thickness_mslp"
+      ]
+    },
+    {
+      "layers": [
+        "opencharts_europe/z500_t850",
+        "opencharts_central_europe/t850_anomaly"
+      ]
+    },
+    {
+      "layers": [
+        "opencharts_europe/z850_rh700",
+        "opencharts_europe/z700_t700"
+      ]
+    },
+    {
+      "layers": [
+        "opencharts_central_europe/t2m_wind1000",
+        "opencharts_central_europe/mountain_2000",
+        "opencharts_central_europe/inversion"
+      ]
+    },
+    {
+      "layers": [
+        "opencharts_central_europe/weather_summary"
+      ]
+    },
+    {
+      "layers": [
+        "opencharts_central_europe/wind10m"
+      ]
+    }
+  ]
+}

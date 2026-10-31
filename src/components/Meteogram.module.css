@@ -1,0 +1,23 @@
+/* Three meteograms side by side on a wide screen, each at most its natural width. */
+.frame {
+  flex: 1 1 520px;
+  max-width: calc((100% - 24px) / 3);
+  min-width: 420px;
+  min-height: 300px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.status {
+  color: var(--muted);
+}

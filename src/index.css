@@ -1,0 +1,28 @@
+:root {
+  --bg: #eef0f3;
+  --surface: #ffffff;
+  --text: #1d2228;
+  --muted: #5f6b78;
+  --border: #c9cfd6;
+  --accent: #1f5fbf;
+  --accent-text: #ffffff;
+  --gap: 6px;
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
