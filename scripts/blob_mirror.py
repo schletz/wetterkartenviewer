@@ -11,8 +11,13 @@ Unfinished downloads (*.part, *.raw/) are left out; the videos of maps/ are neve
 The container keeps no history: blobs without a local file (older runs, charts of past steps)
 are deleted, and soft delete is off. A file is uploaded if its blob is missing or differs in
 size or in the local modification time stored as blob metadata, so a call without a new run
-only lists the container. Uploads go first and deletions last: a reader finds the GRIB of the
-old run until the new one is complete; re-rendered charts are replaced in place.
+only lists the container.
+
+current_run.json marks a consistent container: {"ecmwf": "<run>", "icon-d2": "<run>",
+"updated": "<UTC ISO time>"}, one entry per model with a GRIB in data/. Before anything is
+uploaded or deleted it is removed, and it is written last, so a reader without it knows that an
+upload runs or failed, and a reader that finds it changed after downloading knows that it may
+hold files of two runs. A call that changes nothing keeps it (or writes it if it is missing).
 
 Blobs are written in the hot tier although the account defaults to cool: cool blobs deleted
 within 30 days are billed for the full 30 days, and every run replaces several GB.
@@ -24,9 +29,11 @@ Usage: python scripts/blob_mirror.py data
 """
 
 import argparse
+import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 
 from azure.storage.blob import BlobServiceClient, ContainerClient, ContentSettings, StandardBlobTier
@@ -34,6 +41,9 @@ from azure.storage.blob import BlobServiceClient, ContainerClient, ContentSettin
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 ACCOUNT_VARIABLE, KEY_VARIABLE = "BLOB_STORAGE_ID", "BLOB_STORAGE_KEY"
 CONTAINER = "forecastdata"
+RUN_FILE = "current_run.json"
+# Model key in RUN_FILE → GRIB prefix; must match ECMWF_PREFIX and ICON_PREFIX of update_maps.py.
+MODELS = {"ecmwf": "ecmwf_", "icon-d2": "icon-d2_"}
 # Suffixes of unfinished downloads (download_ecmwf_data.py, download_icon_d2.py).
 UNFINISHED = (".part", ".raw")
 CONTENT_TYPES = {".grb2": "application/octet-stream", ".md": "text/markdown; charset=utf-8",
@@ -107,8 +117,22 @@ def delete(container: ContainerClient, names: list[str]) -> None:
         container.delete_blobs(*names[start:start + DELETE_BATCH])
 
 
+def current_runs(files: dict[str, Path]) -> dict[str, str]:
+    """Content of RUN_FILE: the run of every model with a GRIB in data/, and the time of writing."""
+    runs = {model: name.removeprefix(prefix).removesuffix(".grb2") for model, prefix in MODELS.items()
+            for name in files if "/" not in name and name.startswith(prefix) and name.endswith(".grb2")}
+    return runs | {"updated": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
+def write_run_file(container: ContainerClient, runs: dict[str, str]) -> None:
+    """Upload RUN_FILE; no-cache, so a proxy never serves a state that no longer exists."""
+    settings = ContentSettings(content_type=CONTENT_TYPES[".json"], cache_control="no-cache")
+    container.upload_blob(RUN_FILE, json.dumps(runs, indent=2), overwrite=True, content_settings=settings,
+                          standard_blob_tier=StandardBlobTier.HOT)
+
+
 def mirror(data: Path) -> None:
-    """Make the container hold exactly the finished files of data/; skipped without credentials.
+    """Make the container hold exactly the finished files of data/ plus RUN_FILE; skipped without credentials.
 
     Raises azure.core.exceptions.AzureError on network or service errors; files uploaded
     until then stay, the next call sends the rest.
@@ -121,12 +145,17 @@ def mirror(data: Path) -> None:
     container = container_client(*login)
     files = local_files(data)
     blobs = {blob.name: blob for blob in container.list_blobs(include=["metadata"])}
+    marked = blobs.pop(RUN_FILE, None) is not None
     uploads = stale_files(files, blobs)
+    obsolete = sorted(set(blobs) - set(files))
+    if (uploads or obsolete) and marked:
+        container.delete_blob(RUN_FILE)
     with ThreadPoolExecutor(PARALLEL_UPLOADS) as pool:
         # list() collects the results, so the first failed upload raises here.
         list(pool.map(lambda name: upload(container, name, files[name]), uploads))
-    obsolete = sorted(set(blobs) - set(files))
     delete(container, obsolete)
+    if uploads or obsolete or not marked:
+        write_run_file(container, current_runs(files))
     size = sum(files[name].stat().st_size for name in uploads) / MB
     print(f"blob mirror {container.url}: uploaded {len(uploads)} files ({size:.0f} MB), "
           f"deleted {len(obsolete)} blobs in {time.monotonic() - started:.0f} s")

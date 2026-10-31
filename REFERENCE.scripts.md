@@ -137,7 +137,7 @@ data_dir --> synop : GRIB, charts.md
 window_dir --> synop : charts,\ngeometry.json
 data_dir --> blob_mirror
 window_dir --> blob_mirror
-blob_mirror --> blob : changed files,\ndelete the rest
+blob_mirror --> blob : changed files,\ndelete the rest,\ncurrent_run.json last
 blob --> synop : anonymous\nHTTPS
 @enduml
 ```
@@ -636,13 +636,14 @@ Without a new run a call takes ≈ 3.5 s.
 ### blob_mirror.py
 
 `mirror(data)` makes the container `forecastdata` hold exactly the finished files of `data/` (all but paths with a part ending in `.part`/`.raw`); blob name = path relative to `data/`. Called last in update_maps.py, also when nothing was rendered, so a failed upload heals on the next call; without changes it only lists the container.
-Changed = blob missing, other size, or metadata `mtime` ≠ local `st_mtime_ns` (no hash). Uploads first, then batch deletes of blobs without a local file: readers see the old GRIB until the new one is complete, but re-rendered charts change in place, so a reader during an upload can get charts of two runs.
+Changed = blob missing, other size, or metadata `mtime` ≠ local `st_mtime_ns` (no hash). Order when something changed: delete `current_run.json`, upload, batch-delete blobs without a local file, write `current_run.json` (`{"ecmwf": run, "icon-d2": run, "updated": UTC ISO}`, runs from the top-level GRIB names, `Cache-Control: no-cache`). Re-rendered charts change in place, so the container is consistent only while `current_run.json` exists; the skill's `fetch_data.py` reads it before and after downloading and rejects a missing or changed one. A call without changes leaves it alone or writes it if a failed call left none.
 Tier hot per blob although the account defaults to cool: cool blobs deleted within 30 days are billed for 30 days, and every run replaces GB. No versioning, soft delete off (per user).
 Credentials: `BLOB_STORAGE_ID` (account name or its resource ID, last segment taken) and `BLOB_STORAGE_KEY` (account key); environment before `.env` in the repo root (`KEY=VALUE` lines, ignored by git). Missing → notice on stdout, nothing happens.
 
 | Field | Meaning |
 | --- | --- |
 | `CONTAINER = 'forecastdata'`, `ENV_FILE` | |
+| `RUN_FILE = 'current_run.json'`, `MODELS` | consistency marker; model key → GRIB prefix, **must match** `ECMWF_PREFIX`/`ICON_PREFIX` |
 | `UNFINISHED = ('.part', '.raw')` | suffixes of unfinished downloads, never uploaded |
 | `CONTENT_TYPES` | grb2 octet-stream, md `text/markdown; charset=utf-8`, json, webp |
 | `MTIME = 'mtime'` | metadata key of the local modification time |
@@ -654,6 +655,7 @@ Credentials: `BLOB_STORAGE_ID` (account name or its resource ID, last segment ta
 | `credentials() -> (account, key) \| None` | |
 | `local_files(data) -> dict[name, Path]`, `stale_files(files, blobs) -> list[str]` | |
 | `upload(container, name, path)`, `delete(container, names)` | |
+| `current_runs(files) -> dict`, `write_run_file(container, runs)` | content and upload of `current_run.json` |
 | `mirror(data)` | raises `AzureError`; update_maps.py catches it and only warns |
 
 ### maps_manifest.py
@@ -1151,14 +1153,14 @@ chart_styles.py holds every scale and threshold:
 | climatology missing | update_maps: exit 1 before anything; render_charts directly with a CLIMATE product: `FileNotFoundError` |
 | ICON file with `--products` outside `IconProducts.ALL` | argparse error, exit 2 |
 | upload breaks off | `sys.exit`; some assets replaced, manifest not committed; the next call uploads what `changed_videos` detects |
-| blob upload fails (network, key) | update_maps.py: warning on stderr, exit 0, publish still runs; uploaded files stay, the next call sends the rest |
+| blob upload fails (network, key) | update_maps.py: warning on stderr, exit 0, publish still runs; uploaded files stay, `current_run.json` stays missing (readers refuse the container), the next call sends the rest and writes it |
 | push rejected | `sys.exit`; local manifest commit stays (download_loop.sh discards it on its next reset) |
 
 No logging framework, no tests, no cleanup of `.part` files after an exception. The stress test (fake ECMWF server, ICON 404, random bytes) existed only in a session scratchpad.
 
 ## Pitfalls
 
-- **Values that must stay in sync**: projection parameters (Python, TS); image size 1200×690 (chart_canvas.py, tile_videos.py, TS, CSS); `MOUNTAIN_HEIGHT_M` vs `MOUNTAIN_HEIGHTS`; `PER_STEP` vs `step_messages`; product names in the classes vs render_charts.py docstring (`--help`) and data/charts.md; window names in `PROJECTIONS`, `WINDOWS`/`ICON_WINDOWS`, `DEFAULTS`, TS `PROJECTIONS`; `PREFIX` vs `ICON_PREFIX`; layer format TS vs Python; two profile level lists (IFS `constants.PROFILE_LEVELS`, ICON `PROFILE_LEVELS`).
+- **Values that must stay in sync**: projection parameters (Python, TS); image size 1200×690 (chart_canvas.py, tile_videos.py, TS, CSS); `MOUNTAIN_HEIGHT_M` vs `MOUNTAIN_HEIGHTS`; `PER_STEP` vs `step_messages`; product names in the classes vs render_charts.py docstring (`--help`) and data/charts.md; window names in `PROJECTIONS`, `WINDOWS`/`ICON_WINDOWS`, `DEFAULTS`, TS `PROJECTIONS`; `PREFIX` vs `ICON_PREFIX` vs `blob_mirror.MODELS` (also the keys of `current_run.json` the skill reads); layer format TS vs Python; two profile level lists (IFS `constants.PROFILE_LEVELS`, ICON `PROFILE_LEVELS`).
 - **Video and steps can drift**: whoever changes `data/<window>/<product>/` outside update_maps.py must delete the video.
 - **Fallback chains switch videos**; an ICON daily product in a chain covers only its day until 23 UTC.
 - **ICON steps hang on the ECMWF run**; relating steps to the ICON run means changing `chart_frames`, `ChartIndex` and `currentStep` together.

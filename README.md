@@ -36,7 +36,9 @@ Datenordner, `data/charts.md` beschreibt ihm den Inhalt.
 Am Ende spiegelt `scripts/blob_mirror.py` `data/` (ohne halbfertige Downloads) in den Azure-Blob-Container
 `forecastdata`, damit der Skill ohne dieses Repo arbeiten kann. Lesen geht anonym über
 `https://wetterkartenviewer.blob.core.windows.net/forecastdata/<pfad>`. Hochgeladen wird nur, was
-sich geändert hat; Blobs ohne lokale Datei werden gelöscht, eine Historie gibt es nicht. Zum
+sich geändert hat; Blobs ohne lokale Datei werden gelöscht, eine Historie gibt es nicht.
+`current_run.json` nennt die Läufe und fehlt, solange ein Upload läuft: Nur mit ihr ist der
+Container in sich stimmig. Zum
 Hochladen braucht es `pip install azure-storage-blob` und eine `.env` im Repo-Root (nicht committet):
 
 ```
