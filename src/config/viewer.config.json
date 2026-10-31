@@ -24,19 +24,31 @@
     },
     {
       "layers": [
-        "opencharts_central_europe/t2m_wind1000",
-        "opencharts_central_europe/mountain_2000",
+        [
+          "icon-d2/t2m_wind1000",
+          "opencharts_central_europe/t2m_wind1000"
+        ],
+        [
+          "icon-d2/mountain_2000",
+          "opencharts_central_europe/mountain_2000"
+        ],
         "opencharts_central_europe/inversion"
       ]
     },
     {
       "layers": [
-        "opencharts_central_europe/weather_summary"
+        [
+          "icon-d2/weather_summary",
+          "opencharts_central_europe/weather_summary"
+        ]
       ]
     },
     {
       "layers": [
-        "opencharts_central_europe/wind10m"
+        [
+          "icon-d2/wind10m",
+          "opencharts_central_europe/wind10m"
+        ]
       ]
     }
   ]

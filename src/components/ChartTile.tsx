@@ -24,7 +24,7 @@ export default function ChartTile({ index, tile, layer, step, location, onNextLa
 
   return (
     <div className={styles.tile} onClick={onNextLayer} onContextMenu={enlarge}>
-      <ChartImage index={index} path={tile.layers[layer]} step={step} location={location} />
+      <ChartImage index={index} path={index.resolve(tile.layers[layer], step)} step={step} location={location} />
       {tile.layers.length > 1 && (
         <span className={styles.badge} title="Klick: nächster Layer">{layer + 1}/{tile.layers.length}</span>
       )}

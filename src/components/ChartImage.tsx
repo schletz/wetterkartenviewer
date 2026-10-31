@@ -15,10 +15,14 @@ interface ChartImageProps {
 }
 
 /** Text of the placeholder, or null when the chart can be shown. */
-function placeholderText(index: ChartIndex, path: ChartPath, frame: ChartFrame | null, failed: boolean): string | null {
+function placeholderText(index: ChartIndex, path: ChartPath, step: number, frame: ChartFrame | null,
+  failed: boolean): string | null {
   if (frame) return failed ? `${path} konnte nicht geladen werden` : null
   const first = index.firstStep(path)
-  return first === null ? 'keine Karten in diesem Lauf' : `ab +${first} h`
+  if (first === null) return 'keine Karten in diesem Lauf'
+  // A short run (ICON-D2) ends before the slider does.
+  const last = index.lastStep(path)
+  return last !== null && step > last ? `bis +${last} h` : `ab +${first} h`
 }
 
 /**
@@ -43,7 +47,7 @@ export default function ChartImage({ index, path, step, location, className = ''
     if (element && time !== null && element.readyState >= HTMLMediaElement.HAVE_METADATA) element.currentTime = time
   }, [time])
 
-  const message = placeholderText(index, path, frame, failed || (url !== null && undecodable === url))
+  const message = placeholderText(index, path, step, frame, failed || (url !== null && undecodable === url))
   if (message !== null) {
     return (
       <div className={`${styles.chart} ${styles.placeholder} ${className}`}>

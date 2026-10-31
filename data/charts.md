@@ -1,8 +1,8 @@
 # Datenordner: Karten und GRIB
 
 Diesen Ordner erzeugt der Wetterkartenviewer (`scripts/update_maps.py`) für einen Lauf des
-ECMWF-Modells IFS. Er enthält die Vorhersagedatei mit allen abgeleiteten Größen, die Karten
-beider Fenster und die Klimatologie. Die Datei hier beschreibt, was drinsteht und wie man es
+ECMWF-Modells IFS und einen Lauf des DWD-Modells ICON-D2. Er enthält die Vorhersagedateien (IFS mit
+allen abgeleiteten Größen), die Karten aller Fenster und die Klimatologie. Die Datei hier beschreibt, was drinsteht und wie man es
 liest. Lies nur die Abschnitte, die du gerade brauchst.
 
 ## Inhalt
@@ -17,6 +17,8 @@ liest. Lies nur die Abschnitte, die du gerade brauchst.
 - Bergwetter (Mitteleuropa): [mountain_2000](#mountain_2000), [freezing_level](#freezing_level),
   [snow_line](#snow_line)
 - Statisch: [orography](#orography)
+- ICON-D2 (Österreich, stündlich bis +48 h): [ICON-D2-Datei](#icon-d2-datei),
+  [Produkte im Fenster icon-d2](#produkte-im-fenster-icon-d2), [icon-d2/weather_summary](#icon-d2weather_summary)
 
 ## Dateien
 
@@ -25,13 +27,16 @@ liest. Lies nur die Abschnitte, die du gerade brauchst.
 | `ecmwf_<YYYYMMDDHH>.grb2` | Vorhersage eines Laufs mit abgeleiteten Feldern ([GRIB-Datei](#grib-datei)) |
 | `opencharts_europe/` | alle Produkte im Europafenster |
 | `opencharts_central_europe/` | die Produkte für Mitteleuropa (Liste unter [Allgemeines](#allgemeines)) |
+| `icon-d2_<YYYYMMDDHH>.grb2` | ICON-D2-Lauf auf dem Modellgitter ([ICON-D2-Datei](#icon-d2-datei)) |
+| `icon-d2/` | die ICON-D2-Produkte für Österreich und Umgebung |
 | `<fenster>/<produkt>/<YYYYMMDDHH>.webp` | Karte zur Gültigkeitszeit in UTC (Tmax/Tmin: `<YYYYMMDD>.webp`) |
-| `<fenster>/sheets/<produkt>.webp` | Kontaktabzug: 12-UTC-Karte jedes Tages |
+| `<fenster>/sheets/<produkt>.webp` | Kontaktabzug: 12-UTC-Karte jedes Tages (ICON-D2: 03, 09, 15, 21 UTC) |
 | `<fenster>/orography.webp` | Modellorografie, statisch |
-| `<fenster>/geometry.json` | Projektion und Kachelpositionen der Kontaktabzüge, zum Markieren eines Orts |
+| `<fenster>/geometry.json` | Modell, Lauf, Projektion und Kachelpositionen der Kontaktabzüge, zum Markieren eines Orts |
 | `era5_means/*.grb2` | Klimatologie 1991–2020: `HHz` je Tageszeit, `daily`, `monthly` |
 
-Der Ordner hält genau einen Lauf. Ein neuer Lauf ersetzt GRIB und Karten.
+Der Ordner hält genau einen Lauf je Modell. Ein neuer Lauf ersetzt GRIB und Karten seines Modells.
+ICON-D2 rechnet alle 3 h, IFS alle 12 h; die Läufe der beiden Modelle sind also meist verschieden.
 
 ## GRIB-Datei
 
@@ -77,13 +82,17 @@ demselben Code wie die Karten. Karte und Zahl am Ort passen deshalb zusammen.
 
 ## Allgemeines
 
-**Fenster.** Beide haben dieselbe polarstereografische Projektion wie ECMWF open charts und eine
-Kartenfläche von 1200×600 px. Darunter liegt ein Legendenstreifen von 90 px.
+**Fenster.** Die beiden IFS-Fenster haben dieselbe polarstereografische Projektion wie ECMWF open
+charts, `icon-d2` eine Lambert-Kegelprojektion (Standardparallelen 46° und 49° N, Zentralmeridian
+13°20′ E wie die österreichische Lambert-Projektion). Alle haben eine Kartenfläche von 1200×600 px,
+darunter liegt ein Legendenstreifen von 90 px. `geometry.json` gibt die Formel mit `cone` und `lon0`;
+bei den IFS-Fenstern ist `cone` 1 und `lon0` 0.
 
 | Fenster | Bereich | km pro Pixel | Standardprodukte |
 |---|---|---|---|
 | `opencharts_europe` | Atlantik bis Westrussland, Nordafrika bis Nordkap | 7,6 (35° N) bis 9,4 (70° N) | alle Produkte |
 | `opencharts_central_europe` | 35,7–57,4° N, 23° W–37° E (Irland bis Rumänien, Dänemark bis Sizilien) | etwa 3,2 | alle außer `z500_t850`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h` |
+| `icon-d2` | 45,3–49,6° N, 5,7–18,2° E (Burgund bis Bratislava, Mailand bis Würzburg) | 0,75 | `t2m_wind1000`, `wind10m`, `mountain_2000`, `weather_summary`, `tmax`, `tmin`, `orography` (ICON-D2) |
 
 Europa zeigt, was stromauf liegt und in den nächsten Tagen ankommt. Mitteleuropa zeigt Fronten
 etwa zwei Tage im Voraus und die Grenzschicht im Detail. Für einen Ort nördlich von 57° N oder
@@ -343,3 +352,63 @@ Regen), Regen ohne Symbol. Schwarze Linien: Isobaren alle 4 hPa mit Hoch und Tie
 - Der Niederschlag ist eine Summe über die Stunden vor dem Termin, die Niederschlagsart gilt zum
   Termin selbst.
 - Der Kontaktabzug zeigt die Phasen mit Wolken und Niederschlag über 10 Tage.
+
+## ICON-D2-Datei
+
+Ein Lauf von ICON-D2 (DWD Open Data, etwa 2,2 km) auf dem Ikosaeder-Gitter des Modells: ein Wert
+je Zelle, kein reguläres Gitter. Die Lage der Zellen steht in `clat`/`clon`. Stündlich von T+0
+bis T+48, ohne abgeleitete Felder. Die Namen sind die von ecCodes; in Klammern der Name, unter dem
+der Viewer das Feld liest.
+
+| Name | Schritte | Einheit | Bedeutung |
+|---|---|---|---|
+| `tlat`, `tlon` (`clat`, `clon`) | nur T+0 | ° | Mittelpunkt jeder Zelle |
+| `HSURF` (`hsurf`), `lsm` | nur T+0 | m, 0–1 | Modellorografie, Landanteil |
+| `CLCT` (`tcc`) | 0–48 | % | Gesamtbewölkung (nicht 0–1 wie bei IFS) |
+| `tp` | 0–48 | kg/m² = mm | Niederschlag seit T+0 (nicht m wie bei IFS) |
+| `prmsl` (`msl`) | 0–48 | Pa | Luftdruck auf Meeresniveau |
+| `WW` (`ww`) | 1–48 | Code | signifikantes Wetter zum Termin, WMO-Tafel 4677 (45/48 Nebel, 5x Niesel, 6x Regen, 7x Schnee, 8x Schauer, 95/96 Gewitter, 96 mit Hagel) |
+| `max_i10fg` (`gust`) | 0–48 | m/s | stärkste Böe in 10 m während der Stunde vor dem Termin |
+| `2t` | 0–48 | K | Temperatur in 2 m |
+| `max_2t`, `min_2t` (`tmax_2m`, `tmin_2m`) | 0–48 | K | Extreme in 2 m seit dem letzten Neustart; ICON startet sie alle 6 h ab Laufbeginn neu, obwohl der Kopf „seit T+0“ angibt |
+| `10u`, `10v` | 0–48 | m/s | Wind in 10 m |
+| `u`, `v` | 1000, 850, 700 hPa | m/s | Wind |
+| `t`, `r`, `z` | 850, 700 hPa | K, %, m²/s² | Temperatur, relative Feuchte, Geopotential (nicht gpm wie `gh` bei IFS) |
+
+Zellen im Randstreifen der Domain haben fehlende Werte (Bitmap). 925 hPa gibt es bei ICON-D2 nicht.
+
+## Produkte im Fenster icon-d2
+
+ICON-D2 für Österreich und Umgebung, stündlich von T+1 (`weather_summary`) bzw. T+0 bis T+48.
+Die Karten lesen sich wie ihre IFS-Gegenstücke im Mitteleuropafenster, mit diesen Unterschieden:
+
+- [t2m_wind1000](#t2m_wind1000), [wind10m](#wind10m): gleich; Täler und Becken sind etwa viermal
+  feiner aufgelöst, Kaltluftseen und Talwinde zeigen sich deshalb deutlich.
+- [mountain_2000](#mountain_2000): das Profil kommt nur aus 850 und 700 hPa (IFS: sechs Flächen).
+  2000 m liegen immer dazwischen, der Wert ist linear interpoliert.
+- [tmax, tmin](#tmax-tmin): Fenster wie bei IFS (06–18 UTC bzw. 18–06 UTC), meist ein Tmax-Tag und
+  zwei Tmin-Nächte je Lauf. Bei Läufen um 03, 09, 15 und 21 UTC kommen die ersten drei Stunden
+  eines Fensters aus der stündlichen 2-m-Temperatur statt aus den Modellextremen, ein Maximum am
+  Morgen oder ein Minimum am Abend kann dort etwas zu schwach sein.
+- Alle Karten färben grau, was außerhalb der Domain liegt; das Fenster liegt derzeit ganz darin.
+
+## icon-d2/weather_summary
+
+ICON-D2 für Österreich und Umgebung, stündlich von T+1 bis T+48. Inhalt wie
+[weather_summary](#weather_summary), aber:
+
+- Der Niederschlag ist die Summe der **letzten Stunde**, nicht der letzten 6 h.
+- Die Niederschlagsart kommt aus `ww` und ist auf dieselben Symbole abgebildet wie bei IFS.
+- **Zusätzlich:** Gewitter (Blitz, ww 95), Gewitter mit Hagel (Dreieck, ww 96), Nebel (drei
+  Striche, ww 45/48) und Sturmböen ab 75 km/h (Bft 9) als Zahl in km/h. ICON-D2 rechnet Konvektion
+  und Nebel aufgelöst; IFS kennt diese Felder nicht.
+- Landesgrenzen schwarz, Bundesländergrenzen gestrichelt; sie helfen beim Verorten.
+- Hintergrund und Wolken wie bei IFS: Jede Farbe ist genau eine der Legende.
+
+- Das Modell löst Strukturen ab etwa 10 km auf, auf der Karte rund 13 px. Einzelne Schauer und
+  Gewitterzellen sind Möglichkeiten im Raum, keine Ortsprognose.
+- Der Kontaktabzug zeigt die Karten um 03, 09, 15 und 21 UTC, also 8 Kacheln über 48 h: den
+  Tagesgang mit Gewittern am Nachmittag (15 UTC) und Nebel in der Nacht und am Vormittag.
+- `icon-d2/orography.webp` zeigt, wie fein ICON-D2 Täler und Gipfel auflöst (ohne Schraffur, ICON
+  liefert keine Subgitter-Rauigkeit). Vergleiche sie mit der IFS-Orografie, bevor du Talwetter
+  aus einer der beiden Karten liest.

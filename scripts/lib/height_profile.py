@@ -17,13 +17,23 @@ class HeightProfile:
     in height between neighbouring pressure levels.
     """
 
-    def __init__(self, grib: ForecastGrib, step: int):
+    def __init__(self, grib: ForecastGrib, step: int, height: str = "gh", height_factor: float = 1.0):
+        """Profile of one step.
+
+        Args:
+            grib: the forecast file.
+            step: its step.
+            height: field of the level heights, e.g. "gh" (gpm) or "z" (geopotential, m2/s2).
+            height_factor: factor from that field to gpm, e.g. 1 / GRAVITY for "z".
+        """
         self.grib, self.step = grib, step
+        self.height, self.height_factor = height, height_factor
 
     def _stack(self, name: str) -> tuple[np.ndarray, np.ndarray]:
-        """(heights, values) of a parameter on every profile level that holds it, bottom to top."""
-        levels = [level for level in LEVELS if self.grib.has(name, self.step, level)]
-        heights = np.stack([self.grib.field("gh", self.step, level) for level in levels])
+        """(heights, values) of a parameter on every profile level that holds it and its height, bottom to top."""
+        levels = [level for level in LEVELS
+                  if self.grib.has(name, self.step, level) and self.grib.has(self.height, self.step, level)]
+        heights = np.stack([self.grib.field(self.height, self.step, level) * self.height_factor for level in levels])
         values = np.stack([self.grib.field(name, self.step, level) for level in levels])
         return heights, values
 

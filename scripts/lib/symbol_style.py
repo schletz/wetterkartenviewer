@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from matplotlib.path import Path
+
 
 @dataclass(frozen=True)
 class SymbolStyle:
@@ -9,7 +11,7 @@ class SymbolStyle:
 
     Attributes:
         label: legend text.
-        marker: matplotlib marker, e.g. "D" or (6, 2, 0) for an asterisk.
+        marker: matplotlib marker, e.g. "D", (6, 2, 0) for an asterisk, vertices or a Path.
         size: marker size in points.
         colour: line colour of the marker (for line markers the only colour).
         fill: face colour of filled markers, None for line markers.
@@ -18,7 +20,7 @@ class SymbolStyle:
     """
 
     label: str
-    marker: str | tuple
+    marker: str | tuple | Path
     size: float
     colour: str
     fill: str | None = None

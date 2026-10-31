@@ -12,3 +12,8 @@ WEATHER_PARAMS = ("tcc", "tp", "ptype")
 # Pressure levels of the temperature, humidity and height profile, ground to about 5.5 km.
 # 600 hPa (about 4.2 km) halves the gap above 700 hPa for 3000 m values and the freezing level.
 PROFILE_LEVELS = [500, 600, 700, 850, 925, 1000]
+# GRIB shortNames of ICON-D2 -> the names its charts use: those of the ECMWF file where one
+# exists (ForecastGrib aliases). tcc is in % and tp in kg/m2 (mm) there, not 0..1 and m.
+# The 2 m extremes keep the DWD names: they restart every 6 h (icon_extremes.py), unlike any ECMWF field.
+ICON_NAMES = {"tlat": "clat", "tlon": "clon", "HSURF": "hsurf", "CLCT": "tcc", "prmsl": "msl", "WW": "ww",
+              "max_i10fg": "gust", "max_2t": "tmax_2m", "min_2t": "tmin_2m"}

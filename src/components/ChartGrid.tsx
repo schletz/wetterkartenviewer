@@ -60,7 +60,8 @@ export default function ChartGrid({ index, location, onBack }: ChartGridProps) {
         ))}
       </section>
       {enlarged !== null && (
-        <LargeView index={index} path={tiles[enlarged].layers[layers[enlarged]]} step={step} location={location}
+        <LargeView index={index} path={index.resolve(tiles[enlarged].layers[layers[enlarged]], step)} step={step}
+          location={location}
           onNextLayer={() => nextLayer(enlarged)} onClose={() => setEnlarged(null)} />
       )}
     </main>

@@ -20,8 +20,7 @@ from .projection import EUROPE
 from .t850_climate import T850Climate
 
 CHANGE_HOURS = 24
-# weather_summary: precipitation interval in h, and the factor from the GRIB cloud cover to %.
-PRECIP_HOURS = 6
+# weather_summary: factor from the GRIB cloud cover to %.
 TCC_PERCENT = 100.0
 
 
@@ -45,6 +44,11 @@ class ChartProducts:
     STATIC = ("orography",)
     ALL = (*STEP, *DAY, *STATIC)
     CLIMATE = ("t850_anomaly",)
+    # Model name in the legend strip; weather_summary: precipitation interval in h;
+    # valid hours (UTC) of the charts in a contact sheet: one per day over 10 days.
+    MODEL = "ECMWF IFS"
+    PRECIP_HOURS = 6
+    SHEET_HOURS = (12,)
     DEFAULTS = {
         "opencharts_europe": ("z500_t850", "z700_t700", "z850_rh700", "thickness_mslp", "dt850_24h"),
         # T850 instead of the thickness under the isobars: the thickness is smooth at
@@ -70,7 +74,7 @@ class ChartProducts:
         self.climate, self.climate_pixels = climate, climate_pixels
         self.projection = base_map.projection
         # Zoomed windows get denser isobars and printed values.
-        self.detail = self.projection.scale_k > EUROPE.scale_k
+        self.detail = self.projection.km_per_px(50.0) < EUROPE.km_per_px(50.0)
         self.height = self.pixels.resample(surface.height)
         self.land = self.pixels.resample(surface.land) >= 0.5
 
@@ -79,7 +83,7 @@ class ChartProducts:
     def keys(self, product: str) -> list:
         """Steps, days or [None] for which a product can be drawn."""
         if product in self.DAY:
-            return self.grib.extreme_days(self.DAY[product])
+            return self.extreme_days(self.DAY[product])
         if product in self.STATIC:
             return [None]
         if product == "weather_summary":
@@ -118,9 +122,13 @@ class ChartProducts:
             dx, dy = np.where(hide, np.nan, dx), np.where(hide, np.nan, dy)
         return dx, dy
 
+    def profile(self, step: int) -> HeightProfile:
+        """Pressure level profile of one step."""
+        return HeightProfile(self.grib, step)
+
     def diagnostics(self, step: int) -> Diagnostics:
         """Free atmosphere diagnostics of one step."""
-        return Diagnostics(HeightProfile(self.grib, step), self.surface)
+        return Diagnostics(self.profile(step), self.surface)
 
     def speed(self, step: int, level: int, smooth_km: float) -> np.ndarray:
         """Wind speed on a level, smoothed on the model grid."""
@@ -134,7 +142,7 @@ class ChartProducts:
 
     @property
     def _run(self) -> str:
-        return f"ECMWF IFS run {self.grib.base_time:%d.%m.%Y %H} UTC"
+        return f"{self.MODEL} run {self.grib.base_time:%d.%m.%Y %H} UTC"
 
     def z500_lines(self, canvas: ChartCanvas, step: int) -> None:
         canvas.contours(self.field("gh", step, 500, smooth_km=styles.Z500.smooth_km, factor=0.1), styles.Z500,
@@ -334,7 +342,7 @@ class ChartProducts:
         height = styles.MOUNTAIN_HEIGHT_M
         canvas = ChartCanvas(self.base_map, f"{height:g} m: temperature (°C), wind, in cloud (hatched)",
                              self.step_label(step))
-        profile = HeightProfile(self.grib, step)
+        profile = self.profile(step)
         temperature = self.pixels.resample(profile.at_height("t", height) - KELVIN)
         below_ground = self.height > height
         canvas.shade(temperature, styles.MOUNTAIN_T, mask=below_ground, mask_colour=styles.MASK_RGB,
@@ -380,37 +388,58 @@ class ChartProducts:
 
         It shows the near-surface weather of the model as it comes
         (WEATHER_PARAMS), which the analysis deliberately leaves out. The
-        precipitation is summed over the last 6 h (3 h at T+3); its type
-        is the one at the valid time, so a shower that ended earlier shows
-        colour but no symbol.
+        precipitation is summed over the last PRECIP_HOURS (6 h, 3 h at T+3);
+        its type is the one at the valid time, so a shower that ended earlier
+        shows colour but no symbol. The fields come from cloud_cover,
+        precipitation and precipitation_type, which other models override.
         """
-        hours = min(PRECIP_HOURS, step)
+        hours = min(self.PRECIP_HOURS, step)
         canvas = ChartCanvas(self.base_map, "MSLP (hPa), total cloud cover, precipitation and its type",
                              self.step_label(step))
         canvas.background(styles.SUMMARY_LAND_RGB, styles.SUMMARY_SEA_RGB)
-        canvas.shade(self.field("tcc", step, factor=TCC_PERCENT), styles.CLOUD_COVER, bar=styles.CLOUD_BAR)
-        # tp accumulates from T+0 in m; packing noise can make the difference slightly negative.
-        precip = np.maximum(self.grib.field("tp", step) - self.grib.field("tp", step - hours), 0) * 1000
-        precip = self.pixels.resample(precip)
+        canvas.shade(self.cloud_cover(step), styles.CLOUD_COVER, bar=styles.CLOUD_BAR)
+        precip = self.precipitation(step, hours)
         canvas.shade(precip, replace(styles.PRECIPITATION, title=f"Precipitation over the last {hours} h (mm)"),
                      bar=styles.PRECIP_BAR)
         canvas.outlines()
         self.isobars(canvas, step, styles.MSLP_SUMMARY)
         # ptype is set even for traces; symbols outside the shaded precipitation would only confuse.
         wet = precip >= styles.PRECIPITATION.transparent_below
-        ptype = self.pixels.nearest(self.grib.field("ptype", step))
+        ptype = self.precipitation_type(step)
         for codes, style in styles.PRECIP_TYPES:
             canvas.symbols(np.isin(ptype, codes) & wet, styles.PRECIP_TYPE_SPACING_PX, style,
                            "(type at the valid time; rain without symbol)")
         return canvas
 
+    def cloud_cover(self, step: int) -> np.ndarray:
+        """Total cloud cover in % on the chart pixels."""
+        return self.field("tcc", step, factor=TCC_PERCENT)
+
+    def precipitation(self, step: int, hours: int) -> np.ndarray:
+        """Precipitation in mm over the ``hours`` before ``step`` on the chart pixels."""
+        # tp accumulates from T+0 in m; packing noise can make the difference slightly negative.
+        precip = np.maximum(self.grib.field("tp", step) - self.grib.field("tp", step - hours), 0) * 1000
+        return self.pixels.resample(precip)
+
+    def precipitation_type(self, step: int) -> np.ndarray:
+        """ECMWF ptype code at the valid time on the chart pixels."""
+        return self.pixels.nearest(self.grib.field("ptype", step))
+
     # Daily and static products
+
+    def extreme_days(self, kind: str) -> list[date]:
+        """Days with a complete daily maximum (``kind="max"``) or minimum ("min")."""
+        return self.grib.extreme_days(kind)
+
+    def daily_extreme_field(self, kind: str, day: date) -> np.ndarray:
+        """Daily 2 m maximum or minimum in K on the model grid."""
+        return self.grib.daily_extreme(kind, day)
 
     def daily_extreme(self, kind: str, day: date) -> ChartCanvas:
         window, name = ("06-18", "maximum") if kind == "max" else ("18-06", "minimum")
         canvas = ChartCanvas(self.base_map, f"Daily 2 m {name} temperature (°C, colours)",
                              f"{day:%a %d.%m.%Y}, {window} UTC   ({self._run})")
-        values = self.grib.daily_extreme(kind, day) - KELVIN
+        values = self.daily_extreme_field(kind, day) - KELVIN
         pixels = self.pixels.resample(values)
         canvas.shade(pixels, styles.T2M)
         canvas.outlines()
@@ -419,13 +448,16 @@ class ChartProducts:
         return canvas
 
     def orography(self) -> ChartCanvas:
-        canvas = ChartCanvas(self.base_map, "Model orography (m, colours) + rough sub-grid terrain (hatched)",
-                             f"Static field   ({self._run})")
+        """Model orography: how fine the model resolves valleys and summits; rough terrain hatched if known."""
+        rough = self.surface.sdor is not None
+        canvas = ChartCanvas(self.base_map, "Model orography (m, colours)"
+                             + (" + rough sub-grid terrain (hatched)" if rough else ""), f"Static field   ({self._run})")
         sea = self.pixels.resample(self.surface.land) < 0.5
         canvas.shade(self.height, styles.OROGRAPHY, mask=sea, mask_colour=styles.OROGRAPHY_SEA_RGB,
                      mask_label="light blue: sea (model land-sea mask)")
         canvas.outlines()
-        canvas.hatch(self.pixels.resample(self.surface.sdor), styles.ROUGH_TERRAIN_SDOR, "black",
-                     f"hatched: sub-grid std. dev. ≥ {styles.ROUGH_TERRAIN_SDOR:g} m (valleys/summits differ)")
+        if rough:
+            canvas.hatch(self.pixels.resample(self.surface.sdor), styles.ROUGH_TERRAIN_SDOR, "black",
+                         f"hatched: sub-grid std. dev. ≥ {styles.ROUGH_TERRAIN_SDOR:g} m (valleys/summits differ)")
         self.print_values(canvas, self.height, "{:.0f}", "numbers: model height in m")
         return canvas

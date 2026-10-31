@@ -1,11 +1,15 @@
-import type { ChartPath } from '../config/viewerConfig'
+import { layerPaths, type ChartPath, type LayerConfig } from '../config/viewerConfig'
 
 /** The video of one tile layer: one frame per forecast step, in step order. */
 export interface ChartVideo {
   /** Path of the video relative to maps/. */
   file: string
-  /** Forecast step of every frame. */
+  /** Forecast step of every frame, counted from the run of the manifest. */
   steps: number[]
+  /** Run of the model the video comes from, YYYYMMDDHH in UTC; missing in older manifests. */
+  run?: string
+  /** Last step the video covers (hourly charts); later steps have no frame. */
+  end?: number
 }
 
 /** The frame of a video that shows one forecast step. */
@@ -46,8 +50,10 @@ export class ChartIndex {
     return new Date(Date.UTC(+r.slice(0, 4), +r.slice(4, 6) - 1, +r.slice(6, 8), +r.slice(8, 10)))
   }
 
-  /** The latest frame at or before ``step``, or null if the product starts later or is missing. */
+  /** The latest frame at or before ``step``, or null if the product starts later, has ended or is missing. */
   frame(path: ChartPath, step: number): ChartFrame | null {
+    const end = this.lastStep(path)
+    if (end !== null && step > end) return null
     const steps = this.frameSteps(path)
     let index = -1
     while (index + 1 < steps.length && steps[index + 1] <= step) index++
@@ -59,19 +65,35 @@ export class ChartIndex {
     return this.frameSteps(path)[0] ?? null
   }
 
-  /** All steps that have a frame in any of the given paths, sorted. */
-  steps(paths: ChartPath[]): number[] {
-    const steps = new Set(paths.flatMap((path) => this.frameSteps(path)))
+  /** Last step a product covers, or null if it covers every later step. */
+  lastStep(path: ChartPath): number | null {
+    return this.manifest.charts[path]?.end ?? null
+  }
+
+  /** All steps that have a frame in any path of the given layers, sorted. */
+  steps(layers: LayerConfig[]): number[] {
+    const steps = new Set(layers.flatMap(layerPaths).flatMap((path) => this.frameSteps(path)))
     return [...steps].sort((a, b) => a - b)
   }
 
   /**
+   * The chart path a layer shows at ``step``: the first of its paths with a frame there. Without
+   * one, the last path with a video (or the last path), whose placeholder then tells why.
+   */
+  resolve(layer: LayerConfig, step: number): ChartPath {
+    const paths = layerPaths(layer)
+    return paths.find((path) => this.frame(path, step) !== null)
+      ?? paths.findLast((path) => this.firstStep(path) !== null)
+      ?? paths[paths.length - 1]
+  }
+
+  /**
    * URL of the video of a product relative to the page, or null if the run has none.
-   * Every run reuses the file name; the run in the query keeps the browser cache apart.
+   * Every run reuses the file name; the run of the video's model in the query keeps the browser cache apart.
    */
   videoUrl(path: ChartPath): string | null {
     const video = this.manifest.charts[path]
-    return video ? `${import.meta.env.BASE_URL}maps/${video.file}?run=${this.manifest.run}` : null
+    return video ? `${import.meta.env.BASE_URL}maps/${video.file}?run=${video.run ?? this.manifest.run}` : null
   }
 
   /** Time in seconds that shows a frame: its middle, so rounding never lands on the neighbour. */

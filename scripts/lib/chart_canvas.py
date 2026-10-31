@@ -37,8 +37,6 @@ DPI = 100
 WEBP_QUALITY = 90
 # Drawing order, bottom to top.
 Z_BACKGROUND, Z_SHADING, Z_GRATICULE, Z_OUTLINE, Z_CONTOUR, Z_ARROW, Z_MARKER = range(7)
-# Labels of the graticule: latitudes along this meridian, longitudes along this parallel.
-LABEL_MERIDIAN, LABEL_PARALLEL = 0, 40
 # Centres closer than this to the image border are not marked; the field is cut there.
 EXTREMA_BORDER_PX = 20
 # Streamlines integrate on every n-th pixel; finer grids only cost time, the field is smooth at that scale.
@@ -104,20 +102,32 @@ class ChartCanvas:
         if mask is not None:
             self._swatch(mask_colour, mask_label)
 
+    def uncovered(self, covered: np.ndarray, colour: tuple, label: str) -> None:
+        """Paint the pixels without model data (outside a limited area model) over every shading."""
+        if covered.all():
+            return
+        rgba = np.zeros((*covered.shape, 4), np.uint8)
+        rgba[~covered] = (*colour, 255)
+        self.ax.imshow(rgba, extent=(0, IMAGE_WIDTH, IMAGE_HEIGHT, 0), interpolation="nearest", zorder=Z_SHADING)
+        self._swatch(colour, label)
+
     def outlines(self) -> None:
-        """Coastlines, borders and a labelled 10 degree graticule."""
+        """Coastlines, country and state borders and a labelled graticule."""
         grey = dict(colors="#808080", linewidths=0.4, zorder=Z_GRATICULE)
         self.ax.add_collection(LineCollection(list(self.base_map.parallels.values()), **grey))
         self.ax.add_collection(LineCollection(list(self.base_map.meridians.values()), **grey))
+        self.ax.add_collection(LineCollection(self.base_map.state_rings, colors="#303030", linewidths=0.4,
+                                              linestyles=(0, (4, 2)), zorder=Z_OUTLINE))
         self.ax.add_collection(LineCollection(self.base_map.rings, colors="black", linewidths=0.6, zorder=Z_OUTLINE))
+        projection = self.base_map.projection
         text = dict(fontsize=7, color="#404040", ha="center", va="center", zorder=Z_GRATICULE,
                     bbox=dict(boxstyle="square,pad=0.1", fc="white", ec="none", alpha=0.7))
         for lat, line in self.base_map.parallels.items():
-            x, y = self._graticule_point(line, LABEL_MERIDIAN, axis=1)
+            x, y = self._graticule_point(line, projection.label_lon, axis=1)
             if x is not None:
                 self.ax.text(x, y, f"{lat}°N", **text)
         for lon, line in self.base_map.meridians.items():
-            x, y = self._graticule_point(line, LABEL_PARALLEL, axis=0)
+            x, y = self._graticule_point(line, projection.label_lat, axis=0)
             if x is not None:
                 self.ax.text(x, y, f"{abs(lon)}°{'E' if lon >= 0 else 'W'}" if lon else "0°", **text)
 

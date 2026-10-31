@@ -2,11 +2,13 @@
 
 maps/ holds only the manifest and one video per tile layer (update_maps.py
 encodes them from the charts in data/), so viewer.config.json alone
-decides what is published. The videos (about 50 MB per run) replace the
-assets of the release (maps_release.py); assets the manifest no longer
-lists are deleted. Only maps/manifest.json enters the history, as one
-commit "Data update <run>z", so the repository does not grow with the
-videos. The push triggers the Pages deployment, which downloads the videos
+decides what is published. The videos (about 50 MB per ECMWF run) replace
+the assets of the release (maps_release.py); only videos that changed since
+their upload are sent again (another size, or a file newer than the asset),
+so a new ICON-D2 run every 3 h uploads only its own videos. Assets the
+manifest no longer lists are deleted. Only maps/manifest.json enters the
+history, as one commit "Data update <run>z" (plus the runs of other models),
+so the repository does not grow with the videos. The push triggers the Pages deployment, which downloads the videos
 the manifest lists (fetch_maps.py); uploading first means it never finds a
 manifest without its videos.
 
@@ -16,13 +18,15 @@ Usage: python scripts/publish_maps.py maps
 """
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
-from maps_manifest import MANIFEST, read_run, video_files
+from maps_manifest import MANIFEST, read_run, read_window_runs, video_files
 from maps_release import TAG, asset_name
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -42,6 +46,18 @@ def ensure_release() -> None:
         call("gh", "release", "create", TAG, "--title", "Tile videos", "--latest=false",
              "--notes", "Videos of the current run; every run replaces them (scripts/publish_maps.py).")
         print(f"created release {TAG}")
+
+
+def changed_videos(maps: Path, files: list[str]) -> list[str]:
+    """Videos without an asset of the same size uploaded after the file was written."""
+    assets = {asset["name"]: asset for asset in json.loads(call("gh", "release", "view", TAG, "--json", "assets"))["assets"]}
+    changed = []
+    for file in files:
+        asset, local = assets.get(asset_name(file)), (maps / file).stat()
+        written = datetime.fromtimestamp(local.st_mtime, timezone.utc)
+        if asset is None or asset["size"] != local.st_size or datetime.fromisoformat(asset["updatedAt"]) < written:
+            changed.append(file)
+    return changed
 
 
 def upload_videos(maps: Path, files: list[str]) -> None:
@@ -65,13 +81,20 @@ def prune_assets(files: list[str]) -> None:
             print(f"deleted asset {name}")
 
 
+def commit_message(maps: Path, run: str) -> str:
+    """"Data update <run>z", followed by the runs of windows of other models, e.g. ", icon-d2 2026103109z"."""
+    others = sorted({(window, window_run) for window, window_run in read_window_runs(maps).items() if window_run != run})
+    return f"Data update {run}z" + "".join(f", {window} {window_run}z" for window, window_run in others)
+
+
 def commit_manifest(maps: Path, run: str) -> None:
     """Commit the manifest alone, if it changed; other staged changes stay staged."""
     manifest = str((maps / MANIFEST).resolve())
     call("git", "add", manifest)
     if subprocess.run(["git", "diff", "--cached", "--quiet", "--", manifest], cwd=ROOT).returncode:
-        call("git", "commit", "-q", "-m", f"Data update {run}z", "--", manifest)
-        print(f"committed Data update {run}z")
+        message = commit_message(maps, run)
+        call("git", "commit", "-q", "-m", message, "--", manifest)
+        print(f"committed {message}")
     else:
         print("manifest unchanged")
 
@@ -87,7 +110,11 @@ def main() -> None:
     if missing:
         sys.exit(f"videos listed in the manifest are missing: {', '.join(missing)}; run update_maps.py")
     ensure_release()
-    upload_videos(args.maps, files)
+    changed = changed_videos(args.maps, files)
+    if changed:
+        upload_videos(args.maps, changed)
+    else:
+        print("every video is up to date in the release")
     prune_assets(files)
     commit_manifest(args.maps, run)
     # Pushes also local commits of code changes; a push of an unchanged HEAD is a no-op.

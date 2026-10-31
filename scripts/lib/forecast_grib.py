@@ -19,14 +19,26 @@ CACHED_FIELDS = 64
 class ForecastGrib:
     """Index of one forecast file; fields are decoded on request and cached read-only.
 
+    Besides the regular lat/lon files of download_ecmwf_data.py it reads
+    the ICON files of download_icon_d2.py, whose fields have one value per
+    cell of the unstructured grid (``grid`` is None, fields are 1-D).
+
     Attributes:
         base_time: run as a naive datetime in UTC.
         grid: dict with lat0, lon0 (-180..180), dlat, dlon, ni, nj of the
-            regular lat/lon grid; rows run north to south.
+            regular lat/lon grid, rows north to south; None for an unstructured grid.
     """
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, aliases: dict[str, str] | None = None):
+        """Index a forecast file.
+
+        Args:
+            path: the GRIB2 file.
+            aliases: names under which GRIB shortNames are indexed, e.g.
+                {"prmsl": "msl"}, so the fields of another model carry the names the charts use.
+        """
         self.path = Path(path)
+        self._aliases = aliases or {}
         # (shortName, level, end step) -> (start step, byte offset)
         self._index: dict[tuple, tuple[int, int]] = {}
         # (shortName, level) -> typeOfLevel, in file order
@@ -34,10 +46,12 @@ class ForecastGrib:
         with self.path.open("rb") as fh:
             while (gid := eccodes.codes_grib_new_from_file(fh, headers_only=True)) is not None:
                 try:
+                    # Steps in hours; ICON gives its time invariant fields in minutes ("0m").
+                    eccodes.codes_set(gid, "stepUnits", 1)
                     key = (self._name(gid), eccodes.codes_get(gid, "level"), eccodes.codes_get(gid, "endStep"))
                     self._index[key] = (eccodes.codes_get(gid, "startStep"), int(eccodes.codes_get(gid, "offset")))
                     self._level_types.setdefault(key[:2], eccodes.codes_get(gid, "typeOfLevel"))
-                    if not hasattr(self, "grid"):
+                    if not hasattr(self, "base_time"):
                         self._read_grid(gid)
                 finally:
                     eccodes.codes_release(gid)
@@ -45,18 +59,21 @@ class ForecastGrib:
             raise ValueError(f"{self.path} holds no GRIB messages")
         self._decode = lru_cache(maxsize=CACHED_FIELDS)(self._read)
 
-    @staticmethod
-    def _name(gid: int) -> str:
-        """shortName of a message; the derived fields of the local category get their name from local_params."""
+    def _name(self, gid: int) -> str:
+        """Name of a message: its shortName or alias; the derived fields of the local category get theirs from local_params."""
         if (eccodes.codes_get(gid, "discipline") == 0
                 and eccodes.codes_get(gid, "parameterCategory") == LOCAL_CATEGORY):
             number = eccodes.codes_get(gid, "parameterNumber")
             return LOCAL_NAMES.get(number, f"local{number}")
-        return eccodes.codes_get(gid, "shortName")
+        name = eccodes.codes_get(gid, "shortName")
+        return self._aliases.get(name, name)
 
     def _read_grid(self, gid: int) -> None:
         get = lambda key: eccodes.codes_get(gid, key)  # noqa: E731
         self.base_time = datetime.strptime(f"{get('dataDate')}{get('dataTime'):04d}", "%Y%m%d%H%M")
+        if get("gridType") != "regular_ll":
+            self.grid = None
+            return
         self.grid = {"lat0": get("latitudeOfFirstGridPointInDegrees"),
                      "lon0": (get("longitudeOfFirstGridPointInDegrees") + 180.0) % 360.0 - 180.0,
                      "dlat": get("jDirectionIncrementInDegrees"), "dlon": get("iDirectionIncrementInDegrees"),
@@ -75,7 +92,7 @@ class ForecastGrib:
         return self._key(short_name, step, level) is not None
 
     def field(self, short_name: str, step: int, level: int | None = None) -> np.ndarray:
-        """Values of one field as a read-only (nj, ni) float32 array.
+        """Values of one field as a read-only (nj, ni) float32 array; 1-D on an unstructured grid.
 
         Args:
             short_name: GRIB shortName, e.g. "t", "gh", "thick", "2t".
@@ -113,12 +130,13 @@ class ForecastGrib:
             gid = eccodes.codes_grib_new_from_file(fh)
             try:
                 values = eccodes.codes_get_values(gid).astype(np.float32)
-                # Derived fields mark points below the model ground as missing in a bitmap.
+                # Derived fields mark points below the model ground as missing in a bitmap, ICON its boundary zone.
                 if eccodes.codes_get(gid, "bitmapPresent"):
                     values[values == eccodes.codes_get(gid, "missingValue")] = np.nan
             finally:
                 eccodes.codes_release(gid)
-        values = values.reshape(self.grid["nj"], self.grid["ni"])
+        if self.grid is not None:
+            values = values.reshape(self.grid["nj"], self.grid["ni"])
         # Shared by every caller through the cache, so nobody may change it in place.
         values.flags.writeable = False
         return values

@@ -20,11 +20,7 @@ class PixelGrid:
         rows = (grid["lat0"] - lat) / grid["dlat"]
         cols = ((lon - grid["lon0"]) % 360.0) / grid["dlon"]
         self._coords = np.array([rows, cols])
-        # Unit vectors of north and east in image coordinates (y down): north points to the pole.
-        north = np.array([projection.pole_x - px, projection.pole_y - py])
-        north /= np.hypot(*north)
-        self._north = north
-        self._east = np.array([-north[1], north[0]])
+        self._north, self._east = projection.north_east()
 
     def resample(self, values: np.ndarray, smooth_km: float = 0.0) -> np.ndarray:
         """Bilinearly interpolate a (nj, ni) field to (height, width) pixels, optionally smoothed first."""

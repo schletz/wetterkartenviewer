@@ -7,6 +7,8 @@ bands (lower bound, upper bound, RGB); values outside the outermost
 bands get the colour of the nearest band.
 """
 
+from matplotlib.path import Path
+
 from .colour_scale import ColourScale
 from .contour_style import ContourStyle
 from .symbol_style import SymbolStyle
@@ -155,6 +157,27 @@ PRECIP_TYPE_SPACING_PX = 14
 # Two colour bars side by side in the legend strip, (left, width) in px.
 PRECIP_BAR = (8, 470)
 CLOUD_BAR = (500, 270)
+
+# Pixels outside the domain of a limited area model.
+OUTSIDE_RGB = (190, 190, 190)
+
+# Weather of ICON-D2 at the valid time from ww (WMO code table 4677). Snow, mixed and freezing
+# precipitation are given the ECMWF ptype codes above, so both models share symbols and legend;
+# rain and drizzle (50-67 otherwise, 80-82) get none.
+WW_PTYPE = {5: (70, 71, 72, 73, 74, 75, 77, 85, 86), 7: (68, 69, 83, 84), 3: (56, 57, 66, 67), 8: (79,)}
+# Weather that ECMWF has no field for; ICON-D2 resolves convection and fog explicitly.
+LIGHTNING = ((0.15, 1.0), (-0.45, -0.05), (-0.05, -0.05), (-0.3, -1.0), (0.5, 0.2), (0.1, 0.2), (0.45, 1.0))
+# Fog as in station plots: three horizontal lines.
+FOG_LINES = Path([(-1, 0.7), (1, 0.7), (-1, 0), (1, 0), (-1, -0.7), (1, -0.7)], [Path.MOVETO, Path.LINETO] * 3)
+WW_SYMBOLS = (
+    ((95,), SymbolStyle("thunderstorm", LIGHTNING, 11, "#600000", fill="#ffd000", width=0.6)),
+    ((96,), SymbolStyle("thunderstorm with hail", "^", 7, "#600000", fill="white", width=1.2)),
+    ((45, 48), SymbolStyle("fog", FOG_LINES, 8, "#fff060", width=1.4, halo="#404040")),
+)
+WW_SYMBOL_SPACING_PX = 20
+# Gusts from Beaufort 9 (75 km/h, the "Sturmböen" of the DWD warnings) are printed in km/h.
+STORM_GUST_KMH = 75.0
+GUST_SPACING_PX = 60
 
 # wind10m, a chart for people: km/h with the band limits of the Beaufort scale (force 0-1 to 12),
 # so a band reads as a force; blue (calm) over green and yellow to red and purple (hurricane).
