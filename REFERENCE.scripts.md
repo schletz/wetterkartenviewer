@@ -581,7 +581,8 @@ render_charts.py <grib> <outdir> [--climate DIR] [--projection icon-d2|openchart
 build_borders.py <VGD_50_generalisiert.shp> [target.geojson]
 make_icon_test_grib.py <source.grb2> <target.grb2> [--step N] (default 12)
 download_data.cmd | download_data.sh [update_maps options] = update_maps.py data maps, then publish_maps.py maps
-download_loop.sh [--yes] every 600 s: git fetch, reset --hard origin/main, download_data.sh
+download_loop.sh [--yes] every 600 s: git fetch, reset --hard origin/main, download_data.sh,
+ then rsync -a --delete data/ to $WETTER_MIRROR_DIR (default ~/Downloads/wetterviewer_data; skipped if the folder is missing)
 ```
 
 Status on stdout, errors on stderr. Downloaders print the absolute GRIB path as their last stdout line and exit 0 with "already on disk" if the target is complete.
@@ -1121,6 +1122,7 @@ No logging framework, no tests, no cleanup of `.part` files after an exception. 
 - **Fallback chains switch videos**; an ICON daily product in a chain covers only its day until 23 UTC.
 - **ICON steps hang on the ECMWF run**; relating steps to the ICON run means changing `chart_frames`, `ChartIndex` and `currentStep` together.
 - **download_loop.sh resets to origin/main every round**: unpushed commits and changes to tracked files are lost (`data/`, videos are ignored and stay). A failed push heals itself. Only on branch `main`. The script restarts itself with `exec … --yes` if the reset changed it.
+- **download_loop.sh mirrors `data/` with `--delete`** after every pass, also a failed one: files in the mirror folder that are not in `data/` are deleted. Copying is decided by size and mtime; a re-rendered window is copied again in full.
 - **Executable bit** of `.sh` files lives only in the git index: add new ones with `git add --chmod=+x`.
 - **Removing a layer**: it leaves the manifest at once but its video stays in `maps/` until a new run or `--force` empties the window.
 - **Changing encoding settings**: same-run videos are not re-encoded; delete the MP4s or use `--force`.

@@ -13,7 +13,9 @@ download_data.cmd      (Windows)
 
 Für den Dauerbetrieb (z. B. ein immer laufender Mac) setzt `./download_loop.sh` den Checkout alle
 10 Minuten per `git fetch` und `git reset --hard origin/main` auf den Stand von GitHub und ruft
-dann `download_data.sh` auf. Nach dem Start fragt es einmal nach, `--yes` überspringt die Frage.
+dann `download_data.sh` auf. Danach spiegelt es `data/` per `rsync --delete` nach
+`$WETTER_MIRROR_DIR` (Standard `~/Downloads/wetterviewer_data`), sofern der Ordner existiert.
+Nach dem Start fragt es einmal nach, `--yes` überspringt die Frage.
 
 1. `scripts/update_maps.py` lädt den neuesten IFS-Lauf (GRIB mit abgeleiteten Feldern) und den
    neuesten ICON-D2-Lauf nach `data/` und rendert dort die Kartenfenster. Ältere Läufe werden

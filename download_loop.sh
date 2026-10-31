@@ -9,6 +9,8 @@
 
 INTERVAL=600
 BRANCH=main
+# Target of the data/ mirror; override with the environment variable WETTER_MIRROR_DIR.
+MIRROR_DIR="${WETTER_MIRROR_DIR:-$HOME/Downloads/wetterviewer_data}"
 # Absolute path, so the restart and the change check work after the cd into the repository.
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 
@@ -48,6 +50,19 @@ update() {
         log "pass finished"
     else
         log "pass failed (exit $?), retrying in the next pass"
+    fi
+    mirror_data
+}
+
+# Mirror data/ into MIRROR_DIR: only new or changed files (size or mtime differ) are copied, files
+# missing in data/ are deleted there. Runs after every pass, also a failed one, so the mirror always
+# shows the current state of data/. Skipped if MIRROR_DIR does not exist (e.g. on other machines).
+mirror_data() {
+    [ -d "$MIRROR_DIR" ] || return
+    if rsync -a --delete data/ "$MIRROR_DIR/"; then
+        log "mirrored data/ to $MIRROR_DIR"
+    else
+        log "mirroring data/ to $MIRROR_DIR failed (exit $?)"
     fi
 }
 
