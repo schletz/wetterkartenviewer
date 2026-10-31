@@ -47,6 +47,18 @@ class IconProducts(ChartProducts):
     def profile(self, step: int) -> HeightProfile:
         return HeightProfile(self.grib, step, "z", 1.0 / GRAVITY)
 
+    def summit_cloud(self, profile: HeightProfile, step: int, height: float) -> tuple[np.ndarray, str]:
+        """RH at the height only below the cloud base of the model.
+
+        The humidity is interpolated over the 1500 m between 850 and 700 hPa,
+        the cloud base (lowest layer above 50 % cover, m above sea level) is
+        the model's own; a height below it cannot be in cloud. ICON's layer
+        covers (clcl/clcm) do not tell: their border at 800 hPa lies near 2000 m.
+        """
+        humidity = np.where(self.grib.field("ceiling", step) <= height, profile.at_height("r", height), 0.0)
+        return humidity, (f"hatched: in cloud at {height:g} m (RH ≥ {styles.SUMMIT_CLOUD_RH:g} %, "
+                          f"cloud base ≤ {height:g} m)")
+
     def extreme_days(self, kind: str) -> list:
         return IconExtremes(self.grib).days(kind)
 

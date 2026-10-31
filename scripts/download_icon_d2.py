@@ -15,12 +15,14 @@ onto the chart pixels (lib/triangle_grid.py). Parameters, as named by DWD
     t_2m, tmax_2m, tmin_2m         2 m temperature and its extremes (K); 2t, max_2t -> tmax_2m,
                                    min_2t -> tmin_2m (they restart every 6 h, lib/icon_extremes.py)
     u_10m, v_10m                   10 m wind (m/s); 10u, 10v
+    ceiling                        base of the lowest cloud layer above 50 % cover (m above sea level,
+                                   about 20 km where there is none); ceil -> ceiling
     u, v @1000 hPa                 wind (m/s) for t2m_wind1000
     t, relhum, fi, u, v @850, 700  pressure levels for the values at 2000 m (mountain_2000): K, % (r),
                                    geopotential m2/s2 (z), m/s; ICON-D2 has no 925 hPa
 
 Parameters on pressure levels are written "<folder>@<hPa>" (FORECAST_PARAMS). A run
-is about 1080 files, 580 MB to download and 780 MB as GRIB.
+is about 1130 files, 610 MB to download and 820 MB as GRIB.
 
 Without --run the newest complete run is taken: the run folders (00/ ... 21/)
 are ordered by the newest time stamp of their parameter folders, and the
@@ -56,7 +58,7 @@ from lib.icon_runs import IconRuns  # noqa: E402
 # Pressure levels (hPa) of the height profile: they bracket 2000 m (mountain_2000) everywhere;
 # ICON-D2 has no 925 hPa.
 PROFILE_LEVELS = (850, 700)
-FORECAST_PARAMS = ("clct", "tot_prec", "pmsl", "ww", "vmax_10m", "t_2m", "tmax_2m", "tmin_2m", "u_10m", "v_10m",
+FORECAST_PARAMS = ("clct", "tot_prec", "pmsl", "ww", "vmax_10m", "t_2m", "tmax_2m", "tmin_2m", "u_10m", "v_10m", "ceiling",
                    "u@1000", "v@1000", *(f"{p}@{level}" for level in PROFILE_LEVELS for p in ("t", "relhum", "fi", "u", "v")))
 STATIC_PARAMS = ("clat", "clon", "hsurf", "fr_land")
 PARALLEL_REQUESTS = 8

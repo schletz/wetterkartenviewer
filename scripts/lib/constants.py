@@ -16,4 +16,4 @@ PROFILE_LEVELS = [500, 600, 700, 850, 925, 1000]
 # exists (ForecastGrib aliases). tcc is in % and tp in kg/m2 (mm) there, not 0..1 and m.
 # The 2 m extremes keep the DWD names: they restart every 6 h (icon_extremes.py), unlike any ECMWF field.
 ICON_NAMES = {"tlat": "clat", "tlon": "clon", "HSURF": "hsurf", "CLCT": "tcc", "prmsl": "msl", "WW": "ww",
-              "max_i10fg": "gust", "max_2t": "tmax_2m", "min_2t": "tmin_2m"}
+              "max_i10fg": "gust", "max_2t": "tmax_2m", "min_2t": "tmin_2m", "ceil": "ceiling"}

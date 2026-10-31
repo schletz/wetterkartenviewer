@@ -372,6 +372,7 @@ der Viewer das Feld liest.
 | `2t` | 0–48 | K | Temperatur in 2 m |
 | `max_2t`, `min_2t` (`tmax_2m`, `tmin_2m`) | 0–48 | K | Extreme in 2 m seit dem letzten Neustart; ICON startet sie alle 6 h ab Laufbeginn neu, obwohl der Kopf „seit T+0“ angibt |
 | `10u`, `10v` | 0–48 | m/s | Wind in 10 m |
+| `ceil` (`ceiling`) | 0–48 | m über NN | Untergrenze der tiefsten Wolkenschicht mit mehr als 50 % Bedeckung; etwa 20 000, wo es keine gibt |
 | `u`, `v` | 1000, 850, 700 hPa | m/s | Wind |
 | `t`, `r`, `z` | 850, 700 hPa | K, %, m²/s² | Temperatur, relative Feuchte, Geopotential (nicht gpm wie `gh` bei IFS) |
 
@@ -385,7 +386,12 @@ Die Karten lesen sich wie ihre IFS-Gegenstücke im Mitteleuropafenster, mit dies
 - [t2m_wind1000](#t2m_wind1000), [wind10m](#wind10m): gleich; Täler und Becken sind etwa viermal
   feiner aufgelöst, Kaltluftseen und Talwinde zeigen sich deshalb deutlich.
 - [mountain_2000](#mountain_2000): das Profil kommt nur aus 850 und 700 hPa (IFS: sechs Flächen).
-  2000 m liegen immer dazwischen, der Wert ist linear interpoliert.
+  2000 m liegen immer dazwischen, der Wert ist linear interpoliert. Schraffiert („in Wolken“) ist
+  nur, wo die Feuchte auf 2000 m ≥ 95 % ist **und** die Wolkenuntergrenze des Modells (`ceiling`)
+  nicht über 2000 m liegt. Die lineare Feuchte über 1500 m Höhenunterschied allein meldet sonst
+  Wolken, wo die Basis erst darüber beginnt. Die Schichtbedeckungen `clcl`/`clcm` helfen hier
+  nicht: Ihre Grenze bei 800 hPa liegt fast genau auf 2000 m, und Hochnebel (100 % `clcl`) lässt
+  die Gipfel frei.
 - [tmax, tmin](#tmax-tmin): Fenster wie bei IFS (06–18 UTC bzw. 18–06 UTC), meist ein Tmax-Tag und
   zwei Tmin-Nächte je Lauf. Bei Läufen um 03, 09, 15 und 21 UTC kommen die ersten drei Stunden
   eines Fensters aus der stündlichen 2-m-Temperatur statt aus den Modellextremen, ein Maximum am
