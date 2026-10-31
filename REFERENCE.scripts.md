@@ -14,7 +14,7 @@ The API sections follow Javadoc: intro, fields, methods per module or class.
 - Render WebP charts for three windows into `data/`, encode each tile layer of the viewer as `maps/<window>/<product>.mp4` (one frame per step), write `maps/manifest.json`.
 - Upload the videos to a GitHub release, push a manifest commit; GitHub Actions builds and deploys the app with them.
 - IFS updates every 12 h, ICON-D2 every 3 h; `download_loop.sh` runs the whole chain every 10 min on an always-on machine.
-- `data/` is also the data directory of the skill synop (`~/.claude/skills/synop`), see *Contract with the skill synop*; `blob_mirror.py` mirrors it into a public Azure blob container so the skill works without this repository.
+- `data/` is also the data directory of the skill synop (source in `skills/synop`, installed to `~/.claude/skills/synop`), see *Contract with the skill synop*; `blob_mirror.py` mirrors it into a public Azure blob container so the skill works without this repository.
 
 ## Diagrams
 
@@ -531,7 +531,7 @@ Entries of other products in an existing file are kept, so single-product runs a
 The skill reads `data/` (docstrings scripts/update_maps.py, scripts/lib/local_params.py), locally or as its mirror `https://wetterkartenviewer.blob.core.windows.net/forecastdata/<path relative to data/>` (container-level public access: blobs and the listing `?restype=container&comp=list` need no credentials; see *blob_mirror.py*). Changing any of these breaks it until the skill is updated:
 product names and the folder layout above, `geometry.json` keys, GRIB short names, levels, units and `stepRange` of the daily extremes, the local parameter numbers 0–5 in category 192, `charts.md`.
 The skill has its own copies of `ForecastGrib` and `ClimateArchive`.
-Its `ChartGeometry` (`~/.claude/skills/synop/scripts/lib/chart_geometry.py`) ignores `cone`/`lon0`: right for `opencharts_*` (cone 1, lon0 0), wrong markers on `icon-d2` until updated.
+Its `ChartGeometry` (`skills/synop/scripts/lib/chart_geometry.py`) ignores `cone`/`lon0`: right for `opencharts_*` (cone 1, lon0 0), wrong markers on `icon-d2` until updated.
 
 ### Forecast file (IFS)
 

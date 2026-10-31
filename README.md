@@ -4,6 +4,12 @@ Zeigt selbst gerenderte Karten des ECMWF IFS und des DWD-Modells ICON-D2 (Öster
 bis +48 h) mit einem Zeitslider und auf der Startseite drei ECMWF-ENS-Meteogramme.
 Die Seite: https://schletz.github.io/wetterkartenviewer/
 
+Der Skill `synop` (in `skills/synop`) erstellt aus denselben Daten synoptische Analysen. Installieren:
+
+```
+npx skills@latest add schletz/wetterkartenviewer --skill synop -g -y --copy
+```
+
 ## Karten aktualisieren
 
 ```
