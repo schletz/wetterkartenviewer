@@ -1,5 +1,5 @@
 {
- "run": "2026103012",
+ "run": "2026103100",
  "fps": 10,
  "charts": {
   "opencharts_europe/thickness_mslp": {
@@ -70,7 +70,9 @@
     228,
     234,
     240
-   ]
+   ],
+   "run": "2026103100",
+   "end": 240
   },
   "opencharts_europe/z500_t850": {
    "file": "opencharts_europe/z500_t850.mp4",
@@ -140,7 +142,9 @@
     228,
     234,
     240
-   ]
+   ],
+   "run": "2026103100",
+   "end": 240
   },
   "opencharts_central_europe/t850_anomaly": {
    "file": "opencharts_central_europe/t850_anomaly.mp4",
@@ -210,7 +214,9 @@
     228,
     234,
     240
-   ]
+   ],
+   "run": "2026103100",
+   "end": 240
   },
   "opencharts_europe/z850_rh700": {
    "file": "opencharts_europe/z850_rh700.mp4",
@@ -280,7 +286,9 @@
     228,
     234,
     240
-   ]
+   ],
+   "run": "2026103100",
+   "end": 240
   },
   "opencharts_europe/z700_t700": {
    "file": "opencharts_europe/z700_t700.mp4",
@@ -350,7 +358,65 @@
     228,
     234,
     240
-   ]
+   ],
+   "run": "2026103100",
+   "end": 240
+  },
+  "icon-d2/t2m_wind1000": {
+   "file": "icon-d2/t2m_wind1000.mp4",
+   "steps": [
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57
+   ],
+   "run": "2026103109",
+   "end": 57
   },
   "opencharts_central_europe/t2m_wind1000": {
    "file": "opencharts_central_europe/t2m_wind1000.mp4",
@@ -420,7 +486,65 @@
     228,
     234,
     240
-   ]
+   ],
+   "run": "2026103100",
+   "end": 240
+  },
+  "icon-d2/mountain_2000": {
+   "file": "icon-d2/mountain_2000.mp4",
+   "steps": [
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57
+   ],
+   "run": "2026103109",
+   "end": 57
   },
   "opencharts_central_europe/mountain_2000": {
    "file": "opencharts_central_europe/mountain_2000.mp4",
@@ -490,7 +614,9 @@
     228,
     234,
     240
-   ]
+   ],
+   "run": "2026103100",
+   "end": 240
   },
   "opencharts_central_europe/inversion": {
    "file": "opencharts_central_europe/inversion.mp4",
@@ -560,7 +686,64 @@
     228,
     234,
     240
-   ]
+   ],
+   "run": "2026103100",
+   "end": 240
+  },
+  "icon-d2/weather_summary": {
+   "file": "icon-d2/weather_summary.mp4",
+   "steps": [
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57
+   ],
+   "run": "2026103109",
+   "end": 57
   },
   "opencharts_central_europe/weather_summary": {
    "file": "opencharts_central_europe/weather_summary.mp4",
@@ -629,7 +812,65 @@
     228,
     234,
     240
-   ]
+   ],
+   "run": "2026103100",
+   "end": 240
+  },
+  "icon-d2/wind10m": {
+   "file": "icon-d2/wind10m.mp4",
+   "steps": [
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57
+   ],
+   "run": "2026103109",
+   "end": 57
   },
   "opencharts_central_europe/wind10m": {
    "file": "opencharts_central_europe/wind10m.mp4",
@@ -699,7 +940,9 @@
     228,
     234,
     240
-   ]
+   ],
+   "run": "2026103100",
+   "end": 240
   }
  }
 }
