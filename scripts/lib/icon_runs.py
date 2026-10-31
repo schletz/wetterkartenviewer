@@ -82,8 +82,21 @@ class IconRuns:
             return None
         url = lambda param, name: f"{BASE_URL}{hour}/{self._split(param)[0]}/{name}"  # noqa: E731
         static = [url(p, name) for p in self.static_params for _, _, name in files[p]]
-        steps = sorted((step, params.index(p), url(p, name)) for p in self.forecast_params for _, step, name in files[p])
+        steps = sorted((step, params.index(p), url(p, name)) for p in self.forecast_params
+                       for step, name in self._every_step(run, files[p]))
         return IconRun(run, tuple(static + [u for _, _, u in steps]))
+
+    @staticmethod
+    def _every_step(run: str, listed: list[tuple[str, int, str]]) -> list[tuple[int, str]]:
+        """(step, file name) from the first listed step to T+48, also for steps missing in the listing.
+
+        DWD now and then lacks a single file; its name follows from another
+        step, the download gets a 404 and IconDownloader writes a placeholder.
+        """
+        steps = {step: name for _, step, name in listed}
+        first, name = min(steps), steps[min(steps)]
+        return [(step, steps.get(step) or name.replace(f"_{run}_{first:03d}_", f"_{run}_{step:03d}_"))
+                for step in range(first, MAX_STEP + 1)]
 
     def _split(self, param: str) -> tuple[str, str]:
         """(folder, level in the file name) of a parameter."""

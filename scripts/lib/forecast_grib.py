@@ -9,6 +9,7 @@ import numpy as np
 
 from .extreme_windows import EXTREME_PARAMS, ExtremeWindows
 from .local_params import LOCAL_CATEGORY, LOCAL_NAMES
+from .missing_field_error import MissingFieldError
 
 # Decoded fields kept per instance: a chart or table row reads the same
 # levels several times (profile, inversion, ground check). 64 fields of
@@ -43,6 +44,8 @@ class ForecastGrib:
         self._index: dict[tuple, tuple[int, int]] = {}
         # (shortName, level) -> typeOfLevel, in file order
         self._level_types: dict[tuple[str, int], str] = {}
+        # index key -> whether every value is missing (a placeholder of missing_values.py), set on decoding
+        self._empty: dict[tuple, bool] = {}
         with self.path.open("rb") as fh:
             while (gid := eccodes.codes_grib_new_from_file(fh, headers_only=True)) is not None:
                 try:
@@ -88,7 +91,7 @@ class ForecastGrib:
         return sorted({end for name, _, end in self._index if name == short_name})
 
     def has(self, short_name: str, step: int, level: int | None = None) -> bool:
-        """Whether a field exists."""
+        """Whether a field has a message, possibly a placeholder without values."""
         return self._key(short_name, step, level) is not None
 
     def field(self, short_name: str, step: int, level: int | None = None) -> np.ndarray:
@@ -100,22 +103,25 @@ class ForecastGrib:
             level: pressure level; may be omitted for single level fields.
 
         Raises:
-            KeyError: if the file holds no such field.
+            MissingFieldError: if the file holds no such field, or only its placeholder with every value missing.
         """
         key = self._key(short_name, step, level)
         if key is None:
-            raise KeyError(f"{short_name} level {level} step {step} not in {self.path.name}")
-        return self._decode(key)
+            raise MissingFieldError(f"{self._label(short_name, step, level)} not in {self.path.name}")
+        values = self._decode(key)
+        if self._empty[key]:
+            raise MissingFieldError(f"{self._label(short_name, step, level)} lost, no data in {self.path.name}")
+        return values
 
     def message(self, short_name: str, step: int, level: int | None = None) -> bytes:
         """The encoded GRIB message of one field, e.g. as template for a derived field.
 
         Raises:
-            KeyError: if the file holds no such field.
+            MissingFieldError: if the file holds no such field.
         """
         key = self._key(short_name, step, level)
         if key is None:
-            raise KeyError(f"{short_name} level {level} step {step} not in {self.path.name}")
+            raise MissingFieldError(f"{self._label(short_name, step, level)} not in {self.path.name}")
         with self.path.open("rb") as fh:
             fh.seek(self._index[key][1])
             gid = eccodes.codes_grib_new_from_file(fh)
@@ -135,11 +141,17 @@ class ForecastGrib:
                     values[values == eccodes.codes_get(gid, "missingValue")] = np.nan
             finally:
                 eccodes.codes_release(gid)
+        self._empty[key] = bool(np.isnan(values).all())
         if self.grid is not None:
             values = values.reshape(self.grid["nj"], self.grid["ni"])
         # Shared by every caller through the cache, so nobody may change it in place.
         values.flags.writeable = False
         return values
+
+    @staticmethod
+    def _label(short_name: str, step: int, level: int | None) -> str:
+        """"t 850 T+108" for messages."""
+        return f"{short_name}{'' if level is None else f' {level}'} T+{step}"
 
     def _key(self, short_name: str, step: int, level: int | None):
         for key in self._index:

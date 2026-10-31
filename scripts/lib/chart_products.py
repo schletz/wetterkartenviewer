@@ -14,6 +14,7 @@ from .contour_style import ContourStyle
 from .diagnostics import Diagnostics
 from .forecast_grib import ForecastGrib
 from .height_profile import HeightProfile
+from .missing_field_error import MissingFieldError
 from .model_surface import ModelSurface
 from .pixel_grid import PixelGrid
 from .projection import EUROPE
@@ -103,10 +104,15 @@ class ChartProducts:
         return out_dir / product / f"{self.grib.valid_time(key):%Y%m%d%H}.webp"
 
     def draw(self, product: str, key) -> ChartCanvas:
-        """Canvas of one chart with every layer."""
-        if product in self.DAY:
-            return self.daily_extreme(self.DAY[product], key)
-        return getattr(self, product)() if product in self.STATIC else getattr(self, product)(key)
+        """Canvas of one chart with every layer; "No data available" if a field it needs was lost on the server."""
+        try:
+            if product in self.DAY:
+                return self.daily_extreme(self.DAY[product], key)
+            return getattr(self, product)() if product in self.STATIC else getattr(self, product)(key)
+        except MissingFieldError as error:
+            canvas = ChartCanvas(self.base_map, product, self.key_label(product, key))
+            canvas.no_data(error.args[0])
+            return canvas
 
     # Helpers
 
@@ -134,6 +140,18 @@ class ChartProducts:
         """Wind speed on a level, smoothed on the model grid."""
         speed = np.hypot(self.grib.field("u", step, level), self.grib.field("v", step, level))
         return self.pixels.resample(speed, smooth_km)
+
+    def key_label(self, product: str, key) -> str:
+        """Legend line of the time a chart is valid for: step, day or static."""
+        if product in self.DAY:
+            return self.day_label(self.DAY[product], key)
+        if product in self.STATIC:
+            return f"Static field   ({self._run})"
+        return self.step_label(key)
+
+    def day_label(self, kind: str, day: date) -> str:
+        """Day and window of a daily maximum (``kind="max"``) or minimum, and run, for the legend strip."""
+        return f"{day:%a %d.%m.%Y}, {'06-18' if kind == 'max' else '18-06'} UTC   ({self._run})"
 
     def step_label(self, step: int) -> str:
         """Valid time, step and run for the legend strip."""
@@ -444,9 +462,8 @@ class ChartProducts:
         return self.grib.daily_extreme(kind, day)
 
     def daily_extreme(self, kind: str, day: date) -> ChartCanvas:
-        window, name = ("06-18", "maximum") if kind == "max" else ("18-06", "minimum")
-        canvas = ChartCanvas(self.base_map, f"Daily 2 m {name} temperature (°C, colours)",
-                             f"{day:%a %d.%m.%Y}, {window} UTC   ({self._run})")
+        name = "maximum" if kind == "max" else "minimum"
+        canvas = ChartCanvas(self.base_map, f"Daily 2 m {name} temperature (°C, colours)", self.day_label(kind, day))
         values = self.daily_extreme_field(kind, day) - KELVIN
         pixels = self.pixels.resample(values)
         canvas.shade(pixels, styles.T2M)
@@ -459,7 +476,7 @@ class ChartProducts:
         """Model orography: how fine the model resolves valleys and summits; rough terrain hatched if known."""
         rough = self.surface.sdor is not None
         canvas = ChartCanvas(self.base_map, "Model orography (m, colours)"
-                             + (" + rough sub-grid terrain (hatched)" if rough else ""), f"Static field   ({self._run})")
+                             + (" + rough sub-grid terrain (hatched)" if rough else ""), self.key_label("orography", None))
         sea = self.pixels.resample(self.surface.land) < 0.5
         canvas.shade(self.height, styles.OROGRAPHY, mask=sea, mask_colour=styles.OROGRAPHY_SEA_RGB,
                      mask_label="light blue: sea (model land-sea mask)")

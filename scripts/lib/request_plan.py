@@ -45,6 +45,13 @@ class RequestPlan:
             return len(value) if isinstance(value, list) else 1
         return count("param") * count("levelist") * count("step")
 
+    def fields(self) -> set[tuple[str, int | None, int]]:
+        """(param, level, end step) of every raw message the groups ask for; level None without levelist."""
+        def listed(value):
+            return value if isinstance(value, list) else [value]
+        return {(param, level, step) for request in self.groups.values() for param in listed(request["param"])
+                for level in listed(request.get("levelist")) for step in request["step"]}
+
     def expected_total(self) -> int:
         """Messages of a complete forecast file: every group, then per step the thickness and the
         derived fields, the orography in m and one daily maximum or minimum per complete day."""

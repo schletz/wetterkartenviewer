@@ -36,6 +36,11 @@ downloaded again. The file is assembled as <out>.part and renamed at the end;
 the raw files land in <out>.raw/ and are removed after success (--keep-raw
 keeps them), so an interrupted call can simply be repeated.
 
+A file missing on the server (also a gap in its listing) or delivered
+damaged does not stop the download: it is written as a copy of the same
+field at another step with every value missing (a warning names it), and
+the charts of that step say "No data available".
+
 Example::
 
     python download_icon_d2.py data
@@ -97,7 +102,7 @@ def main(argv: list[str]) -> int:
         raw_files = list(pool.map(downloader.fetch, run.urls))
     print(f"downloaded in {time.monotonic() - started:.0f}s", flush=True)
     part = out.with_name(out.name + ".part")
-    count = downloader.join(raw_files, part)
+    count = downloader.join(list(run.urls), raw_files, part)
     if count != len(run.urls):
         print(f"{count} messages instead of one per file ({len(run.urls)})", file=sys.stderr)
         return 1

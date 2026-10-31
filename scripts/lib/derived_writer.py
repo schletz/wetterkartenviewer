@@ -12,19 +12,24 @@ is computed here once, with the same code that draws the charts:
     mx2t, mn2t                       daily 2 m maximum 06-18 UTC and minimum 18-06 UTC, per complete day
 
 Values below the model ground are missing (GRIB bitmap) and read back as NaN.
+A derived field whose inputs are lost (placeholders of missing_values.py)
+is written with every value missing.
 """
 
 import os
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 from pathlib import Path
 
-import eccodes
 import numpy as np
 
 from .diagnostics import Diagnostics
 from .forecast_grib import ForecastGrib
 from .height_profile import HeightProfile
 from .local_params import LOCAL_CATEGORY, LOCAL_NUMBERS
+from .missing_field_error import MissingFieldError
+from .missing_values import encode
 from .model_surface import ModelSurface
 
 MOUNTAIN_HEIGHTS = (2000, 2500, 3000)
@@ -45,26 +50,6 @@ _grib: ForecastGrib | None = None
 _surface: ModelSurface | None = None
 
 
-def encode(template: bytes, values: np.ndarray, keys: dict) -> bytes:
-    """A copy of ``template`` with new keys and values; NaN becomes missing in a bitmap."""
-    gid = eccodes.codes_new_from_message(template)
-    try:
-        for key, value in keys.items():
-            if value is None:
-                eccodes.codes_set_missing(gid, key)
-            else:
-                eccodes.codes_set(gid, key, value)
-        values = np.asarray(values, dtype=np.float64).ravel()
-        missing = np.isnan(values)
-        if missing.any():
-            eccodes.codes_set(gid, "bitmapPresent", 1)
-            values = np.where(missing, eccodes.codes_get(gid, "missingValue"), values)
-        eccodes.codes_set_values(gid, values)
-        return eccodes.codes_get_message(gid)
-    finally:
-        eccodes.codes_release(gid)
-
-
 def height_keys(height: int) -> dict:
     """Level keys of a height above mean sea level in m."""
     return {"typeOfFirstFixedSurface": 102, "scaleFactorOfFirstFixedSurface": 0,
@@ -83,27 +68,30 @@ def init_worker(path: Path) -> None:
     _surface = ModelSurface(_grib)
 
 
+def or_missing(grib: ForecastGrib, compute: Callable[[], np.ndarray]) -> np.ndarray:
+    """The values of ``compute``, or all missing if an input field is (see missing_values.py)."""
+    try:
+        return compute()
+    except MissingFieldError:
+        return np.full((grib.grid["nj"], grib.grid["ni"]), np.nan)
+
+
 def step_messages(step: int) -> list[bytes]:
-    """Worker: the derived messages of one step."""
+    """Worker: the derived messages of one step; each is missing where its inputs are."""
     grib = _grib
     profile = HeightProfile(grib, step)
     diagnostics = Diagnostics(profile, _surface)
     t850 = grib.message("t", step, 850)
-    messages = []
-    for name in PROFILE_PARAMS:
-        template = grib.message(name, step, 850)
-        messages += [encode(template, profile.at_height(name, height), height_keys(height))
-                     for height in MOUNTAIN_HEIGHTS]
-    messages.append(encode(t850, diagnostics.freezing_level(), {"paramId": PARAM_IDS["deg0l"]}))
-    surface_values = {"inv": diagnostics.inversion(), "rhbl": diagnostics.moist_boundary_layer(),
-                      "psig": diagnostics.precipitation_signal().astype(np.float32),
-                      "snowl": diagnostics.snow_line()}
-    messages += [encode(t850, surface_values[name], {**local_keys(name), **SURFACE}) for name in SURFACE_FIELDS]
-    for level in FREE_LEVELS:
-        for component, name in (("u", "uf"), ("v", "vf")):
-            messages.append(encode(grib.message(component, step, level), diagnostics.free(component, level),
-                                   local_keys(name)))
-    return messages
+    jobs = [(grib.message(name, step, 850), partial(profile.at_height, name, height), height_keys(height))
+            for name in PROFILE_PARAMS for height in MOUNTAIN_HEIGHTS]
+    jobs.append((t850, diagnostics.freezing_level, {"paramId": PARAM_IDS["deg0l"]}))
+    surface_values = {"inv": diagnostics.inversion, "rhbl": diagnostics.moist_boundary_layer,
+                      "psig": lambda: diagnostics.precipitation_signal().astype(np.float32),
+                      "snowl": diagnostics.snow_line}
+    jobs += [(t850, surface_values[name], {**local_keys(name), **SURFACE}) for name in SURFACE_FIELDS]
+    jobs += [(grib.message(component, step, level), partial(diagnostics.free, component, level), local_keys(name))
+             for level in FREE_LEVELS for component, name in (("u", "uf"), ("v", "vf"))]
+    return [encode(template, or_missing(grib, compute), keys) for template, compute, keys in jobs]
 
 
 class DerivedWriter:
@@ -142,6 +130,6 @@ class DerivedWriter:
             for day in grib.extreme_days(kind):
                 template = grib.message(*windows.parts(kind, day)[0])
                 start, end = windows.window(kind, day)
-                messages.append(encode(template, grib.daily_extreme(kind, day),
+                messages.append(encode(template, or_missing(grib, partial(grib.daily_extreme, kind, day)),
                                        {"paramId": PARAM_IDS[kind], "stepRange": f"{start}-{end}"}))
         return messages

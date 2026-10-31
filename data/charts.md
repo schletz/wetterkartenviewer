@@ -75,6 +75,11 @@ demselben Code wie die Karten. Karte und Zahl am Ort passen deshalb zusammen.
 - **Fehlende Werte:** Wo `inv`, `rhbl`, `uf` und `vf` einen fehlenden Wert haben, liegt die
   Fläche unter dem Modellboden. Dort extrapoliert das Modell die Druckflächen aus dem Boden, die
   Werte wären keine freie Atmosphäre.
+- **Vom Server verlorene Felder:** Fehlt am Server eine Datei oder kommt sie beschädigt an, steht
+  das Feld trotzdem in der Datei, aber jeder Wert ist fehlend. Das gilt auch für die daraus
+  abgeleiteten Felder dieses Termins. Ein Feld, das überall fehlt, ist also kein Wetter, sondern
+  eine Datenlücke. Die Karten dieses Termins zeigen „No data available“ und nennen das Feld in
+  der Legende. Dann nimm die Nachbartermine oder das andere Modell.
 - **Lokale Parameter:** `inv`, `rhbl`, `psig`, `snowl`, `uf` und `vf` haben keinen WMO-Parameter.
   Sie stehen in Disziplin 0, Kategorie 192 unter `parameterNumber` 0 bis 5 in dieser Reihenfolge.
   ecCodes nennt sie `unknown`, der Leser des Skills benennt sie selbst.
@@ -384,6 +389,7 @@ der Viewer das Feld liest.
 | `t`, `r`, `z` | 850, 700 hPa | K, %, m²/s² | Temperatur, relative Feuchte, Geopotential (nicht gpm wie `gh` bei IFS) |
 
 Zellen im Randstreifen der Domain haben fehlende Werte (Bitmap). 925 hPa gibt es bei ICON-D2 nicht.
+Eine vom Server verlorene Datei steht wie bei IFS als Feld mit lauter fehlenden Werten in der Datei.
 
 ## Produkte im Fenster icon-d2
 

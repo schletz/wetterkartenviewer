@@ -34,6 +34,8 @@ BAR = (8, 760)
 NOTES_X = 800
 SYMBOL_GAP_PX = 18
 DPI = 100
+# Map area of a chart whose fields were lost on the server.
+NO_DATA_RGB = (225, 225, 225)
 WEBP_QUALITY = 90
 # Drawing order, bottom to top.
 Z_BACKGROUND, Z_SHADING, Z_GRATICULE, Z_OUTLINE, Z_CONTOUR, Z_ARROW, Z_MARKER = range(7)
@@ -110,6 +112,15 @@ class ChartCanvas:
         rgba[~covered] = (*colour, 255)
         self.ax.imshow(rgba, extent=(0, IMAGE_WIDTH, IMAGE_HEIGHT, 0), interpolation="nearest", zorder=Z_SHADING)
         self._swatch(colour, label)
+
+    def no_data(self, note: str) -> None:
+        """Grey map with outlines and "No data available" across it; ``note`` names the lost field in the legend."""
+        self.ax.add_patch(Rectangle((0, 0), IMAGE_WIDTH, IMAGE_HEIGHT, color=rgb(NO_DATA_RGB), zorder=Z_BACKGROUND))
+        self.outlines()
+        self.ax.text(IMAGE_WIDTH / 2, IMAGE_HEIGHT / 2, "No data available", fontsize=40, fontweight="bold",
+                     color="#404040", ha="center", va="center", zorder=Z_MARKER,
+                     bbox=dict(boxstyle="square,pad=0.4", fc="white", ec="#404040", alpha=0.85))
+        self._notes.append(note)
 
     def outlines(self) -> None:
         """Coastlines, country and state borders and a labelled graticule."""

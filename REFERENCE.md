@@ -57,8 +57,8 @@ Jedes Pipeline-Skript parst nur Argumente und verdrahtet Klassen aus `scripts/li
 | scripts/publish_maps.py | 126 | Manifest prüfen, geänderte Videos ins Release laden, überzählige Assets löschen, Manifest committen, pushen (`gh`, `git`) |
 | scripts/fetch_maps.py | 48 | Im Deploy: Manifest und dessen Videos aus dem Release nach `dist/maps` (nur Standardbibliothek, ohne Token) |
 | scripts/maps_release.py | 20 | `TAG` des Releases, Asset-Name und Download-URL eines Videos |
-| scripts/download_ecmwf_data.py | 145 | IFS: Lauf wählen, Gruppen parallel laden, zuschneiden, abgeleitete Felder anhängen |
-| scripts/download_icon_d2.py | 113 | ICON-D2: Lauf wählen (`IconRuns`), Dateien parallel laden (`IconDownloader`), zu einer GRIB2-Datei verbinden |
+| scripts/download_ecmwf_data.py | 150 | IFS: Lauf wählen, Gruppen parallel laden, zuschneiden (verlorene Felder als Missing), abgeleitete Felder anhängen |
+| scripts/download_icon_d2.py | 118 | ICON-D2: Lauf wählen (`IconRuns`), Dateien parallel laden (`IconDownloader`), zu einer GRIB2-Datei verbinden (verlorene Dateien als Missing) |
 | scripts/render_charts.py | 234 | Modell am Gittertyp erkennen, Produkte eines Fensters im Prozesspool rendern, Kontaktabzüge, `geometry.json` |
 | scripts/build_borders.py | 131 | Einmalig, von Hand: `lib/borders_austria.geojson` aus BEV-Shapefile + world_countries.geojson bauen (braucht pyshp, shapely ≥ 2.1, pyproj; die Pipeline nicht) |
 | scripts/make_icon_test_grib.py | 108 | Testwerkzeug: Kopie einer ICON-Datei mit künstlicher Szene (Gewitterlinie, Hagel, Nebel, Sturmböen) zum Prüfen der Symbole; **nie veröffentlichen** |
@@ -66,9 +66,9 @@ Jedes Pipeline-Skript parst nur Argumente und verdrahtet Klassen aus `scripts/li
 | download_data.cmd | 5 | `update_maps.py data maps %*` und bei Erfolg `publish_maps.py maps` |
 | download_data.sh | 5 | dasselbe für macOS/Linux mit `python3`; im Index ausführbar (100755) |
 
-### Paket `scripts/lib/` (29 Klassen, eine öffentliche Klasse pro Datei)
+### Paket `scripts/lib/` (30 Klassen, eine öffentliche Klasse pro Datei)
 
-Alle Abhängigkeiten werden über den Konstruktor injiziert. Ohne Klasse: `__init__.py`, constants.py, local_params.py, chart_styles.py, fonts.py.
+Alle Abhängigkeiten werden über den Konstruktor injiziert. Ohne Klasse: `__init__.py`, constants.py, local_params.py, chart_styles.py, fonts.py, missing_values.py.
 
 | Datei | Zeilen | Klasse | Verantwortung |
 | --- | --- | --- | --- |
@@ -76,16 +76,18 @@ Alle Abhängigkeiten werden über den Konstruktor injiziert. Ohne Klasse: `__ini
 | local_params.py | 20 | — | Nummern der lokalen GRIB-Parameter (Kategorie 192) ↔ Namen |
 | projection.py | 139 | Projection (frozen dataclass) | Konforme Kegelprojektion eines Kartenfensters (cone = 1: polarstereografisch), `lambert()`, `km_per_px`, `north_east`; `EUROPE`, `CENTRAL_EUROPE`, `ICON_D2`, `PROJECTIONS` |
 | icon_run.py | 11 | IconRun (frozen dataclass) | Ergebnis von IconRuns: Lauf und URLs aller Dateien |
-| icon_runs.py | 109 | IconRuns | DWD-Verzeichnislistings lesen (ein Listing je Ordner): neuester kompletter ICON-D2-Lauf, URLs aller Dateien; Parameter `<ordner>@<hPa>` |
-| icon_downloader.py | 67 | IconDownloader | bz2-Dateien mit Retries laden, nur Nachrichten auf vollen Stunden behalten, zu einer Datei verbinden |
+| icon_runs.py | 122 | IconRuns | DWD-Verzeichnislistings lesen (ein Listing je Ordner): neuester kompletter ICON-D2-Lauf, URLs aller Dateien bis T+48 (auch für Lücken im Listing); Parameter `<ordner>@<hPa>` |
+| icon_downloader.py | 122 | IconDownloader | bz2-Dateien mit Retries laden (`None` bei 404/Schaden), nur Nachrichten auf vollen Stunden behalten, zu einer Datei verbinden; verlorene Dateien als Missing-Platzhalter |
 | open_data_runs.py | 52 | OpenDataRuns | Neuester kompletter Lauf; Hinweis, wenn ein neuerer erst mit 0,25° da ist |
-| request_plan.py | 69 | RequestPlan | Request-Gruppen eines Laufs, erwartete Nachrichtenzahlen; Funktion `count_messages` |
-| group_downloader.py | 52 | GroupDownloader | Eine Gruppe mit Retries laden, Anzahl prüfen |
+| request_plan.py | 76 | RequestPlan | Request-Gruppen eines Laufs, erwartete Nachrichtenzahlen, erwartete Felder (`fields`); Funktion `count_messages` |
+| group_downloader.py | 96 | GroupDownloader | Eine Gruppe mit Retries laden; bei 404 Step für Step ohne die fehlenden; unvollständige Gruppe mit Warnung behalten |
 | grib_cropper.py | 88 | GribCropper | Globale Nachrichten auf die Box schneiden und neu kodieren |
-| forecast_writer.py | 141 | ForecastWriter | Rohdateien im Prozesspool zuschneiden, in Rohdatei-Reihenfolge in eine Datei schreiben, `thick` je Step |
-| derived_writer.py | 147 | DerivedWriter | Abgeleitete Felder an die Vorhersagedatei anhängen (Prozesspool) |
+| forecast_writer.py | 209 | ForecastWriter | Rohdateien im Prozesspool zuschneiden, in Rohdatei-Reihenfolge in eine Datei schreiben, `thick` je Step, Platzhalter für verlorene Felder; `message_spans` überspringt Beschädigtes |
+| derived_writer.py | 135 | DerivedWriter | Abgeleitete Felder an die Vorhersagedatei anhängen (Prozesspool); fehlt eine Eingabe, alle Werte Missing (`or_missing`) |
+| missing_values.py | 59 | — | `encode` (NaN → Bitmap-Missing), `step_keys`, `missing_message`: Platzhalter = Kopie eines anderen Steps desselben Felds, alle Werte Missing |
+| missing_field_error.py | 9 | MissingFieldError(KeyError) | Feld fehlt oder ist ein Platzhalter; render_charts zeichnet dafür „No data available“ |
 | extreme_windows.py | 45 | ExtremeWindows | Welche 3-/6-h-Extreme ein Tagesfenster lückenlos abdecken; Steps eines Fensters (`window`, auch für ICON) |
-| forecast_grib.py | 179 | ForecastGrib | Byte-Offset-Index der Vorhersagedatei (IFS oder ICON, Namens-Aliasse), gecachtes Dekodieren, Tagesextreme |
+| forecast_grib.py | 191 | ForecastGrib | Byte-Offset-Index der Vorhersagedatei (IFS oder ICON, Namens-Aliasse), gecachtes Dekodieren, Tagesextreme; `MissingFieldError` für fehlende Felder und Platzhalter |
 | model_surface.py | 21 | ModelSurface | Statische T+0-Felder des IFS: `height` (m), `sdor`, `land` |
 | icon_surface.py | 25 | IconSurface | Statische Felder von ICON je Zelle: `lat`, `lon`, `height`, `sdor` = None, `land` (Anteil), `valid` |
 | height_profile.py | 68 | HeightProfile | Druckflächenprofil → Wert in fester Höhe, Nullgradgrenze; Höhenfeld wählbar (`gh` oder `z` × Faktor) |
@@ -98,15 +100,15 @@ Alle Abhängigkeiten werden über den Konstruktor injiziert. Ohne Klasse: `__ini
 | colour_scale.py / contour_style.py / symbol_style.py | 27 / 27 / 28 | ColourScale / ContourStyle / SymbolStyle | Frozen dataclasses für Farbbänder, Konturlinien, Punktsymbole (`marker` auch Vertices oder matplotlib-`Path`) |
 | chart_styles.py | 245 | — | Alle Farbskalen, Konturstile, Schwellen (auch von Diagnostics benutzt), ww-Zuordnung und -Symbole von ICON |
 | fonts.py | 18 | — | `load_font`: Arial (Dateinamen von Windows und macOS) → DejaVu Sans → PIL-Default in Größe `size` |
-| chart_canvas.py | 314 | ChartCanvas | Eine matplotlib-Figur: Kartenlayer + Legendenstreifen, verlustfrei als WebP speichern |
-| chart_products.py | 471 | ChartProducts | Produktregister (`STEP`, `DAY`, `STATIC`, `ALL`, `CLIMATE`, `DEFAULTS`, `MODEL`, `PRECIP_HOURS`, `SHEET_HOURS`), eine Methode pro Produkt, Hooks `profile`, `summit_cloud`, `extreme_days`, `daily_extreme_field`, `cloud_cover`, `precipitation`, `precipitation_type` |
+| chart_canvas.py | 325 | ChartCanvas | Eine matplotlib-Figur: Kartenlayer + Legendenstreifen, verlustfrei als WebP speichern; `no_data` |
+| chart_products.py | 488 | ChartProducts | Produktregister (`STEP`, `DAY`, `STATIC`, `ALL`, `CLIMATE`, `DEFAULTS`, `MODEL`, `PRECIP_HOURS`, `SHEET_HOURS`), eine Methode pro Produkt, `draw` mit „No data available“ bei `MissingFieldError`, Hooks `profile`, `summit_cloud`, `extreme_days`, `daily_extreme_field`, `cloud_cover`, `precipitation`, `precipitation_type` |
 | icon_products.py | 101 | IconProducts(ChartProducts) | ICON-D2-Produkte `t2m_wind1000`, `wind10m`, `mountain_2000`, `weather_summary` (+ Gewitter, Hagel, Nebel, Sturmböen), `tmax`, `tmin`, `orography`; Grau außerhalb des Gebiets in jeder Karte |
 | icon_extremes.py | 55 | IconExtremes | Tagesmax/-min von ICON aus den 6-stündlich neu startenden `tmax_2m`/`tmin_2m` (+ stündliche `2t` vor dem ersten Neustart im Fenster) |
 | contact_sheet.py | 67 | ContactSheet | Kontaktabzüge bauen, Kachelursprünge liefern |
 | world_countries.geojson | 8,7 MB, eine Zeile | — | Ländergrenzen, Esri „World Countries (Generalized)“ (https://hub.arcgis.com/datasets/esri::world-countries-generalized), lokal gelesen; `borders` der IFS-Fenster |
 | borders_austria.geojson | 3,5 MB, eine Zeile | — | `borders` von `icon-d2`: Länder in Europa (Nachbarn Österreichs entlang der genauen Grenze zugeschnitten) + Österreich + 9 Bundesländer (10 Polygone, Tirol zweiteilig) aus BEV VGD 1:50 000; erzeugt von build_borders.py. Liegt in `scripts/lib/` und ist nicht von `.gitignore` erfasst |
 
-Python gesamt 4.416 Zeilen (Skripte 1.320, lib 3.096).
+Python gesamt 4.725 Zeilen (Skripte 1.330, lib 3.395).
 
 Externe Abhängigkeiten: npm (`package.json`), Laufzeit nur `react`/`react-dom`, Entwicklung `vite`, `@vitejs/plugin-react`, `typescript ~7.0`, `oxlint`. Kein Router, kein State-Management, keine UI-Bibliothek. npm-Skripte: `dev`, `build` (`tsc -b && vite build`), `lint` (oxlint, .oxlintrc.json), `preview`.
 Python-Pakete (keine requirements-Datei): `ecmwf-opendata`, `eccodes`, `numpy`, `scipy` (`ndimage`, `spatial.Delaunay`), `matplotlib` (Agg, erzwungen in scripts/lib/chart_canvas.py:14), `Pillow`, `requests`; nur für build_borders.py zusätzlich `pyshp`, `shapely` ≥ 2.1 (`coverage_simplify`), `pyproj`. `update_maps.py` ruft die drei Pipeline-Skripte (beide Downloader, Renderer) als Subprozess mit `sys.executable` auf. `tile_videos.py` braucht Pillow und **ffmpeg mit dem Encoder `libaom-av1` im PATH**.
@@ -131,7 +133,7 @@ Der Skill liest `data/` als Datenverzeichnis (Docstrings scripts/update_maps.py:
 | `data/charts.md` | von Hand gepflegt, committet; in einen anderen Datenordner kopiert (scripts/update_maps.py:173-174) | Beschreibung der Dateien, GRIB-Felder (inkl. Einheiten, lokale Nummern) und aller Produkte; von Hand gepflegt |
 | `data/<fenster>/geometry.json` | `write_geometry` (scripts/render_charts.py:160) | Schlüssel `window`, `model` (`ChartProducts.MODEL`: `ECMWF IFS` / `ICON-D2`), `run` (YYYYMMDDHH), `image.width/height` (= Kartenfläche 1200×600, ohne Legende), `projection.pole_x/pole_y/scale_k/cone/lon0/formula`, `sheets.scale`, `sheets.tiles.<produkt>` = Liste `[x, y]` der Kachel-Ecken oben links. `run` liest auch `maps_manifest.window_run` |
 | GRIB-Layout | download_ecmwf_data.py + `DerivedWriter` | shortNames, Ebenen, Einheiten, `stepRange` der Tagesextreme und vor allem die lokalen `parameterNumber` 0–5 in Kategorie 192 (`LOCAL_NAMES`, scripts/lib/local_params.py:12) — der Skill benennt sie selbst nach Nummer |
-| Ordner-/Dateinamen | `ChartProducts.path` (scripts/lib/chart_products.py:97), `ClimateArchive` | `<fenster>/<produkt>/<YYYYMMDDHH>.webp`, Tagesprodukte `<YYYYMMDD>.webp`, `sheets/<produkt>.webp`, `orography.webp`, `era5_means/*.grb2`, ein Lauf `ecmwf_<run>.grb2`; daneben `icon-d2_<run>.grb2` und `icon-d2/` |
+| Ordner-/Dateinamen | `ChartProducts.path` (scripts/lib/chart_products.py:98), `ClimateArchive` | `<fenster>/<produkt>/<YYYYMMDDHH>.webp`, Tagesprodukte `<YYYYMMDD>.webp`, `sheets/<produkt>.webp`, `orography.webp`, `era5_means/*.grb2`, ein Lauf `ecmwf_<run>.grb2`; daneben `icon-d2_<run>.grb2` und `icon-d2/` |
 
 **Projektionsformel:** `geometry.json` enthält die allgemeine Kegelformel mit `cone` und `lon0` (siehe *Projektion und Ortsmarker*). `ChartGeometry` im Skill (`~/.claude/skills/synop/scripts/lib/chart_geometry.py:47-51`) rechnet noch die polarstereografische Formel ohne `cone`/`lon0`: Für `opencharts_*` (cone 1, lon0 0) stimmt das, für `icon-d2` landen Ortsmarker des Skills falsch, bis der Skill nachgezogen ist.
 
@@ -214,22 +216,31 @@ download_data.cmd | download_data.sh [--base YYYYMMDDHH] [--icon-run YYYYMMDDHH]
 ### Download und abgeleitete Felder
 
 ```
-download_ecmwf_data.main                         scripts/download_ecmwf_data.py:96
+download_ecmwf_data.main                         scripts/download_ecmwf_data.py:101
  ├─ OpenDataRuns.latest() [ohne --base]          scripts/lib/open_data_runs.py:28   (Netz)
  ├─ pending_notice(run) -> stderr [ohne --base]  scripts/lib/open_data_runs.py:32
  ├─ RequestPlan(STEPS ≤ max_step, run)           scripts/lib/request_plan.py:20
- ├─ [output_complete(out)] "already on disk", Pfad, Exit 0            :59
- ├─ ThreadPool(4) × GroupDownloader.retrieve     scripts/lib/group_downloader.py:22  -> <out>.raw/<gruppe>.grib2
- │     (stderr für den ganzen Block nach devnull)
+ ├─ [output_complete(out)] "already on disk", Pfad, Exit 0            :66
+ ├─ ThreadPool(4) × GroupDownloader.retrieve     scripts/lib/group_downloader.py:34  -> <out>.raw/<gruppe>.grib2
+ │     (stderr für den ganzen Block nach devnull; Warnungen daher auf stdout)
+ │    ├─ _fetch: ganze Gruppe, 3 Versuche; 404 sofort weiter               :60
+ │    ├─ [404] _fetch_steps: jeder Step einzeln, 404-Steps ausgelassen     :73   alle 404 -> RuntimeError
+ │    └─ [Anzahl != expected] Warnung, Rohdatei bleibt (Lücken füllt ForecastWriter)
  ├─ GribCropper.for_windows(PROJECTIONS)         scripts/lib/grib_cropper.py:26
- ├─ ForecastWriter.write(raw, <out>.part)        scripts/lib/forecast_writer.py:89
- │    ├─ message_spans(raw) je Datei             :34   (Datei, Offset, Länge) aus den GRIB2-Indicator-Sections
- │    ├─ cropper.fit(erste Nachricht)            scripts/lib/grib_cropper.py:37   im Hauptprozess, setzt cropper.grid
- │    ├─ ProcessPool(min(CPU, MAX_WORKERS), init_worker(cropper)) × crop_message(span), chunksize CHUNK_SIZE   :67
- │    │    Worker liest die Nachricht selbst, liefert zugeschnittene Bytes (+ Werte bei gh 500/1000)
- │    └─ Hauptprozess: Ergebnisse in Reihenfolge von pool.map schreiben, thick nach dem zweiten gh500/gh1000
- ├─ DerivedWriter.append(<out>.part)             scripts/lib/derived_writer.py:115
- │    ├─ ProcessPool(min(CPU, 8), init_worker) × step_messages(step)   :86   21 Nachrichten je Step
+ ├─ ForecastWriter.write(raw, <out>.part, plan.fields())   scripts/lib/forecast_writer.py:120
+ │    ├─ message_spans(raw) je Datei             :46   (Datei, Offset, Länge) intakter GRIB2-Nachrichten; Rest bis zum nächsten "GRIB" übersprungen
+ │    ├─ _fit(erste dekodierbare Nachricht)      :186  -> cropper.fit (scripts/lib/grib_cropper.py:37), setzt cropper.grid
+ │    ├─ ProcessPool(min(CPU, MAX_WORKERS), init_worker(cropper)) × crop_message(span), chunksize CHUNK_SIZE   :84
+ │    │    Worker liest die Nachricht selbst, liefert zugeschnittene Bytes (+ Werte bei gh 500/1000) und (shortName, level, endStep);
+ │    │    None, wenn ecCodes sie nicht dekodiert
+ │    ├─ Hauptprozess: Ergebnisse in Reihenfolge von pool.map schreiben, thick nach dem zweiten gh500/gh1000,
+ │    │    je (Name, Ebene) die erste Nachricht als Vorlage merken
+ │    ├─ je erwartetem Feld ohne Nachricht: missing_message(Vorlage, Step)   scripts/lib/missing_values.py:52
+ │    ├─ je gh-Step ohne thick: missing_message(gh500-Vorlage, Step, THICKNESS_KEYS)
+ │    └─ Warnung auf stderr (Felder ohne Vorlage: ausgelassen, Datei gilt dann als unvollständig)
+ ├─ DerivedWriter.append(<out>.part)             scripts/lib/derived_writer.py:103
+ │    ├─ ProcessPool(min(CPU, 8), init_worker) × step_messages(step)   :79   21 Nachrichten je Step,
+ │    │    jede über or_missing (:71): MissingFieldError einer Eingabe -> alle Werte Missing
  │    └─ anhängen: alle Steps, dann orog, dann mx2t je Tag, mn2t je Tag
  ├─ <out>.part -> <out>  (rename)
  └─ rmtree(<out>.raw) [ohne --keep-raw]
@@ -238,19 +249,23 @@ download_ecmwf_data.main                         scripts/download_ecmwf_data.py:
 ### ICON-D2-Download
 
 ```
-download_icon_d2.main                            scripts/download_icon_d2.py:77
+download_icon_d2.main                            scripts/download_icon_d2.py:82
  ├─ IconRuns(FORECAST_PARAMS, STATIC_PARAMS)     scripts/lib/icon_runs.py:24
  │    ├─ [--run] run(run)                        :53   Ordner run[8:10]; anderer Lauf darin -> RuntimeError
  │    └─ [sonst] latest()                        :41
- │         ├─ RUN_HOURS sortiert nach _folder_time (:93) absteigend   8 Listings
- │         └─ erster complete_run(hour) != None  :64   ein Listing je Ordner (_split :88: "t@850" -> Ordner t,
- │              Ebene 850), Dateien nach Ebene im Namen gefiltert; 20 Listings je Stundenordner
+ │         ├─ RUN_HOURS sortiert nach _folder_time (:106) absteigend   8 Listings
+ │         └─ erster complete_run(hour) != None  :64   ein Listing je Ordner (_split :101: "t@850" -> Ordner t,
+ │              Ebene 850), Dateien nach Ebene im Namen gefiltert; 20 Listings je Stundenordner;
+ │              _every_step (:90): je Parameter jeder Step vom ersten gelisteten bis 48, fehlende Namen aus einem gelisteten
  ├─ [Ziel existiert und len(message_spans) == len(urls)] "already on disk", Pfad, Exit 0
- ├─ ThreadPool(PARALLEL_REQUESTS=8) × IconDownloader.fetch(url)   scripts/lib/icon_downloader.py:29
- │    ├─ [<out>.raw/<datei>.grib2 existiert] übernehmen
- │    ├─ requests.get (3 Versuche) -> bz2.decompress -> .part
- │    └─ nur Nachrichten mit _on_full_hour (:51) -> .part neu schreiben -> rename
- ├─ IconDownloader.join(raw_files, <out>.part)   :62   in URL-Reihenfolge aneinanderhängen, Nachrichten zählen
+ ├─ ThreadPool(PARALLEL_REQUESTS=8) × IconDownloader.fetch(url)   scripts/lib/icon_downloader.py:40
+ │    ├─ [<out>.raw/<datei>.grib2 existiert] übernehmen (ungeprüft, join prüft)
+ │    ├─ requests.get -> bz2.decompress -> .part -> nur Nachrichten mit _on_full_hour (:65), 3 Versuche
+ │    │    [404, Netz, bz2- oder GRIB-Fehler nach dem letzten Versuch] Warnung auf stderr, None
+ │    └─ .part neu schreiben -> rename
+ ├─ IconDownloader.join(urls, raw_files, <out>.part)   :75   in URL-Reihenfolge aneinanderhängen, Nachrichten zählen;
+ │    Datei None oder ohne intakte Nachricht (_messages :113) -> missing_message(Vorlage desselben Felds, Step aus dem Namen),
+ │    Feld = Dateiname ohne Lauf und Step (STEP); ohne Vorlage ausgelassen; Warnung auf stderr
  ├─ [Anzahl != len(urls)] stderr, Exit 1 (.part und .raw/ bleiben)
  ├─ <out>.part -> <out>  (rename)
  └─ rmtree(<out>.raw) [ohne --keep-raw]
@@ -269,6 +284,8 @@ render_charts.main                               scripts/render_charts.py:213
  ├─ tasks = (produkt, key, out_dir) für key in products.keys(produkt)
  ├─ ProcessPool(workers, init_worker -> build_products je Prozess), chunksize 2
  │    └─ render: products.draw -> ChartCanvas.save                     :127
+ │         ChartProducts.draw (scripts/lib/chart_products.py:106): MissingFieldError -> ChartCanvas mit no_data
+ │         (Titel = Produktname, Zeitzeile key_label :144, Notiz = Feld aus der Fehlermeldung)
  │         [ICON] IconProducts.draw: + uncovered (grau außerhalb) über jeder Karte
  ├─ write_sheets -> ContactSheet.build (liest die geschriebenen WebPs)  :136   Karten mit Stunde in products.SHEET_HOURS
  └─ write_geometry -> geometry.json (model, run, Projektion, Kacheln)   :160
@@ -278,11 +295,11 @@ Invarianten der Reihenfolge:
 
 1. **Manifest wird vor allem Löschen und Rendern gelöscht** (scripts/update_maps.py:182) und erst nach dem Kodieren geschrieben; die Runs daraus liest `main` vorher (`read_run`, `read_window_runs`, :176-177). „Gleicher Lauf“ heißt, getrennt je Modell: das Manifest nennt den ECMWF-Lauf oben (`run`) bzw. den ICON-Lauf an den Layern von `icon-d2` (`charts[…].run`). Ein abgebrochener Aufruf hinterlässt kein Manifest und zählt beim nächsten Mal für beide Modelle als neuer Lauf. Neuer Lauf oder `--force` → die Fenster dieses Modells in `maps/` leeren, rendern, ihre Layer kodieren. Gleicher Lauf → ein Fenster nur rendern, wenn sein Ordner in `data/` fehlt oder ein Kachel-Pfad dieses Fensters dort keine Karten hat (`stale_windows`, scripts/update_maps.py:112), und nur Pfade ohne Video kodieren. Ein gescheiterter ICON-Download zählt als gleicher ICON-Lauf. `stale_windows`, `encode_missing` und das Manifest laufen bei jedem Aufruf; ein in viewer.config.json ergänzter Layer greift also ohne `--force`, auch mit einem Produkt, das noch nicht gerendert ist (das Fenster wird dann ganz neu gerendert).
 2. **Frame-Reihenfolge und Manifest-Steps kommen aus derselben Quelle:** `chart_frames` (scripts/maps_manifest.py:59) sortiert die Karten eines Layers in `data/` nach Step; `encode_video` schreibt sie in dieser Reihenfolge, `build_manifest` (:71) übernimmt deren Steps. Das Manifest liest die Steps bei jedem Aufruf neu aus `data/`, das Video kann aus einem vorigen Aufruf stammen — `len(steps)` muss der Frame-Zahl des Videos entsprechen, sonst zeigt die App stillschweigend falsche Termine. Beides gehört zum selben Lauf, solange `data/` nur durch `update_maps.py` geändert wird.
-3. **`DerivedWriter` läuft auf der fertigen `.part`-Datei**: Er indiziert sie neu und braucht alle Modellfelder. Die Reihenfolge der angehängten Nachrichten ist Teil von `expected_total` (scripts/lib/request_plan.py:48).
-4. **`ForecastWriter` schreibt `thick` direkt nach dem zweiten von gh500/gh1000 eines Steps**; die Reihenfolge 500/1000 innerhalb eines Steps wird nicht vorausgesetzt. Nur der Hauptprozess schreibt, und `pool.map` liefert in Eingabereihenfolge — die Datei ist deshalb byte-gleich mit einem Lauf ohne Pool. Wer auf `as_completed`/`imap_unordered` umstellt, bricht diese Reihenfolge.
-5. **`GribCropper` berechnet Zeilen/Spalten aus der ersten Nachricht** (`fit`) und nutzt sie für alle weiteren; `cropper.grid` existiert erst nach dem ersten `fit`/`crop`. `ForecastWriter.write` ruft `fit` vor dem Pool auf, damit die Worker einen fertigen Cropper bekommen und `download_ecmwf_data` danach `cropper.grid` lesen kann.
+3. **`DerivedWriter` läuft auf der fertigen `.part`-Datei**: Er indiziert sie neu und braucht alle Modellfelder. Die Reihenfolge der angehängten Nachrichten ist Teil von `expected_total` (scripts/lib/request_plan.py:55). Platzhalter sorgen dafür, dass jedes Feld, das `step_messages` als Vorlage holt (`grib.message`), auch nach Verlusten am Server existiert.
+4. **`ForecastWriter` schreibt `thick` direkt nach dem zweiten von gh500/gh1000 eines Steps**; die Reihenfolge 500/1000 innerhalb eines Steps wird nicht vorausgesetzt. Nur der Hauptprozess schreibt, und `pool.map` liefert in Eingabereihenfolge — die Datei ist deshalb byte-gleich mit einem Lauf ohne Pool. Wer auf `as_completed`/`imap_unordered` umstellt, bricht diese Reihenfolge. Platzhalter verlorener Felder und fehlende `thick` stehen am Dateiende; `ForecastGrib` indiziert nach Schlüssel, die Position spielt für Leser keine Rolle.
+5. **`GribCropper` berechnet Zeilen/Spalten aus der ersten Nachricht** (`fit`) und nutzt sie für alle weiteren; `cropper.grid` existiert erst nach dem ersten `fit`/`crop`. `ForecastWriter._fit` ruft `fit` vor dem Pool mit der ersten dekodierbaren Nachricht auf, damit die Worker einen fertigen Cropper bekommen und `download_ecmwf_data` danach `cropper.grid` lesen kann.
 6. **Einzelkarten vor Kontaktabzügen.** `write_sheets` öffnet die von den Workern geschriebenen WebPs; die Farbskala des Abzugs stammt aus dem Legendenstreifen der ersten Karte.
-7. **ChartCanvas-Layer** werden in Aufrufreihenfolge innerhalb ihres zorder-Bands gezeichnet; `save` muss zuletzt kommen, weil dort Notizspalte und Symbolzeile entstehen (scripts/lib/chart_canvas.py:305). `IconProducts.draw` ruft `uncovered` nach der Produktmethode, das Grau liegt also im Band `Z_SHADING` über jeder Flächenfarbe.
+7. **ChartCanvas-Layer** werden in Aufrufreihenfolge innerhalb ihres zorder-Bands gezeichnet; `save` muss zuletzt kommen, weil dort Notizspalte und Symbolzeile entstehen (scripts/lib/chart_canvas.py:316). `IconProducts.draw` ruft `uncovered` nach der Produktmethode, das Grau liegt also im Band `Z_SHADING` über jeder Flächenfarbe.
 8. **Erst hochladen, dann Manifest pushen:** `publish_maps.py` ersetzt die geänderten Assets, bevor der Manifest-Commit gepusht wird, und löscht überzählige Assets vor dem Push. Der Deploy des neuen Manifests findet so alle Videos. Die Asset-Namen enthalten keinen Lauf: Ein Deploy eines älteren Manifests, der während eines Uploads läuft, kann Videos des neuen Laufs holen; der Push danach startet einen neuen Deploy, `concurrency` (`cancel-in-progress`) bricht den alten ab. Die Historie wächst nur um das Manifest (≈ 20 KB je Lauf).
 9. **Lauf eines Layers kommt aus `geometry.json`:** `write_geometry` schreibt `run` am Ende jedes Render-Laufs, `window_run` liest es beim Manifest; fehlt die Datei oder der Schlüssel, steht der ECMWF-Run am Layer. Beim nächsten Aufruf entscheidet dieser Wert, ob ICON als gleicher Lauf gilt. Ein `icon-d2/` ohne `geometry.json` wird deshalb bei jedem Aufruf neu gerendert.
 10. **ICON-Steps zählen ab dem ECMWF-Run:** Bei neuem ECMWF-Lauf und gleichem ICON-Lauf bleibt das ICON-Video, das Manifest verschiebt nur dessen Steps. Karten vor dem ECMWF-Run klemmt `file_step` auf 0 (mehrere Frames mit Step 0; `frame` nimmt den letzten).
@@ -388,7 +405,7 @@ App: `toPixel` liefert `null` außerhalb der Kartenfläche 1200×600; die Legend
 
 ## GRIB-Vorhersagedatei (IFS)
 
-Ein GRIB2-File pro Lauf, 0,1° reguläres Lat/Lon-Gitter, Zeilen Nord → Süd. Box aus `GribCropper.for_windows`: Bildränder beider Fenster ± `BOX_MARGIN_DEG` (1°), auf ganze Grad ab-/aufgerundet → **11–76° N, 71° W–77° E, 651 × 1481 Punkte**. Steps: `STEPS` (scripts/download_ecmwf_data.py:75) = 0…141 alle 3 h (48) + 144…240 alle 6 h (17) = **65**.
+Ein GRIB2-File pro Lauf, 0,1° reguläres Lat/Lon-Gitter, Zeilen Nord → Süd. Box aus `GribCropper.for_windows`: Bildränder beider Fenster ± `BOX_MARGIN_DEG` (1°), auf ganze Grad ab-/aufgerundet → **11–76° N, 71° W–77° E, 651 × 1481 Punkte**. Steps: `STEPS` (scripts/download_ecmwf_data.py:80) = 0…141 alle 3 h (48) + 144…240 alle 6 h (17) = **65**.
 
 | Gruppe (Rohdatei) / Quelle | Inhalt | Nachrichten |
 | --- | --- | --- |
@@ -407,13 +424,15 @@ Ein GRIB2-File pro Lauf, 0,1° reguläres Lat/Lon-Gitter, Zeilen Nord → Süd. 
 
 `RequestPlan.expected_total` (scripts/lib/request_plan.py:48) rechnet genau diese Summe; `output_complete` vergleicht sie mit der Nachrichtenzahl der Zieldatei. Jeder Request ist ein kartesisches Produkt param × levelist × step; `expected` setzt das voraus, weil Open Data fehlende Parameter stillschweigend weglässt.
 
-**Lokale Parameter** (`LOCAL_NAMES`, scripts/lib/local_params.py:12): Disziplin 0, Kategorie 192, `parameterNumber` 0 `inv`, 1 `rhbl`, 2 `psig`, 3 `snowl`, 4 `uf`, 5 `vf`. ecCodes liest sie als shortName `unknown`; `ForecastGrib._name` (scripts/lib/forecast_grib.py:62) ersetzt das durch den Namen (unbekannte Nummer → `local<n>`). Die Nummern sind Vertrag mit dem Skill.
+**Lokale Parameter** (`LOCAL_NAMES`, scripts/lib/local_params.py:12): Disziplin 0, Kategorie 192, `parameterNumber` 0 `inv`, 1 `rhbl`, 2 `psig`, 3 `snowl`, 4 `uf`, 5 `vf`. ecCodes liest sie als shortName `unknown`; `ForecastGrib._name` (scripts/lib/forecast_grib.py:65) ersetzt das durch den Namen (unbekannte Nummer → `local<n>`). Die Nummern sind Vertrag mit dem Skill.
 
-**Fehlende Werte:** `encode` (scripts/lib/derived_writer.py:48) schreibt NaN als Bitmap-Missing; `ForecastGrib._read` macht daraus wieder NaN. NaN entsteht bei `inv`/`rhbl`/`uf`/`vf` unter dem Modellboden, bei Höhenwerten außerhalb der Profil-Ebenen (Wind auf 3000 m überall dort, wo gh700 < 3000 m, weil u/v nur bis 700 hPa reichen) und bei `deg0l`/`snowl`, wo 500 hPa noch > 0 °C hat. `snowl` ist überall gesetzt, nicht nur bei `psig` (die Karte `snow_line` maskiert selbst).
+**Fehlende Werte:** `encode` (scripts/lib/missing_values.py:14) schreibt NaN als Bitmap-Missing; `ForecastGrib._read` macht daraus wieder NaN. NaN entsteht bei `inv`/`rhbl`/`uf`/`vf` unter dem Modellboden, bei Höhenwerten außerhalb der Profil-Ebenen (Wind auf 3000 m überall dort, wo gh700 < 3000 m, weil u/v nur bis 700 hPa reichen) und bei `deg0l`/`snowl`, wo 500 hPa noch > 0 °C hat. `snowl` ist überall gesetzt, nicht nur bei `psig` (die Karte `snow_line` maskiert selbst).
+
+**Vom Server verlorene Felder:** Fehlt eine Step-Datei am Server (404) oder ist eine Nachricht beschädigt (kein „GRIB“-Kopf, Länge endet nicht auf „7777“, ecCodes dekodiert sie nicht), schreibt `ForecastWriter` bzw. `IconDownloader.join` einen Platzhalter: Kopie derselben Nachricht eines anderen Steps (`missing_message`, scripts/lib/missing_values.py:52), Step-Schlüssel per `step_keys` (:34; Momentanwert `step`, Summe ab T+0 `stepRange 0-N`, festes Intervall gleich lang), alle Werte Bitmap-Missing. Die Datei hat damit die volle Nachrichtenzahl und gilt als vollständig. `ForecastGrib.field` merkt sich beim Dekodieren, ob alle Werte NaN sind (`_empty`), und wirft dann `MissingFieldError`; `has()` bleibt wahr. Die abgeleiteten Felder des Steps werden einzeln Missing, sobald eine ihrer Eingaben fehlt; intakte Felder sind bitgleich mit einem Lauf ohne Verluste (geprüft am Härtetest, siehe Fehlerbehandlung).
 
 `WEATHER_PARAMS` (`tcc`, `tp`, `ptype`; scripts/lib/constants.py:10) speisen nur `weather_summary`; die abgeleiteten Felder lassen sie aus, weil ein 9-km-Globalmodell Nebel, Hochnebel und deren Niederschlag falsch trifft (Kommentar dort). `tp` akkumuliert ab T+0 in m.
 
-**Index** von `ForecastGrib` (scripts/lib/forecast_grib.py:19): Schlüssel `(Name, level, endStep)` → `(startStep, Byte-Offset)`, **ohne typeOfLevel**. Name = lokaler Name (Kategorie 192), sonst `aliases.get(shortName, shortName)`; `stepUnits` wird beim Indizieren auf Stunden gesetzt (ICON liefert seine statischen Felder als „0m“). Base-Time und Gitter stammen aus der ersten Nachricht; `grid` ist None, wenn deren `gridType` nicht `regular_ll` ist, Felder sind dann 1-D (eine Zahl je Zelle). `t` auf 850 hPa und `t` auf 2000 m unterscheiden sich nur über `level`. `field()`/`message()` mit `level=None` liefern den ersten Treffer in Dateireihenfolge (nur für Einzelebenen-Parameter sicher). Arrays sind float32 und **read-only** (über `lru_cache` geteilt, `CACHED_FIELDS` = 64 pro Instanz ≈ 250 MB, pro Prozess).
+**Index** von `ForecastGrib` (scripts/lib/forecast_grib.py:20): Schlüssel `(Name, level, endStep)` → `(startStep, Byte-Offset)`, **ohne typeOfLevel**. Name = lokaler Name (Kategorie 192), sonst `aliases.get(shortName, shortName)`; `stepUnits` wird beim Indizieren auf Stunden gesetzt (ICON liefert seine statischen Felder als „0m“). Base-Time und Gitter stammen aus der ersten Nachricht; `grid` ist None, wenn deren `gridType` nicht `regular_ll` ist, Felder sind dann 1-D (eine Zahl je Zelle). `t` auf 850 hPa und `t` auf 2000 m unterscheiden sich nur über `level`. `field()`/`message()` mit `level=None` liefern den ersten Treffer in Dateireihenfolge (nur für Einzelebenen-Parameter sicher). Arrays sind float32 und **read-only** (über `lru_cache` geteilt, `CACHED_FIELDS` = 64 pro Instanz ≈ 250 MB, pro Prozess).
 
 ### Gitter und Koordinaten
 
@@ -431,7 +450,7 @@ Alle Diagnosen nutzen nur Druckflächen; eine Fläche zählt nur, wo ihr Geopote
 | freezing_level (`deg0l`) | `HeightProfile.freezing_level`: 0-°C-Durchgang von oben gesucht (Obergrenze einer Warmschicht über Kaltluftsee); ganz gefroren oder Durchgang unter Grund → Bodenhöhe; 500 hPa > 0 °C → NaN | height_profile.py:50 |
 | snow_line (`snowl`) | `max(freezing_level − 350 m, ground)` | diagnostics.py:68 |
 
-`HeightProfile(grib, step, height="gh", height_factor=1.0)` (scripts/lib/height_profile.py:20): Flächenhöhen aus dem Feld `height` × `height_factor` (IFS `gh` in gpm, ICON `z` × 1/g). `at_height` (:40) interpoliert linear in gpm zwischen den Nachbarflächen, die den Parameter **und** das Höhenfeld haben (`_stack`, :32); NaN außerhalb. `ChartProducts.profile(step)` (scripts/lib/chart_products.py:125) baut es für `mountain_2000` und `diagnostics()`. `mountain_2000` (:340) schraffiert `summit_cloud(profile, step, height)` (:361; liefert Feld, Schwelle und Legendennotiz; Basis: RH in der Höhe mit `SUMMIT_CLOUD_RH`) über `canvas.hatch(resample(feld, smooth_km=10), schwelle, …)`. IFS-Karten sind mit beiden Hooks pixelgleich (geprüft an 10 Produkten bzw. gegen Lauf 2026103100). `PRECIP_RH` und `SNOW_LINE_BELOW_FREEZING_M` stehen in chart_styles.py und wirken auf Karten und GRIB gleichzeitig.
+`HeightProfile(grib, step, height="gh", height_factor=1.0)` (scripts/lib/height_profile.py:20): Flächenhöhen aus dem Feld `height` × `height_factor` (IFS `gh` in gpm, ICON `z` × 1/g). `at_height` (:40) interpoliert linear in gpm zwischen den Nachbarflächen, die den Parameter **und** das Höhenfeld haben (`_stack`, :32); NaN außerhalb. `ChartProducts.profile(step)` (scripts/lib/chart_products.py:131) baut es für `mountain_2000` und `diagnostics()`. `mountain_2000` (:358) schraffiert `summit_cloud(profile, step, height)` (:379; liefert Feld, Schwelle und Legendennotiz; Basis: RH in der Höhe mit `SUMMIT_CLOUD_RH`) über `canvas.hatch(resample(feld, smooth_km=10), schwelle, …)`. IFS-Karten sind mit beiden Hooks pixelgleich (geprüft an 10 Produkten bzw. gegen Lauf 2026103100). `PRECIP_RH` und `SNOW_LINE_BELOW_FREEZING_M` stehen in chart_styles.py und wirken auf Karten und GRIB gleichzeitig.
 
 ### Tagesextreme
 
@@ -451,9 +470,9 @@ Alle Diagnosen nutzen nur Druckflächen; eine Fläche zählt nur, wo ihr Geopote
 
 DWD Open Data `https://opendata.dwd.de/weather/nwp/icon-d2/grib/<HH>/<ordner>/`, je Lauf, Parameter, Ebene und Step eine Datei `icon-d2_germany_icosahedral_<typ>_<YYYYMMDDHH>_<SSS>_<ebene>_<…>.grib2.bz2`, ohne Auth. `<ebene>` ist `2d` bei Einzelebenen-Feldern, `0` bei zeitunabhängigen, hPa auf Druckflächen, eine Zahl auf Modellflächen (Kommentar scripts/lib/icon_runs.py:17-18). Lauf alle 3 h (Ordner 00…21), stündlich bis T+48; jeder Stundenordner hält nur den neuesten Lauf dieser Stunde, insgesamt also ≈ 1 Tag. Felder bleiben auf dem Ikosaedergitter (542 040 Zellen, unstrukturiert; Randzone ohne Werte = Bitmap-Missing → NaN).
 
-**Laufwahl** (`IconRuns`, scripts/lib/icon_runs.py:24): Die Zeitstempel der Stundenordner ändern sich nie, die der Parameterordner darin bei jedem neuen Lauf; deren Maximum ordnet die Stundenordner nach Alter (`_folder_time`, Fehler → `datetime.min`). Ein Ordner gilt als komplett, wenn alle Parameter-Listings genau einen Lauf zeigen (sonst wird er gerade überschrieben) und jeder Vorhersageparameter Step 48 hat (DWD schreibt die Steps in Reihenfolge, Kommentar :79). Sonst nimmt `latest` den nächstälteren Ordner. Parameter heißen wie die DWD-Ordner, auf Druckflächen `<ordner>@<hPa>` (`t@850`); `_split` (:88) liefert (Ordner, Ebenentoken), ohne `@` `0` für statische und `2d` für alle anderen. Jeder Ordner wird pro Stundenordner einmal gelistet (Ordner `u` dient `u@1000`, `u@850`, `u@700`), die Dateien nach dem Ebenentoken im Namen gefiltert. URL-Reihenfolge: statische Felder zuerst, dann nach (Step, Parameterreihenfolge).
+**Laufwahl** (`IconRuns`, scripts/lib/icon_runs.py:24): Die Zeitstempel der Stundenordner ändern sich nie, die der Parameterordner darin bei jedem neuen Lauf; deren Maximum ordnet die Stundenordner nach Alter (`_folder_time`, Fehler → `datetime.min`). Ein Ordner gilt als komplett, wenn alle Parameter-Listings genau einen Lauf zeigen (sonst wird er gerade überschrieben) und jeder Vorhersageparameter Step 48 hat (DWD schreibt die Steps in Reihenfolge, Kommentar :79). Sonst nimmt `latest` den nächstälteren Ordner. Lücken davor füllt `_every_step` (:90) mit erzeugten Dateinamen auf: Jeder Vorhersageparameter bekommt jeden Step vom ersten gelisteten bis 48 (bei vollständigen Listings unverändert 1130 Dateien), eine fehlende Datei endet als 404 und Platzhalter. Parameter heißen wie die DWD-Ordner, auf Druckflächen `<ordner>@<hPa>` (`t@850`); `_split` (:101) liefert (Ordner, Ebenentoken), ohne `@` `0` für statische und `2d` für alle anderen. Jeder Ordner wird pro Stundenordner einmal gelistet (Ordner `u` dient `u@1000`, `u@850`, `u@700`), die Dateien nach dem Ebenentoken im Namen gefiltert. URL-Reihenfolge: statische Felder zuerst, dann nach (Step, Parameterreihenfolge).
 
-**Laden** (`IconDownloader`, scripts/lib/icon_downloader.py:17): bz2 entpacken, nur Nachrichten auf vollen Stunden behalten (`endStep` in Minuten mit `m`-Suffix, durch 60 teilbar; `tot_prec`-Dateien enthalten zusätzlich die Summen zu :15/:30/:45, die `ForecastGrib` in Stunden nicht unterscheiden könnte). Rohdatei via `.part` geschrieben, eine vorhandene Rohdatei gilt als vollständig → Wiederaufnahme. Jede Datei liefert danach genau eine Nachricht; `download_icon_d2.py` prüft das als „Nachrichten = Dateien“.
+**Laden** (`IconDownloader`, scripts/lib/icon_downloader.py:22): bz2 entpacken, nur Nachrichten auf vollen Stunden behalten (`endStep` in Minuten mit `m`-Suffix, durch 60 teilbar; `tot_prec`-Dateien enthalten zusätzlich die Summen zu :15/:30/:45, die `ForecastGrib` in Stunden nicht unterscheiden könnte). Rohdatei via `.part` geschrieben, eine vorhandene Rohdatei gilt als vollständig → Wiederaufnahme. Jede Datei liefert danach genau eine Nachricht; `download_icon_d2.py` prüft das als „Nachrichten = Dateien“. Eine Datei, die nach drei Versuchen fehlt (404, Netz) oder sich nicht entpacken/lesen lässt, und eine vorhandene Rohdatei ohne intakte Nachricht ersetzt `join` durch einen Platzhalter aus derselben Datei eines anderen Steps.
 
 | DWD-Parameter | shortName → Name im Index (`ICON_NAMES`, scripts/lib/constants.py:18) | Inhalt | Steps |
 | --- | --- | --- | --- |
@@ -472,7 +491,7 @@ DWD Open Data `https://opendata.dwd.de/weather/nwp/icon-d2/grib/<HH>/<ordner>/`,
 | u@1000, v@1000 | `u`, `v` (level 1000) | Wind 1000 hPa für `t2m_wind1000` | 0…48 |
 | t, relhum, fi, u, v @850 und @700 (`PROFILE_LEVELS`) | `t`, `r`, `z`, `u`, `v` | Profil für `mountain_2000`: K, %, Geopotential m²/s², m/s; ICON-D2 hat kein 925 hPa | 0…48 |
 
-Summe 4 + 22 × 49 + 48 = **1130** Nachrichten (23 Vorhersageparameter, `FORECAST_PARAMS`, scripts/download_icon_d2.py:61-62; Modul-Docstring: ≈ 610 MB Download; gemessen 820 MB GRIB). Die Aliasse geben ICON-Feldern die Namen der IFS-Datei, damit die Zeichenmethoden von `ChartProducts` greifen; Einheiten unterscheiden sich trotzdem (siehe Tabelle) und werden in `IconProducts` behandelt.
+Summe 4 + 22 × 49 + 48 = **1130** Nachrichten (23 Vorhersageparameter, `FORECAST_PARAMS`, scripts/download_icon_d2.py:66-67; Modul-Docstring: ≈ 610 MB Download; gemessen 820 MB GRIB). Die Aliasse geben ICON-Feldern die Namen der IFS-Datei, damit die Zeichenmethoden von `ChartProducts` greifen; Einheiten unterscheiden sich trotzdem (siehe Tabelle) und werden in `IconProducts` behandelt.
 
 ### Pixelabbildung (TriangleGrid)
 
@@ -505,7 +524,7 @@ Die Zeichenmethoden sind die von `ChartProducts`; überschrieben werden nur Date
 
 ### Grenzen und Gradnetz (BaseMap)
 
-`BaseMap` (scripts/lib/base_map.py:14) liest `projection.borders`. Features mit `properties.LEVEL == "state"` werden `state_rings` (in `ChartCanvas.outlines`, scripts/lib/chart_canvas.py:114, gestrichelt `#303030`, 0,4 px, unter den Ländergrenzen), alle anderen `rings` (Küsten/Grenzen 0,6 px schwarz, Landflächen). Ringe ohne Punkt ≤ `MARGIN_PX` vom Bild fallen weg. Gradnetzbeschriftung entlang `projection.label_lon` (Breiten) und `label_lat` (Längen).
+`BaseMap` (scripts/lib/base_map.py:14) liest `projection.borders`. Features mit `properties.LEVEL == "state"` werden `state_rings` (in `ChartCanvas.outlines`, scripts/lib/chart_canvas.py:125, gestrichelt `#303030`, 0,4 px, unter den Ländergrenzen), alle anderen `rings` (Küsten/Grenzen 0,6 px schwarz, Landflächen). Ringe ohne Punkt ≤ `MARGIN_PX` vom Bild fallen weg. Gradnetzbeschriftung entlang `projection.label_lon` (Breiten) und `label_lat` (Längen).
 
 `borders_austria.geojson` baut `build_borders.py` einmalig: BEV VGD 1:50 000 (Katastralgemeinden in MGI/Austria Lambert, EPSG:31287) zu Bundesländern vereinigt, Splitter < 0,5 km² entfernt, als Coverage vereinfacht (`coverage_simplify`, 150 m ≈ 0,2 px, gemeinsame Grenzen bleiben deckungsgleich), nach WGS84; Länder aus world_countries.geojson, soweit sie in `KEEP_BOX` (= Zuschnittbox des Europafensters, 71° W–77° E, 11–76° N) reichen; die Nachbarn Österreichs entlang der genauen Grenze zugeschnitten und die Lücken zwischen beiden Österreich-Umrissen dem Nachbarn mit der längsten gemeinsamen Kante zugeschlagen; das Esri-Österreich durch das BEV-Österreich ersetzt. Eigenschaften `COUNTRY`, `ISO`, `LEVEL` (`country`/`state`), bei Bundesländern zusätzlich `NAME`; Koordinaten auf 5 Nachkommastellen (≈ 1 m).
 
@@ -552,30 +571,32 @@ Gewitter, Hagel, Nebel und Sturmböen sind selten und DWD hält nur ≈ 1 Tag L�
 | `KEYFRAME_INTERVAL`, `CODEC`, `COLOUR` | scripts/tile_videos.py:22-28 | siehe Tile-Videos |
 | `TAG` | scripts/maps_release.py:10 | `tile-videos`, Tag und Name des Releases mit den Videos; Asset-Name = Videopfad mit `/` → `.` (`asset_name`) |
 | `TIMEOUT_S` | scripts/fetch_maps.py:21 | 60 s je Download |
-| `STEPS`, `PARALLEL_REQUESTS` | scripts/download_ecmwf_data.py:75-76 | Step-Liste (s. o.); 4 Gruppen gleichzeitig |
+| `STEPS`, `PARALLEL_REQUESTS` | scripts/download_ecmwf_data.py:80-81 | Step-Liste (s. o.); 4 Gruppen gleichzeitig |
 | `MAX_STEP` | scripts/lib/open_data_runs.py:9 | 240; `latest()` fragt nach Step 240 von t850, das schließt 06z/18z aus (enden bei +144) |
 | `LISTING_URL`, `RUN_INTERVAL` | scripts/lib/open_data_runs.py:12-13 | `https://data.ecmwf.int/forecasts/{YYYYMMDD}/{HH}z/ifs/`; Zeitstempel des `0p1/`-Ordners + 12 h = erwartete Ankunft des nächsten Laufs |
 | `PROFILE_LEVELS` | scripts/lib/constants.py:14 | 500…1000 hPa für t, r, gh und das Höhenprofil; 600 hPa halbiert die Lücke über 700 hPa. Die u/v-Ebenen stehen getrennt in den Gruppen `uvw700`/`uv_low` (scripts/lib/request_plan.py:28-29) |
 | `RETRIES`, `RETRY_DELAY` | scripts/lib/group_downloader.py:12-13 | 3 Versuche, 30 s × Versuchsnummer |
 | `BOX_MARGIN_DEG` | scripts/lib/grib_cropper.py:10 | 1° Rand für Glättung und Interpolation bis zum Bildrand |
-| `THICKNESS_PARAM` | scripts/lib/forecast_writer.py:19 | 0/3/12 (Schichtdicke, gpm); Flächen Typ 100 bei 100000/50000 Pa |
-| `INDICATOR_LENGTH` | scripts/lib/forecast_writer.py:21 | 16 Byte GRIB2-Section 0; Länge der Nachricht in Byte 8–15 (big endian). Rohdateien müssen lückenlos aufeinanderfolgende GRIB2-Nachrichten sein, sonst `ValueError` |
-| `CHUNK_SIZE` | scripts/lib/forecast_writer.py:23 | 8 Nachrichten je Pool-Aufgabe |
-| `MAX_WORKERS` | scripts/lib/forecast_writer.py:26 | 8; gemessen 15,8 ms/Nachricht mit 8, 14,3 mit 20 Workern, 79,5 mit einem — darüber begrenzt der schreibende Hauptprozess |
-| `CACHED_FIELDS` | scripts/lib/forecast_grib.py:16 | 64 Felder ≈ 250 MB pro `ForecastGrib` (IFS), pro Prozess |
-| `PROFILE_LEVELS` (ICON) | scripts/download_icon_d2.py:60 | (850, 700): umschließen 2000 m (`mountain_2000`) überall; ICON-D2 hat kein 925 hPa. Getrennt von `constants.PROFILE_LEVELS` |
-| `FORECAST_PARAMS`, `STATIC_PARAMS` | scripts/download_icon_d2.py:61-63 | 23 ICON-Parameter (Ordnername, auf Druckflächen `<ordner>@<hPa>`): `clct`, `tot_prec`, `pmsl`, `ww`, `vmax_10m`, `t_2m`, `tmax_2m`, `tmin_2m`, `u_10m`, `v_10m`, `ceiling`, `u@1000`, `v@1000`, je `t`/`relhum`/`fi`/`u`/`v` @850 und @700; statisch `clat`, `clon`, `hsurf`, `fr_land` |
-| `PARALLEL_REQUESTS`, `PREFIX` | scripts/download_icon_d2.py:64-65 | 8 Downloads gleichzeitig; `icon-d2_` |
+| `THICKNESS_KEYS` | scripts/lib/forecast_writer.py:24 | 0/3/12 (Schichtdicke, gpm); Flächen Typ 100 bei 100000/50000 Pa; auch für Missing-`thick` |
+| `INDICATOR_LENGTH` | scripts/lib/forecast_writer.py:30 | 16 Byte GRIB2-Section 0; Länge der Nachricht in Byte 8–15 (big endian). `message_spans` nimmt nur Nachrichten mit Edition 2, deren Länge auf „7777“ endet, und sucht sonst das nächste „GRIB“ |
+| `CHUNK_SIZE` | scripts/lib/forecast_writer.py:32 | 8 Nachrichten je Pool-Aufgabe |
+| `SHOWN_FIELDS` | scripts/lib/forecast_writer.py:37 | 12 verlorene Felder namentlich in der Warnung, der Rest gezählt |
+| `MAX_WORKERS` | scripts/lib/forecast_writer.py:35 | 8; gemessen 15,8 ms/Nachricht mit 8, 14,3 mit 20 Workern, 79,5 mit einem — darüber begrenzt der schreibende Hauptprozess |
+| `CACHED_FIELDS` | scripts/lib/forecast_grib.py:17 | 64 Felder ≈ 250 MB pro `ForecastGrib` (IFS), pro Prozess |
+| `PROFILE_LEVELS` (ICON) | scripts/download_icon_d2.py:65 | (850, 700): umschließen 2000 m (`mountain_2000`) überall; ICON-D2 hat kein 925 hPa. Getrennt von `constants.PROFILE_LEVELS` |
+| `FORECAST_PARAMS`, `STATIC_PARAMS` | scripts/download_icon_d2.py:66-68 | 23 ICON-Parameter (Ordnername, auf Druckflächen `<ordner>@<hPa>`): `clct`, `tot_prec`, `pmsl`, `ww`, `vmax_10m`, `t_2m`, `tmax_2m`, `tmin_2m`, `u_10m`, `v_10m`, `ceiling`, `u@1000`, `v@1000`, je `t`/`relhum`/`fi`/`u`/`v` @850 und @700; statisch `clat`, `clon`, `hsurf`, `fr_land` |
+| `PARALLEL_REQUESTS`, `PREFIX` | scripts/download_icon_d2.py:69-70 | 8 Downloads gleichzeitig; `icon-d2_` |
 | `BASE_URL`, `RUN_HOURS`, `MAX_STEP`, `TIMEOUT_S` | scripts/lib/icon_runs.py:10-14 | DWD-Basis-URL; `00`…`21` alle 3 h; 48 (Lauf komplett, wenn jeder Vorhersageparameter Step 48 hat); 30 s je Listing |
 | `FOLDER`, `FILE` | scripts/lib/icon_runs.py:16-19 | Regex auf das nginx-Listing (Ordnername + Zeitstempel `%d-%b-%Y %H:%M:%S`) bzw. auf `…_icosahedral_…_<run>_<step>_<ebene>_….grib2.bz2` (Gruppen: Name, Lauf, Step, Ebenentoken). Ändert DWD das Listing-Format, findet `latest` keinen Lauf |
 | `SINGLE_LEVEL`, `TIME_INVARIANT` | scripts/lib/icon_runs.py:21 | `2d`, `0`: Ebenentoken eines Parameters ohne `@` (Vorhersage- bzw. statischer Parameter) |
-| `RETRIES`, `RETRY_DELAY`, `TIMEOUT_S` | scripts/lib/icon_downloader.py:12-14 | 3 Versuche, 10 s × Versuchsnummer, 60 s je Datei |
+| `RETRIES`, `RETRY_DELAY`, `TIMEOUT_S` | scripts/lib/icon_downloader.py:15-17 | 3 Versuche, 10 s × Versuchsnummer, 60 s je Datei; danach Platzhalter |
+| `STEP` | scripts/lib/icon_downloader.py:19 | Regex `_<Lauf>_<SSS>_` im DWD-Dateinamen: Step eines Platzhalters, ohne ihn der Feldname (Vorlagensuche) |
 
 ### Abgeleitete Felder und Diagnosen
 
 | Konstante | Ort | Wert / Bedeutung |
 | --- | --- | --- |
-| `MOUNTAIN_HEIGHTS` | scripts/lib/derived_writer.py:30 | 2000, 2500, 3000 m (heightAboveSea) |
+| `MOUNTAIN_HEIGHTS` | scripts/lib/derived_writer.py:35 | 2000, 2500, 3000 m (heightAboveSea) |
 | `PROFILE_PARAMS`, `FREE_LEVELS`, `SURFACE_FIELDS` | :31-33 | t/r/u/v; 1000/925 hPa für uf/vf; inv/rhbl/psig/snowl |
 | `PER_STEP` | :35 | 21 Nachrichten je Step; **importiert von `RequestPlan`** für `expected_total` |
 | `PARAM_IDS` | :37 | deg0l 228024, orog 228002, max 201, min 202 |
@@ -590,18 +611,19 @@ Gewitter, Hagel, Nebel und Sturmböen sind selten und DWD hält nur ≈ 1 Tag L�
 
 | Konstante | Ort | Wert / Bedeutung |
 | --- | --- | --- |
-| `STEP`, `DAY`, `STATIC`, `ALL`, `CLIMATE` | scripts/lib/chart_products.py:41-46 | Produktregister; `ALL` = alle drei Gruppen. `IconProducts` (scripts/lib/icon_products.py:30-34) überschreibt alle |
-| `MODEL`, `PRECIP_HOURS`, `SHEET_HOURS` | scripts/lib/chart_products.py:47-51 | Klassenattribute: Modellname in Legende und `geometry.json` (`ECMWF IFS`); Niederschlagsintervall von `weather_summary` 6 h (3 h bei T+3); Gültigkeitsstunden im Kontaktabzug `(12,)`. ICON: `ICON-D2`, 1 h, `(3, 9, 15, 21)` (scripts/lib/icon_products.py:35-39) |
-| `DEFAULTS` | scripts/lib/chart_products.py:52-59 | Europa: `z500_t850`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h`; Mitteleuropa: `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `t2m_wind1000`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `tmax`, `tmin`, `orography`, `weather_summary`. Kein Eintrag für `icon-d2`; der steht in `IconProducts.DEFAULTS` (scripts/lib/icon_products.py:40) |
-| `CHANGE_HOURS`, `TCC_PERCENT` | scripts/lib/chart_products.py:22-24 | 24 h für `dt850_24h`; tcc 0–1 → % |
+| `STEP`, `DAY`, `STATIC`, `ALL`, `CLIMATE` | scripts/lib/chart_products.py:42-47 | Produktregister; `ALL` = alle drei Gruppen. `IconProducts` (scripts/lib/icon_products.py:30-34) überschreibt alle |
+| `MODEL`, `PRECIP_HOURS`, `SHEET_HOURS` | scripts/lib/chart_products.py:48-52 | Klassenattribute: Modellname in Legende und `geometry.json` (`ECMWF IFS`); Niederschlagsintervall von `weather_summary` 6 h (3 h bei T+3); Gültigkeitsstunden im Kontaktabzug `(12,)`. ICON: `ICON-D2`, 1 h, `(3, 9, 15, 21)` (scripts/lib/icon_products.py:35-39) |
+| `DEFAULTS` | scripts/lib/chart_products.py:53-60 | Europa: `z500_t850`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h`; Mitteleuropa: `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `t2m_wind1000`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `tmax`, `tmin`, `orography`, `weather_summary`. Kein Eintrag für `icon-d2`; der steht in `IconProducts.DEFAULTS` (scripts/lib/icon_products.py:40) |
+| `CHANGE_HOURS`, `TCC_PERCENT` | scripts/lib/chart_products.py:23-25 | 24 h für `dt850_24h`; tcc 0–1 → % |
 | `EARTH_RADIUS_KM` | scripts/lib/projection.py:34 | 6371 km, Kugel für `lambert` und `km_per_px` |
 | `WORLD_COUNTRIES`, `AUSTRIA_BORDERS` | scripts/lib/projection.py:35-36 | GeoJSON-Pfade; Default von `Projection.borders` ist `WORLD_COUNTRIES` |
 | `MARGIN_PX` | scripts/lib/triangle_grid.py:10 | 20 px: Zellen so weit außerhalb des Bildes werden mittrianguliert, damit Randpixel in einem Dreieck liegen |
+| `NO_DATA_RGB` | scripts/lib/chart_canvas.py:38 | (225, 225, 225): Kartenfläche einer „No data available“-Karte |
 | `LEGEND_HEIGHT` | scripts/lib/chart_canvas.py:31 | 90 px unter 1200×600 → Bilder 1200×690 |
 | `BAR`, `NOTES_X` | scripts/lib/chart_canvas.py:33-34 | Farbskala (8, 760); Notizspalte ab x 800, eine Notiz pro 13-px-Zeile |
-| `WEBP_QUALITY` | scripts/lib/chart_canvas.py:37 | 90, nur für Kontaktabzüge; Einzelkarten verlustfrei |
-| `EXTREMA_BORDER_PX` | scripts/lib/chart_canvas.py:41 | kein L/H näher als 20 px am Rand |
-| `STREAMLINE_GRID_PX` | scripts/lib/chart_canvas.py:43 | `streamlines` integriert auf jedem 4. Pixel (300 × 150 Punkte) |
+| `WEBP_QUALITY` | scripts/lib/chart_canvas.py:39 | 90, nur für Kontaktabzüge; Einzelkarten verlustfrei |
+| `EXTREMA_BORDER_PX` | scripts/lib/chart_canvas.py:43 | kein L/H näher als 20 px am Rand |
+| `STREAMLINE_GRID_PX` | scripts/lib/chart_canvas.py:45 | `streamlines` integriert auf jedem 4. Pixel (300 × 150 Punkte) |
 | `WIND10M` | scripts/lib/chart_styles.py:184 | km/h, Bandgrenzen = Beaufortgrenzen 6/12/20/29/39/50/62/75/89/103/118 km/h |
 | `STREAMLINE_SMOOTH_KM`, `STREAMLINE_DENSITY` | scripts/lib/chart_styles.py:190-192 | 15 km Glättung von u/v nur für die Stromlinien (die Farben bleiben ungeglättet); `density` 3 von `streamplot`. Beides nach Augenmaß gewählt |
 | `COLUMNS`, `TILE_WIDTH` | scripts/lib/contact_sheet.py:19-20 | 2 × 580 px, damit 10 Kacheln unter 1568 px Höhe bleiben (darüber verkleinern Modelle Bilder) |
@@ -610,7 +632,7 @@ Gewitter, Hagel, Nebel und Sturmböen sind selten und DWD hält nur ≈ 1 Tag L�
 | `SIMPLIFY_M`, `MIN_PART_KM2`, `KEEP_BOX`, `DECIMALS`, `SOURCE_CRS` | scripts/build_borders.py:39-48 | 150 m = 0,2 px bei 0,75 km/px; Splitter < 0,5 km²; Box der behaltenen Länder; 5 Nachkommastellen; EPSG:31287 |
 | `CELLS`, `FOG`, `KM_PER_DEG` | scripts/make_icon_test_grib.py:35-39 | Testszene (lat, lon, Radius km, ww, mm, Böe m/s) bzw. Nebelscheiben; 111,2 km/° |
 
-Literale in den Produktmethoden, alle empirisch bestimmt (laut User): Z500- und Z700-Zentren (scripts/lib/chart_products.py:171, :183) L-Fenster 121 px, H-Fenster 181 px, `min_depth` 2 dam, 60 km Vorglättung; MSLP-Zentren (`isobars`, :234) 81/161 px, 2 hPa, 60 km; Pfeile `rh700_wind700` (:268) Raster 30 px, 1,2 px pro m/s, Referenz 20 m/s; `t2m_wind1000` (:302) 30 px, 2,5 px pro m/s, 10 m/s; `mountain_2000` (:355-356) 30 px, 1,5 px pro m/s, 20 m/s. Die Z850-Zentren von `z850_rh700` (:201) verwenden dieselben Literale wie Z500.
+Literale in den Produktmethoden, alle empirisch bestimmt (laut User): Z500- und Z700-Zentren (scripts/lib/chart_products.py:189, :201) L-Fenster 121 px, H-Fenster 181 px, `min_depth` 2 dam, 60 km Vorglättung; MSLP-Zentren (`isobars`, :234) 81/161 px, 2 hPa, 60 km; Pfeile `rh700_wind700` (:268) Raster 30 px, 1,2 px pro m/s, Referenz 20 m/s; `t2m_wind1000` (:302) 30 px, 2,5 px pro m/s, 10 m/s; `mountain_2000` (:355-356) 30 px, 1,5 px pro m/s, 20 m/s. Die Z850-Zentren von `z850_rh700` (:201) verwenden dieselben Literale wie Z500.
 
 ### chart_styles.py (Schwellen; Begründungen aus den Code-Kommentaren)
 
@@ -659,8 +681,8 @@ Rendern, Kodieren, Manifest und App-Build sind offline. ffmpeg ist ein externer 
 ## Details
 
 - **Kartendateien** heißen nach Gültigkeitszeit (UTC), Tagesprodukte nach UTC-Datum; `orography.webp` liegt direkt im Fensterordner, kein Produktordner. `weather_summary`-Keys sind die `tp`-Steps > 0; Niederschlag = `tp(step) − tp(step − min(PRECIP_HOURS, step))`, bei 0 geklemmt, in mm (IFS ×1000 aus m, ICON direkt); ptype-Symbole nur, wo ptype passt und ≥ 0,2 mm fallen (ICON-ww-Symbole und Böen unabhängig davon). `dt850_24h`-Keys sind Steps mit vorhandenem `step − 24`. `tmax`/`tmin`-Keys liefert `extreme_days` (IFS: vollständige `mx2t`/`mn2t`-Abdeckung, ICON: Fenster ganz im Lauf).
-- **Detailmodus** `ChartProducts.detail` (scripts/lib/chart_products.py:77) = `km_per_px(50)` kleiner als beim Europafenster (Mitteleuropa und `icon-d2`): dichtere Isobaren und gedruckte Werte (`print_values`, standardmäßig nur über Land).
-- **Legendenzeile** „<MODEL> run DD.MM.YYYY HH UTC“ (`_run`, scripts/lib/chart_products.py:144).
+- **Detailmodus** `ChartProducts.detail` (scripts/lib/chart_products.py:78) = `km_per_px(50)` kleiner als beim Europafenster (Mitteleuropa und `icon-d2`): dichtere Isobaren und gedruckte Werte (`print_values`, standardmäßig nur über Land).
+- **Legendenzeile** „<MODEL> run DD.MM.YYYY HH UTC“ (`_run`, scripts/lib/chart_products.py:162); die Zeitzeile davor liefert `key_label` (:144) über `step_label`/`day_label`.
 - **Isothermen/Isobaren** werden vor dem Konturieren in km geglättet (`ContourStyle.smooth_km`); L/H-Zentren haben eigene 60-km-Glättung und Fenstergrößen.
 - **Einzelkarten** verlustfreies WebP (`ChartCanvas.save`), Kontaktabzüge Qualität 90.
 - **Windows:** Prozesspools nutzen spawn; Worker-Zustand entsteht in `init_worker` (Modulglobale `_products` in render_charts.py, `_grib`/`_surface` in derived_writer.py).
@@ -680,9 +702,11 @@ Rendern, Kodieren, Manifest und App-Build sind offline. ffmpeg ist ein externer 
 | Ortswechsel während Meteogramm-Request | `AbortController`; veraltete Antworten über den `request`-Schlüssel verworfen |
 | localStorage gesperrt oder kaputt | Default-Ort; Schreiben scheitert still |
 | Ungültige Ortseingabe | Button deaktiviert (`isValidLocation`, leere Felder) |
-| Lauf nicht publiziert (404) | `RuntimeError` → stderr, Exit 1; `.raw/` bleibt |
+| Lauf nicht publiziert (404) | jede Gruppe erst ganz, dann Step für Step (ein Request je Step, alle 404) → `RuntimeError` → stderr, Exit 1; `.raw/` bleibt |
+| ECMWF: einzelne Step-Datei fehlt am Server (404) | Gruppe Step für Step ohne diesen Step, Warnung auf stdout; `ForecastWriter` schreibt Platzhalter (Warnung auf stderr mit den Feldern), abgeleitete Felder des Steps Missing, Exit 0 |
+| ECMWF: Nachricht beschädigt (Zufallsbytes) | `message_spans` überspringt sie bis zum nächsten „GRIB“; dekodiert ecCodes eine Nachricht nicht, liefert `crop_message` None; beides → Platzhalter. Beschädigung nur im Datenteil bei intaktem Kopf und „7777“ bleibt unerkannt (falsche Werte) |
 | Anderer Download-Fehler (Netz, Index) | 3 Versuche, dann propagiert die Originalausnahme aus `future.result()` → **Traceback** (nur `RuntimeError` wird gefangen) |
-| Gruppe mit falscher Nachrichtenzahl | `RuntimeError`, Exit 1 |
+| Gruppe mit falscher Nachrichtenzahl | Warnung auf stdout, Rohdatei bleibt, Lücken → Platzhalter; erst ein Feld ohne jede Nachricht (keine Vorlage) fehlt in der Datei, die dann beim nächsten Aufruf als unvollständig neu gebaut wird |
 | Abgebrochener Download | erneuter Aufruf: vollständige Rohgruppen werden übersprungen, andere neu geladen |
 | gh500/gh1000 unvollständig, Fehler in `DerivedWriter` | ungefangen → Traceback; `<out>.part` und `.raw/` bleiben |
 | `pending_notice` / Listing scheitert | still kein Hinweis |
@@ -690,8 +714,10 @@ Rendern, Kodieren, Manifest und App-Build sind offline. ffmpeg ist ein externer 
 | ICON-Download scheitert (kein kompletter Lauf, `--icon-run` zu alt, Netz) | Warnung, `update_maps` läuft weiter: ICON-Fenster wird weder gerendert noch in `maps/` geleert, altes ICON-GRIB bleibt; das Manifest übernimmt das vorhandene Video mit neu berechneten Steps |
 | ICON-Layer ohne Video und ohne Karten (erster ICON-Download gescheitert) | `encode_missing` warnt und überspringt ihn; Layer fehlt im Manifest → App „keine Karten in diesem Lauf“; nächster Aufruf rendert ICON (kein Lauf im Manifest) |
 | ICON: Parameter-Listing HTTP-Fehler | `HTTPError` aus `IconRuns._files` → Traceback, Exit 1 (in update_maps: Warnung) |
-| ICON: Datei nach 3 Versuchen nicht ladbar | Originalausnahme über `pool.map` → Traceback; fertige Rohdateien in `<out>.raw/` bleiben, Wiederholung lädt nur den Rest |
-| ICON: Nachrichtenzahl ≠ Dateizahl nach `join` | stderr, Exit 1; `<out>.part` und `.raw/` bleiben |
+| ICON: Datei nach 3 Versuchen nicht ladbar (404, Netz) oder beschädigt (bz2, GRIB) | `fetch` → Warnung, None; `join` schreibt einen Platzhalter, Warnung mit den Dateinamen, Exit 0. Fällt das Netz ganz aus, entsteht so eine Datei aus lauter Platzhaltern bzw. ohne Vorlagen (dann Exit 1) |
+| ICON: Datei fehlt im Server-Listing (Lücke vor T+48) | `_every_step` erzeugt ihre URL → 404 → Platzhalter |
+| ICON: vorhandene Rohdatei beschädigt (Wiederaufnahme) | `join` findet keine intakte Nachricht → Platzhalter (die Datei wird nicht neu geladen) |
+| ICON: Nachrichtenzahl ≠ Dateizahl nach `join` (Feld ohne Vorlage, z. B. statische Datei verloren) | stderr, Exit 1; `<out>.part` und `.raw/` bleiben |
 | ICON: Ordner wird gerade geschrieben (zwei Läufe gemischt oder Step 48 fehlt) | Ordner gilt als unvollständig, `latest` nimmt den nächstälteren; `--run` → `RuntimeError` |
 | Rendern eines Fensters scheitert | `sys.exit` mit stdout/stderr des Renderers; `maps/manifest.json` fehlt danach, bei neuem Lauf ist `maps/<fenster>/` des Modells schon geleert |
 | Kachel-Pfad, dessen Produkt das Fenster nicht rendert (z. B. Nicht-Default-Produkt auf Mitteleuropa) | `stale_windows` rendert das Fenster bei jedem Aufruf neu (der Pfad hat nie Karten), danach beendet `encode_missing` mit `no charts in data for …; render them or remove them from the tiles`, bevor irgendein Video kodiert wird; Manifest fehlt. Für `ICON_WINDOWS` nur Warnung, Pfad fehlt im Manifest |
@@ -700,7 +726,8 @@ Rendern, Kodieren, Manifest und App-Build sind offline. ffmpeg ist ein externer 
 | ffmpeg nicht im PATH | `FileNotFoundError` aus `Popen` im Encoder-Thread → Traceback; Manifest fehlt |
 | ffmpeg mit Exit ≠ 0 (z. B. ohne libaom-av1) | `RuntimeError` mit ffmpeg-stderr, `.part` gelöscht → Traceback, sobald `pool.map` dieses Ergebnis erreicht; die übrigen Layer werden trotzdem fertig kodiert (der Pool wartet beim Verlassen), Manifest fehlt |
 | Karte nicht lesbar während des Kodierens | Pillow-Ausnahme → Traceback; ffmpeg schließt das Video mit den bisherigen Frames ab, `<layer>.mp4.part` bleibt liegen (der nächste Aufruf zählt als neuer Lauf und leert `maps/<fenster>/`) |
-| Fehlendes Feld in einem Produkt | `KeyError` aus `ForecastGrib.field`, via `pool.map` → Traceback |
+| Fehlendes Feld oder Platzhalter in einem Produkt | `MissingFieldError` aus `ForecastGrib.field`/`message` → `ChartProducts.draw` zeichnet „No data available“ (grau, Umrisse, Zeitzeile, Feld in der Legende); Video, Manifest und Kontaktabzüge wie sonst. Härtetest 31.10.2026 (ECMWF 00z ohne Druckflächen T+108 und mit zerstörtem msl T+60, ICON 09z ohne clct T+12 und mit zerstörtem t_2m T+18): `update_maps` Exit 0, 19 + 12 + 2 Karten „No data“ (alle Druckflächenprodukte T+108, `dt850_24h` auch T+132, msl-Produkte T+60, ICON `weather_summary` T+12 und `t2m_wind1000` T+18) |
+| Statische Felder verloren (IFS `z`/`lsm`/`sdor`, ICON `clat`/`clon`/`hsurf`/`fr_land`) | Platzhalter bzw. fehlend → `ModelSurface`/`IconSurface` werfen `MissingFieldError` beim Aufbau der Produkte → Rendern scheitert (Traceback), jede Karte braucht sie |
 | Klimatologie fehlt, Aufruf über `update_maps.py` | `check_climate` beendet mit Meldung und Exit 1, bevor etwas geladen oder gelöscht wird (Manifest bleibt) |
 | Klimatologie fehlt, `render_charts.py` direkt mit CLIMATE-Produkt | `FileNotFoundError` in `ClimateArchive.__init__`, ungefangen |
 | Gültigkeitsstunde ohne `HHz`-Datei | `ValueError` aus `term_kind`, ungefangen |
@@ -714,7 +741,7 @@ Rendern, Kodieren, Manifest und App-Build sind offline. ffmpeg ist ein externer 
 | Push abgelehnt (Remote weiter) | `sys.exit` mit git-stderr; der lokale Manifest-Commit bleibt, nach `git pull --rebase` pusht der nächste Aufruf ihn mit |
 | `fetch_maps.py`: Asset fehlt (404) oder Netzfehler | `sys.exit` mit URL; Deploy scheitert, die alte Seite bleibt |
 
-Kein Logging-Framework, keine Tests, keine Retries außer in `GroupDownloader`, `IconDownloader` und `fetchMeteogramUrl`.
+Kein Logging-Framework, keine Tests, keine Retries außer in `GroupDownloader`, `IconDownloader` und `fetchMeteogramUrl`. Den Härtetest (Fake-Server für ECMWF, 404 für eine ICON-Datei, Zufallsbytes) gibt es nur als Skript im Scratchpad einer Sitzung, nicht im Repo.
 
 ## Erweiterungspunkte
 
@@ -726,15 +753,15 @@ Kein Logging-Framework, keine Tests, keine Retries außer in `GroupDownloader`, 
 
 **Nicht-Default-Produkt auf Mitteleuropa** — `WINDOWS` (scripts/update_maps.py:52) für `opencharts_central_europe` auf eine kommagetrennte Produktliste oder `"all"` setzen (der String geht unverändert als `--products` an render_charts.py) oder `DEFAULTS` erweitern. Beides ändert, was der Skill in `data/` findet; data/charts.md (Tabelle der Fenster) nachziehen.
 
-**Neues Kartenprodukt** — Methode mit dem Produktnamen in `ChartProducts` (scripts/lib/chart_products.py; `(self, step)` für Step-Produkte, `(self)` für statische), Name in `STEP` oder `STATIC` (`DAY` bildet einen Namen auf `"max"/"min"` ab). In `DEFAULTS` der Fenster, die es standardmäßig rendern, und in `CLIMATE`, falls es `self.climate` nutzt. Steht es als Layer in der Config, rendert `update_maps.py` das Fenster auch bei gleichem Lauf neu (`stale_windows`, scripts/update_maps.py:112), sofern das Fenster es rendert (`DEFAULTS` bzw. `WINDOWS`); ohne Config-Eintrag erst beim nächsten Lauf oder mit `--force`. Braucht es neue GRIB-Felder, die Gruppe in `RequestPlan` (scripts/lib/request_plan.py:24) erweitern: `expected_total` wächst mit, die vorhandene Datei gilt danach als unvollständig und wird neu geladen. Gibt es das Produkt nicht zu jedem `t`-Step, `keys()` (:83) wie bei `dt850_24h`/`weather_summary` erweitern. Skalen/Schwellen in chart_styles.py. Kontaktabzüge und `geometry.json`-Einträge kommen für `STEP`/`DAY` automatisch. Von Hand mitziehen: Produktliste im Docstring von scripts/render_charts.py:8-26 (= `--help`) und ein Abschnitt in data/charts.md (Vertrag mit dem Skill).
+**Neues Kartenprodukt** — Methode mit dem Produktnamen in `ChartProducts` (scripts/lib/chart_products.py; `(self, step)` für Step-Produkte, `(self)` für statische), Name in `STEP` oder `STATIC` (`DAY` bildet einen Namen auf `"max"/"min"` ab). In `DEFAULTS` der Fenster, die es standardmäßig rendern, und in `CLIMATE`, falls es `self.climate` nutzt. Steht es als Layer in der Config, rendert `update_maps.py` das Fenster auch bei gleichem Lauf neu (`stale_windows`, scripts/update_maps.py:112), sofern das Fenster es rendert (`DEFAULTS` bzw. `WINDOWS`); ohne Config-Eintrag erst beim nächsten Lauf oder mit `--force`. Braucht es neue GRIB-Felder, die Gruppe in `RequestPlan` (scripts/lib/request_plan.py:24) erweitern: `expected_total` wächst mit, die vorhandene Datei gilt danach als unvollständig und wird neu geladen. Gibt es das Produkt nicht zu jedem `t`-Step, `keys()` (:84) wie bei `dt850_24h`/`weather_summary` erweitern. Skalen/Schwellen in chart_styles.py. Kontaktabzüge und `geometry.json`-Einträge kommen für `STEP`/`DAY` automatisch. Von Hand mitziehen: Produktliste im Docstring von scripts/render_charts.py:8-26 (= `--help`) und ein Abschnitt in data/charts.md (Vertrag mit dem Skill).
 
 **Neues ICON-Produkt** — Ein vorhandenes `ChartProducts`-Produkt: nur den Namen in `IconProducts.STEP`/`DAY`/`STATIC` (scripts/lib/icon_products.py:30-32) eintragen, wenn die ICON-Datei alle Felder hat (Tabelle *ICON-D2*), sonst zuerst die Parameter laden (*Neuer ICON-Parameter*). Weicht nur die Datenquelle ab, einen Hook wie `profile`/`summit_cloud`/`extreme_days`/`daily_extreme_field`/`cloud_cover`/`precipitation`/`precipitation_type` in `ChartProducts` einführen und in `IconProducts` überschreiben (so sind `mountain_2000` und `tmax`/`tmin` angebunden). Ein reines ICON-Produkt als Methode in `IconProducts`. `ALL` und damit `DEFAULTS["icon-d2"]` folgen automatisch, `update_maps.py` rendert es ohne weitere Änderung. `keys` stammt aus `ChartProducts` (Step-Produkte: `t`-Steps, also T+0…48). Das Grau außerhalb des Gebiets setzt `IconProducts.draw` für jede Karte. Docstring von render_charts.py (ICON-Abschnitt :28-38) und data/charts.md nachziehen; als Layer `icon-d2/<produkt>` in die Config, meist als erster Pfad einer Rückfallkette mit dem ECMWF-Gegenstück.
 
-**Neuer ICON-Parameter** — DWD-Ordnername in `FORECAST_PARAMS` bzw. `STATIC_PARAMS` (scripts/download_icon_d2.py:61-63), auf Druckflächen als `<ordner>@<hPa>` (neue Profilflächen über `PROFILE_LEVELS`, :60, nur Flächen, die ICON-D2 publiziert: kein 925 hPa); heißt sein shortName anders als der Name, den die Karten benutzen sollen, Alias in `ICON_NAMES` (scripts/lib/constants.py:18). Bedingungen: Dateien auf dem Ikosaedergitter mit dem Ebenentoken im Namen (`FILE`-Regex, scripts/lib/icon_runs.py:19), jeder Vorhersageparameter muss Step 48 erreichen (sonst findet `IconRuns` nie einen kompletten Lauf), und nach dem Filter auf volle Stunden genau eine Nachricht je Datei (sonst scheitert der Zählvergleich in download_icon_d2.py:88 und :101). Ein Ordner kostet ein Listing je Stundenordner, weitere Ebenen desselben Ordners nicht. Vorhandene ICON-Dateien gelten danach als unvollständig und werden neu geladen. `ForecastGrib` unterscheidet Ebenen nur über `level`: Mehrebenenparameter brauchen eindeutige Levels. Modul-Docstring von download_icon_d2.py und data/charts.md nachziehen.
+**Neuer ICON-Parameter** — DWD-Ordnername in `FORECAST_PARAMS` bzw. `STATIC_PARAMS` (scripts/download_icon_d2.py:61-63), auf Druckflächen als `<ordner>@<hPa>` (neue Profilflächen über `PROFILE_LEVELS`, :60, nur Flächen, die ICON-D2 publiziert: kein 925 hPa); heißt sein shortName anders als der Name, den die Karten benutzen sollen, Alias in `ICON_NAMES` (scripts/lib/constants.py:18). Bedingungen: Dateien auf dem Ikosaedergitter mit dem Ebenentoken im Namen (`FILE`-Regex, scripts/lib/icon_runs.py:19), jeder Vorhersageparameter muss Step 48 erreichen (sonst findet `IconRuns` nie einen kompletten Lauf), und nach dem Filter auf volle Stunden genau eine Nachricht je Datei (sonst scheitert der Zählvergleich in download_icon_d2.py:93 und :106). Ein Ordner kostet ein Listing je Stundenordner, weitere Ebenen desselben Ordners nicht. Vorhandene ICON-Dateien gelten danach als unvollständig und werden neu geladen. `ForecastGrib` unterscheidet Ebenen nur über `level`: Mehrebenenparameter brauchen eindeutige Levels. Modul-Docstring von download_icon_d2.py und data/charts.md nachziehen.
 
 **Neuer GRIB-Parameter** — Gruppe in `RequestPlan.__init__` (scripts/lib/request_plan.py:24) ergänzen oder erweitern; jede Gruppe muss ein vollständiges kartesisches Produkt dessen sein, was Open Data wirklich publiziert, sonst stimmt `expected()` nie und die Gruppe scheitert als unvollständig. Bestehende Vorhersagedateien gelten danach als unvollständig und werden neu gebaut (vollständige Rohgruppen werden wiederverwendet). Modul-Docstring von download_ecmwf_data.py und Tabelle in data/charts.md nachziehen.
 
-**Neues abgeleitetes Feld** — in `step_messages` (scripts/lib/derived_writer.py:86) erzeugen und **`PER_STEP` (:35) von Hand passend halten** — die Formel spiegelt die Schleifen in `step_messages`, ist aber nicht daraus abgeleitet; eine Abweichung lässt `output_complete` nie wahr werden (jeder Lauf lädt neu). Ohne WMO/ECMWF-Parameter: nächste freie Nummer in `LOCAL_NAMES` (scripts/lib/local_params.py:12), bestehende Nummern nie umdeuten. Einmalige Felder wie `orog` zusätzlich im `+ 1` von `expected_total` (scripts/lib/request_plan.py:57) berücksichtigen. data/charts.md ergänzen.
+**Neues abgeleitetes Feld** — in `step_messages` (scripts/lib/derived_writer.py:79) als Eintrag `(Vorlage, Berechnung, Schlüssel)` der Liste `jobs` erzeugen und **`PER_STEP` (:40) von Hand passend halten** — die Formel spiegelt die Einträge von `jobs`, ist aber nicht daraus abgeleitet; eine Abweichung lässt `output_complete` nie wahr werden (jeder Lauf lädt neu). Ohne WMO/ECMWF-Parameter: nächste freie Nummer in `LOCAL_NAMES` (scripts/lib/local_params.py:12), bestehende Nummern nie umdeuten. Einmalige Felder wie `orog` zusätzlich im `+ 1` von `expected_total` (scripts/lib/request_plan.py:64) berücksichtigen. data/charts.md ergänzen.
 
 **Neue Höhe in `MOUNTAIN_HEIGHTS`** — nur Werte, die nicht mit einem Druckflächen-Level übereinstimmen (500, 600, 700, 850, 925, 1000): der `ForecastGrib`-Index unterscheidet keine Ebenentypen, eine Höhe 1000 m würde t1000 hPa im Index überschreiben. `PER_STEP` folgt automatisch; charts.md nachziehen.
 
@@ -780,10 +807,11 @@ Kein Logging-Framework, keine Tests, keine Retries außer in `GroupDownloader`, 
 - **Browser-Speicher und AV1:** Jedes angezeigte Video liegt ganz als Blob im Speicher und wird bis zum Neuladen nie freigegeben (alle 14 Pfade ≈ 67 MB). Die App setzt einen Browser mit AV1-Decoder voraus; ohne ihn bleiben Kacheln leer.
 - **Speicher:** Beim Zuschneiden dekodiert jeder der bis zu 8 `ForecastWriter`-Worker ein globales Feld (≈ 100 MB). Jeder Render-Worker baut eigenen `ForecastGrib` (bis ~250 MB Cache), `BaseMap` (8,7- bzw. 3,5-MB-GeoJSON) und ggf. Klimatologie bzw. die Delaunay-Triangulierung (`TriangleGrid`, auch im Hauptprozess); Default-Workerzahl = CPU-Zahl, bis zu drei Fenster laufen parallel. `DerivedWriter` hält alle abgeleiteten Nachrichten aller Steps im Hauptprozess, bevor er sie anhängt.
 - **Read-only-Arrays:** Ergebnisse von `ForecastGrib.field` nie in-place ändern.
+- **Platzhalter machen eine Datei vollständig:** Eine Vorhersagedatei mit Platzhaltern hat die volle Nachrichtenzahl; der nächste Aufruf meldet „already on disk“ und holt eine später nachgelieferte Server-Datei nicht mehr. Erst der nächste Lauf oder das Löschen der GRIB-Datei lädt neu. `has()` ist für Platzhalter wahr, nur `field()` wirft; wer auf Vorhandensein prüft, muss `MissingFieldError` fangen. Der Skill synop liest Platzhalter mit seiner eigenen `ForecastGrib`-Kopie als NaN (data/charts.md erklärt das).
 - **Schnelltests teilen den Namen:** `--max-step` mit Ordnerziel schreibt trotzdem `ecmwf_<run>.grb2`; ein späterer Vollaufruf sieht eine andere Nachrichtenzahl und lädt neu.
 - **Ordner vs. Datei als Ziel:** `download_ecmwf_data.py` behandelt `out` nur als Ordner, wenn er existiert.
 - **Modellfelder unter Grund:** Werte auf 1000/925/850 hPa unter der Modellorografie extrapoliert das Modell; Diagnostics maskiert pro Gitterpunkt, die Karten maskieren dagegen über feste Modellhöhen (`ABOVE_850HPA_M` usw.); `z500_t850`, `dt850_24h` färben T850 überall.
 - **Der Dev-Server** liefert `maps/` aus dem Repo-Root aus; Vite beobachtet `data/` und `maps/` nicht (vite.config.ts:11), ein neues Manifest braucht einen Reload. `base: './'` ist für den Pages-Unterpfad nötig; alle Pfade gehen über `import.meta.env.BASE_URL`.
-- **Zeitzonen:** Run, Steps und Dateinamen sind UTC; der Slider zeigt nur `+N h`, die Gültigkeitszeit steht in der Kartenlegende.
+- **Zeitzonen:** Run, Steps und Dateinamen sind UTC; der Slider zeigt die Gültigkeitszeit in UTC („So, 1. 00Z“, `+N h` im Tooltip), die Kartenlegende ebenso.
 - **StrictMode** führt Effekte im Dev doppelt aus; Meteogramm-Requests werden dabei abgebrochen und neu gestellt. `Meteogram` fragt ECMWF bei jedem Ortswechsel neu ab, kein Cache außer dem Browser-Bildcache.
 - **Es gibt keine Tests**, kein Logging, keine requirements-Datei, keine Validierung des Manifests (die App vertraut dem JSON-Typ) und kein Aufräumen von `<out>.part` bzw. `<layer>.mp4.part` nach einer Ausnahme. `lint` ist oxlint mit Hooks-Regeln.

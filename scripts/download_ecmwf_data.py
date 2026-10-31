@@ -43,6 +43,11 @@ successful run (--keep-raw keeps them). A group whose raw file already
 holds every expected message is not downloaded again, so an interrupted
 call can simply be repeated.
 
+Step files missing on the server and damaged messages do not stop the
+download: those fields are written with every value missing (a warning
+names them), and the charts of their steps say "No data available".
+Only a run of which the server has no step at all fails.
+
 Example::
 
     python download_ecmwf_data.py ecmwf_2026102912.grb2
@@ -128,7 +133,7 @@ def main(argv: list[str]) -> int:
 
     cropper = GribCropper.for_windows(list(PROJECTIONS.values()))
     part = out.with_name(out.name + ".part")
-    count = ForecastWriter(cropper).write(raw_files, part)
+    count = ForecastWriter(cropper).write(raw_files, part, plan.fields())
     print(f"{count} messages cropped to box {cropper.grid['Nj']}x{cropper.grid['Ni']} "
           f"({time.monotonic() - started:.0f}s)", flush=True)
     count += DerivedWriter().append(part)
