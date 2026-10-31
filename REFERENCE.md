@@ -23,21 +23,23 @@ Referenz für die React-App und die Python-Datenpipeline (Download, abgeleitete 
 | src/model/ChartIndex.ts | 107 | Manifest abfragen: Frame zu einem Step (null nach `end`), erster/letzter Step, Steps aller Layer, Pfad eines Layers zu einem Step (`resolve`), Video-URL, Seek-Zeit |
 | src/model/ChartProjection.ts | 56 | Lat/Lon in Bildpixel der drei Kartenfenster umrechnen |
 | src/model/GeoLocation.ts | 13 | Ortstyp, Default-Ort, Validierung |
+| src/model/holidays.ts | 50 | Österreichische Feiertage eines UTC-Kalendertags (`holidayName`), portiert aus calendar_days.py des Skills synop |
 | src/services/ecmwfMeteogram.ts | 42 | Meteogramm bei ECMWF rendern lassen und die Bild-URL holen (mit Retry) |
+| src/services/placeSearch.ts | 33 | Ortsnamen per Nominatim auflösen (`searchPlace`, erster Treffer mit Namen) |
 | src/services/videoLoader.ts | 23 | Video einmal ganz laden → Object-URL; Promise (URL oder null) pro URL gecacht; nur `video/*` zählt |
 | src/hooks/useChartIndex.ts | 28 | `maps/manifest.json` laden |
 | src/hooks/useHashRoute.ts | 23 | Route `start`/`maps` aus `location.hash` |
 | src/hooks/useLoadedVideo.ts | 39 | Voriges Video zeigen, bis das neue geladen ist; Ladefehler melden |
 | src/hooks/useStoredLocation.ts | 28 | Ort in localStorage lesen und schreiben |
 | src/components/StartPage.tsx | 29 | Kopfzeile mit Ortsformular, Meteogramme |
-| src/components/LocationForm.tsx | 38 | Eingabe von Breite und Länge |
+| src/components/LocationForm.tsx | 77 | Eingabe von Ortsname oder Breite/Länge; ein eingegebener Name hat Vorrang und füllt die Koordinaten mit dem Treffer |
 | src/components/Meteogram.tsx | 44 | Ein Meteogramm samt Lade- und Fehlerzustand |
 | src/components/MapViewer.tsx | 21 | Manifest laden, dann `ChartGrid` |
 | src/components/ChartGrid.tsx | 69 | Step-, Layer- und Großansicht-State, Tastatur, Raster |
 | src/components/ChartTile.tsx | 33 | Kachel: Pfad des Layers per `index.resolve`, Linksklick nächster Layer, Rechtsklick Großansicht |
 | src/components/ChartImage.tsx | 75 | Stummes `<video>` auf den Frame des Steps setzen bzw. Platzhalter („ab +N h“, „bis +N h“), Ortsmarker |
 | src/components/LargeView.tsx | 69 | Verschiebbares Fenster mit der Karte in 1:1-Größe |
-| src/components/StepSlider.tsx | 23 | Range-Input 0–240 h mit Tagesmarken |
+| src/components/StepSlider.tsx | 71 | Range-Input 0–240 h; Anzeige der Gültigkeitszeit („So, 1. 00Z“), Tagesleiste bei 00 UTC, Sonn- und Feiertage rot |
 | src/components/*.module.css | je 4–41 | CSS-Module pro Komponente |
 | src/index.css | 28 | Globale CSS-Variablen (`--bg`, `--accent`, `--gap` …) |
 | .github/workflows/deploy.yml | 39 | Bei Push auf `main`: bauen, Manifest und Videos aus dem Release nach `dist/maps` (`fetch_maps.py`), Pages deployen |
@@ -94,11 +96,11 @@ Alle Abhängigkeiten werden über den Konstruktor injiziert. Ohne Klasse: `__ini
 | triangle_grid.py | 78 | TriangleGrid | Unstrukturiertes Gitter (ICON-Zellmittelpunkte) per Delaunay/baryzentrisch auf die Pixel; gleiche Schnittstelle wie PixelGrid + `covered` |
 | base_map.py | 64 | BaseMap | Projizierte Länder- und Bundesländerringe (`projection.borders`) und Gradnetz |
 | colour_scale.py / contour_style.py / symbol_style.py | 27 / 27 / 28 | ColourScale / ContourStyle / SymbolStyle | Frozen dataclasses für Farbbänder, Konturlinien, Punktsymbole (`marker` auch Vertices oder matplotlib-`Path`) |
-| chart_styles.py | 240 | — | Alle Farbskalen, Konturstile, Schwellen (auch von Diagnostics benutzt), ww-Zuordnung und -Symbole von ICON |
+| chart_styles.py | 245 | — | Alle Farbskalen, Konturstile, Schwellen (auch von Diagnostics benutzt), ww-Zuordnung und -Symbole von ICON |
 | fonts.py | 18 | — | `load_font`: Arial (Dateinamen von Windows und macOS) → DejaVu Sans → PIL-Default in Größe `size` |
 | chart_canvas.py | 314 | ChartCanvas | Eine matplotlib-Figur: Kartenlayer + Legendenstreifen, verlustfrei als WebP speichern |
-| chart_products.py | 467 | ChartProducts | Produktregister (`STEP`, `DAY`, `STATIC`, `ALL`, `CLIMATE`, `DEFAULTS`, `MODEL`, `PRECIP_HOURS`, `SHEET_HOURS`), eine Methode pro Produkt, Hooks `profile`, `summit_cloud`, `extreme_days`, `daily_extreme_field`, `cloud_cover`, `precipitation`, `precipitation_type` |
-| icon_products.py | 94 | IconProducts(ChartProducts) | ICON-D2-Produkte `t2m_wind1000`, `wind10m`, `mountain_2000`, `weather_summary` (+ Gewitter, Hagel, Nebel, Sturmböen), `tmax`, `tmin`, `orography`; Grau außerhalb des Gebiets in jeder Karte |
+| chart_products.py | 471 | ChartProducts | Produktregister (`STEP`, `DAY`, `STATIC`, `ALL`, `CLIMATE`, `DEFAULTS`, `MODEL`, `PRECIP_HOURS`, `SHEET_HOURS`), eine Methode pro Produkt, Hooks `profile`, `summit_cloud`, `extreme_days`, `daily_extreme_field`, `cloud_cover`, `precipitation`, `precipitation_type` |
+| icon_products.py | 101 | IconProducts(ChartProducts) | ICON-D2-Produkte `t2m_wind1000`, `wind10m`, `mountain_2000`, `weather_summary` (+ Gewitter, Hagel, Nebel, Sturmböen), `tmax`, `tmin`, `orography`; Grau außerhalb des Gebiets in jeder Karte |
 | icon_extremes.py | 55 | IconExtremes | Tagesmax/-min von ICON aus den 6-stündlich neu startenden `tmax_2m`/`tmin_2m` (+ stündliche `2t` vor dem ersten Neustart im Fenster) |
 | contact_sheet.py | 67 | ContactSheet | Kontaktabzüge bauen, Kachelursprünge liefern |
 | world_countries.geojson | 8,7 MB, eine Zeile | — | Ländergrenzen, Esri „World Countries (Generalized)“ (https://hub.arcgis.com/datasets/esri::world-countries-generalized), lokal gelesen; `borders` der IFS-Fenster |
@@ -291,11 +293,11 @@ Invarianten der Reihenfolge:
 App                                             src/App.tsx:6
  ├─ useHashRoute()        '#/maps' -> 'maps', sonst 'start'
  ├─ useStoredLocation()   localStorage 'wetterkartenviewer.location'
- ├─ [start] StartPage -> LocationForm, Meteogram × meteograms
+ ├─ [start] StartPage -> LocationForm (Ortsname -> searchPlace, src/services/placeSearch.ts:24), Meteogram × meteograms
  │                         └─ fetchMeteogramUrl(...)          src/services/ecmwfMeteogram.ts:28
  └─ [maps]  MapViewer -> useChartIndex() (fetch maps/manifest.json, cache: no-cache)
              └─ ChartGrid  state: step, layers[], enlarged     src/components/ChartGrid.tsx:23
-                  ├─ StepSlider
+                  ├─ StepSlider(step, index.runTime)   Gültigkeitszeit = runTime + step, holidayName
                   ├─ ChartTile × tiles                             src/components/ChartTile.tsx:27
                   │    path = index.resolve(tile.layers[layer], step)   src/model/ChartIndex.ts:83
                   ├─ ChartImage(path)                               src/components/ChartImage.tsx:33
@@ -429,7 +431,7 @@ Alle Diagnosen nutzen nur Druckflächen; eine Fläche zählt nur, wo ihr Geopote
 | freezing_level (`deg0l`) | `HeightProfile.freezing_level`: 0-°C-Durchgang von oben gesucht (Obergrenze einer Warmschicht über Kaltluftsee); ganz gefroren oder Durchgang unter Grund → Bodenhöhe; 500 hPa > 0 °C → NaN | height_profile.py:50 |
 | snow_line (`snowl`) | `max(freezing_level − 350 m, ground)` | diagnostics.py:68 |
 
-`HeightProfile(grib, step, height="gh", height_factor=1.0)` (scripts/lib/height_profile.py:20): Flächenhöhen aus dem Feld `height` × `height_factor` (IFS `gh` in gpm, ICON `z` × 1/g). `at_height` (:40) interpoliert linear in gpm zwischen den Nachbarflächen, die den Parameter **und** das Höhenfeld haben (`_stack`, :32); NaN außerhalb. `ChartProducts.profile(step)` (scripts/lib/chart_products.py:125) baut es für `mountain_2000` und `diagnostics()`. `mountain_2000` (:340) schraffiert `summit_cloud(profile, step, height)` (:361; Basis: RH in der Höhe + Legendennotiz) über `canvas.hatch(resample(…, smooth_km=10), SUMMIT_CLOUD_RH, …)`. IFS-Karten sind mit beiden Hooks pixelgleich (geprüft an 10 Produkten bzw. gegen Lauf 2026103100). `PRECIP_RH` und `SNOW_LINE_BELOW_FREEZING_M` stehen in chart_styles.py und wirken auf Karten und GRIB gleichzeitig.
+`HeightProfile(grib, step, height="gh", height_factor=1.0)` (scripts/lib/height_profile.py:20): Flächenhöhen aus dem Feld `height` × `height_factor` (IFS `gh` in gpm, ICON `z` × 1/g). `at_height` (:40) interpoliert linear in gpm zwischen den Nachbarflächen, die den Parameter **und** das Höhenfeld haben (`_stack`, :32); NaN außerhalb. `ChartProducts.profile(step)` (scripts/lib/chart_products.py:125) baut es für `mountain_2000` und `diagnostics()`. `mountain_2000` (:340) schraffiert `summit_cloud(profile, step, height)` (:361; liefert Feld, Schwelle und Legendennotiz; Basis: RH in der Höhe mit `SUMMIT_CLOUD_RH`) über `canvas.hatch(resample(feld, smooth_km=10), schwelle, …)`. IFS-Karten sind mit beiden Hooks pixelgleich (geprüft an 10 Produkten bzw. gegen Lauf 2026103100). `PRECIP_RH` und `SNOW_LINE_BELOW_FREEZING_M` stehen in chart_styles.py und wirken auf Karten und GRIB gleichzeitig.
 
 ### Tagesextreme
 
@@ -486,14 +488,14 @@ Die Zeichenmethoden sind die von `ChartProducts`; überschrieben werden nur Date
 | --- | --- | --- |
 | `draw` | :42 | ruft die Produktmethode und danach `canvas.uncovered(self.pixels.covered, OUTSIDE_RGB, …)`: jede Karte grau außerhalb des Modellgebiets |
 | `profile` | :47 | `HeightProfile(grib, step, "z", 1 / GRAVITY)`: Flächenhöhen aus dem Geopotential, nur 850/700 hPa (für `mountain_2000`) |
-| `summit_cloud` | :50 | Wolke auf 2000 m (`mountain_2000`): RH in der Höhe nur dort, wo `ceiling` ≤ Höhe, sonst 0; Legende „hatched: in cloud at 2000 m (RH ≥ 95 %, cloud base ≤ 2000 m)“. Grund siehe unten |
+| `summit_cloud` | :50 | Wolke auf 2000 m (`mountain_2000`): Zelle in Wolken (100) wo `ceiling` ≤ Höhe **und** RH in der Höhe ≥ `ICON_SUMMIT_CLOUD_RH` (90 %), sonst 0; nach 10 km Glättung der Flächenanteil in %, schraffiert ab `SUMMIT_CLOUD_AREA` (50 %). Legende „hatched: ≥ 50 % in cloud at 2000 m (base below, RH ≥ 90 %)“. Grund siehe unten |
 | `extreme_days`, `daily_extreme_field` | :62, :65 | `IconExtremes` statt `ForecastGrib.extreme_days`/`daily_extreme` |
 | `weather_summary` | :68 | zusätzlich `WW_SYMBOLS` (95 Gewitter = Blitz, 96 Gewitter mit Hagel = Dreieck, 45/48 Nebel = drei Striche) auf Raster 20 px, **ohne** Kopplung an Niederschlag; Böen ≥ `STORM_GUST_KMH` (75 km/h, Bft 9 = „Sturmböen“ der DWD-Warnungen) als Zahlen in km/h auf Raster 60 px |
 | `cloud_cover` | :79 | tcc direkt in %, NaN → 0 |
 | `precipitation` | :83 | tp-Differenz der letzten Stunde ohne ×1000 |
 | `precipitation_type` | :88 | ww per `nearest`, über `WW_PTYPE` in IFS-ptype-Codes übersetzt (5 Schnee, 7 Schneeregen, 3 gefrierender Regen/Niesel, 8 Eiskörner, alles andere 0) — dieselben Symbole und Legende wie IFS |
 
-**Warum `summit_cloud` die Wolkenuntergrenze braucht:** Die RH auf 2000 m ist linear über die ≈ 1500 m zwischen 850 und 700 hPa interpoliert und meldet Wolke auch dort, wo die Basis höher liegt; `ceiling` ist die modelleigene Basis, darunter kann die Höhe nicht in Wolken liegen (Docstring :51-57). ICONs Schichtbedeckungen `clcl`/`clcm` helfen nicht: ihre Grenze bei 800 hPa liegt nahe 2000 m, und Nebel/Hochnebel (`clcl` 100 %) lässt die Gipfel frei. Die 3-D-Bedeckung `clc` gibt es nur auf Modellflächen (zu teuer zum Laden).
+**Warum `summit_cloud` die Wolkenuntergrenze braucht:** Die RH auf 2000 m ist linear über die ≈ 1500 m zwischen 850 und 700 hPa interpoliert und meldet Wolke auch dort, wo die Basis höher liegt; `ceiling` ist die modelleigene Basis, darunter kann die Höhe nicht in Wolken liegen (Docstring :51-62). **Warum Flächenanteil und 90 %:** Die Wolken des 2-km-Modells sind fleckig. Die frühere Variante (RH, außerhalb der Basis 0, geglättet, Schwelle 95 %) verlangte fast lückenlose Wolken im 10-km-Umkreis und schraffierte am 01.11.2026 12 UTC (Lauf 09z) praktisch nichts, obwohl die Alpennordseite mit Basis um 1300 m bedeckt war. `relhum` gilt gegenüber Wasser; eisgesättigte Wolke hat bei −5 °C nur ≈ 95 %, bei −10 °C ≈ 91 %. Mit 90 % und ≥ 50 % Flächenanteil ist die Nordseite von Tirol bis Salzburg schraffiert. Eine einzelne Zelle am Ort kann in Wolken liegen, ohne dass die Fläche schraffiert ist; den Wert am Ort liefert die ICON-Ortstabelle des Skills. ICONs Schichtbedeckungen `clcl`/`clcm` helfen nicht: ihre Grenze bei 800 hPa liegt nahe 2000 m, und Nebel/Hochnebel (`clcl` 100 %) lässt die Gipfel frei. Die 3-D-Bedeckung `clc` gibt es nur auf Modellflächen (zu teuer zum Laden).
 
 `t2m_wind1000` (2t, u/v 1000 hPa), `wind10m` (10u/10v, msl) und `orography` laufen unverändert; `orography` ohne Schraffur, weil `IconSurface.sdor` None ist (`ChartProducts.orography` prüft das). Andere `ChartProducts`-Produkte brauchen Felder, die die ICON-Datei nicht hat (gh, 925 hPa, w, ptype …), und stehen nicht in `IconProducts.ALL`. `ChartProducts.detail` ist für `icon-d2` wahr (`km_per_px(50)` kleiner als Europa): dichtere Isobaren außer in `weather_summary`/`wind10m` (fest `MSLP_SUMMARY`) und gedruckte Werte.
 
@@ -520,7 +522,12 @@ Gewitter, Hagel, Nebel und Sturmböen sind selten und DWD hält nur ≈ 1 Tag L�
 | `IMAGE_WIDTH`, `IMAGE_HEIGHT`, `MAP_HEIGHT` | src/model/ChartProjection.ts:4-6 | 1200, 690, 600 — Kartenbild (Karte + 90 px Legende) |
 | `aspect-ratio: 1200 / 690` | src/components/ChartImage.module.css:4 | **muss zu `IMAGE_WIDTH`/`IMAGE_HEIGHT` passen**, hält die Kachelhöhe stabil, solange noch kein Video da ist |
 | `.chart { width: 1200px }` | src/components/LargeView.module.css:39 | Großansicht 1:1 |
-| `MAX_STEP` | src/components/StepSlider.tsx:3 | 240 — Reichweite der 00z/12z-Läufe; Tagesmarken alle 24 h |
+| `MAX_STEP` | src/components/StepSlider.tsx:5 | 240 — Reichweite der 00z/12z-Läufe; Tagesmarken bei 00 UTC (`midnightSteps`) |
+| `WEEKDAYS` | src/components/StepSlider.tsx:7 | deutsche Kürzel So…Sa für „So, 1. 00Z“; Monat bewusst weggelassen (10 Tage) |
+| `.days { left: 8px; right: 8px }` | src/components/StepSlider.module.css | halbe Reglerbreite, damit die Tagesleiste unter den Werten des Range-Inputs steht |
+| `NOMINATIM_URL` | src/services/placeSearch.ts:4 | `https://nominatim.openstreetmap.org/search`, `format=jsonv2`, `limit=1`, `accept-language=de` |
+| `DECIMALS` | src/components/LocationForm.tsx:12 | 4 Nachkommastellen vom Suchtreffer; Zahlenfelder mit `step="any"`, sonst blockiert die Browser-Validierung das nächste Absenden |
+| `FIXED_HOLIDAYS`, `EASTER_HOLIDAYS` | src/model/holidays.ts:7-25 | wie calendar_days.py des Skills; gegen das Skript für 2026–2027 geprüft |
 | `DEFAULT_LOCATION` | src/model/GeoLocation.ts:7 | 48 °N, 16,4 °E |
 | `STORAGE_KEY` | src/hooks/useStoredLocation.ts:4 | `wetterkartenviewer.location` |
 | `EPSGRAM_API` | src/services/ecmwfMeteogram.ts:3 | `https://charts.ecmwf.int/opencharts-api/v1/features/epsgrams/` |
@@ -627,10 +634,13 @@ Literale in den Produktmethoden, alle empirisch bestimmt (laut User): Z500- und 
 | `ASCENT_LINES`, `SUBSIDENCE_LINES` | 221-222 | ω700 −0,6/−0,2 und +0,2 Pa/s |
 | `PRECIP_RH` | 228 | 90 %, Niederschlagssignal (auch Diagnostics/`psig`) |
 | `SNOW_LINE_BELOW_FREEZING_M` | 231 | 350 m Schmelzstrecke (300–400 m) (auch `snowl`) |
-| `MOUNTAIN_HEIGHT_M`, `SUMMIT_CLOUD_RH` | 235-236 | 2000 m Kartenhöhe (getrennt von `MOUNTAIN_HEIGHTS` definiert), 95 % = in Wolken |
+| `MOUNTAIN_HEIGHT_M`, `SUMMIT_CLOUD_RH` | 235-236 | 2000 m Kartenhöhe (getrennt von `MOUNTAIN_HEIGHTS` definiert), 95 % = in Wolken (IFS) |
+| `ICON_SUMMIT_CLOUD_RH`, `SUMMIT_CLOUD_AREA` | 240-241 | ICON: 90 % RH (über Wasser, Eissättigung) mit Wolkenbasis darunter = Zelle in Wolken; schraffiert ab 50 % Flächenanteil |
 | `VALUE_SPACING_PX` | 240 | 80 px (~250 km bei Mitteleuropa) Raster gedruckter Werte, nur Detailfenster |
 
 ## Externe Systeme
+
+**Nominatim (OpenStreetMap)** (`searchPlace`, src/services/placeSearch.ts:24): `GET` ohne Auth aus dem Browser, erster Treffer; HTTP-Fehler oder leere Liste → `Error` mit deutscher Meldung, die `LocationForm` neben dem Formular zeigt. Nutzungsregeln von Nominatim: höchstens 1 Anfrage/s; die App fragt nur beim Klick auf „Ort übernehmen“.
 
 **ECMWF Opencharts epsgrams** (`fetchMeteogramUrl`, src/services/ecmwfMeteogram.ts:28): `POST` ohne Auth, `mode: 'cors'`, Body `{"location":{"type":"latlon","lat":…,"lon":…,"station_name":""},"axis":{},"epsgrams":"<name>"}`. Antwort `result.url` ist die Bild-URL; das Bild existiert erst nach diesem Request. Fehlt `result`, wird nach 3 s bis zu 5-mal wiederholt. Gültige Namen in `viewer.config.json`: `classical_10d`, `classical_15d_with_climate`, `classical_plume`.
 
@@ -742,7 +752,7 @@ Kein Logging-Framework, keine Tests, keine Retries außer in `GroupDownloader`, 
 
 **Neue Seite** — `Route` und `currentRoute`/`navigate` in src/hooks/useHashRoute.ts, Verzweigung in src/App.tsx. Es gibt keinen Router.
 
-**Andere Slider-Reichweite** — `MAX_STEP` (src/components/StepSlider.tsx:3); `currentStep` in ChartGrid klemmt mit demselben Wert.
+**Andere Slider-Reichweite** — `MAX_STEP` (src/components/StepSlider.tsx:5); `currentStep` in ChartGrid klemmt mit demselben Wert.
 
 **Neues Tastenkürzel** — `onKey` in src/components/ChartGrid.tsx:37. Eingaben in `<input>` werden für Pfeiltasten bewusst ignoriert.
 

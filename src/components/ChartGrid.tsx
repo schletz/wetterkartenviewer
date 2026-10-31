@@ -51,7 +51,7 @@ export default function ChartGrid({ index, location, onBack }: ChartGridProps) {
     <main className={styles.viewer}>
       <header className={styles.toolbar}>
         <button onClick={onBack}>Start</button>
-        <StepSlider step={step} onChange={setStep} />
+        <StepSlider step={step} runTime={index.runTime} onChange={setStep} />
       </header>
       <section className={styles.grid}>
         {tiles.map((tile, i) => (
