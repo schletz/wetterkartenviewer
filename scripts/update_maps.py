@@ -13,6 +13,9 @@ depend on it; the synop skill reads it as its data directory:
     charts.md                       products and GRIB contents for the skill; copied into
                                     any other data directory
 
+At the end data/ is mirrored into the Azure blob container of the skill (blob_mirror.py), if
+.env holds its credentials; a failed upload only warns, the next call sends the rest.
+
 maps/ holds only what the web app loads: manifest.json (committed) and one
 AV1 video <window>/<product>.mp4 per tile layer in src/config/viewer.config.json
 (tile_videos.py, published as release assets by publish_maps.py).
@@ -41,6 +44,9 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from azure.core.exceptions import AzureError
+
+from blob_mirror import mirror
 from lib.climate_archive import DIRECTORY as CLIMATE_DIRECTORY, ClimateArchive
 from maps_manifest import (MANIFEST, chart_frames, read_run, read_window_runs, tile_chart_paths, video_file,
                            write_manifest)
@@ -193,6 +199,10 @@ def main() -> None:
             print(output, end="")
     encode_missing(args.data, args.maps, run)
     print(write_manifest(args.data, args.maps, run))
+    try:
+        mirror(args.data)
+    except AzureError as error:
+        print(f"warning: blob mirror failed, the next call uploads the rest: {error}", file=sys.stderr)
 
 
 if __name__ == "__main__":

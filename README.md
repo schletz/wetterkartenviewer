@@ -31,8 +31,23 @@ Nach dem Start fragt es einmal nach, `--yes` überspringt die Frage.
    Manifest nennt, aus dem Release (`scripts/fetch_maps.py`) und veröffentlicht alles auf GitHub Pages.
 
 `data/` ist in `.gitignore`, bis auf `data/charts.md`. `data/` dient auch dem Skill `synop` als
-Datenordner, `data/charts.md` beschreibt ihm den Inhalt. Von `maps/` ist nur `manifest.json`
-committet. Welche Videos nach `maps/` kommen, bestimmt allein
+Datenordner, `data/charts.md` beschreibt ihm den Inhalt.
+
+Am Ende spiegelt `scripts/blob_mirror.py` `data/` (ohne halbfertige Downloads) in den Azure-Blob-Container
+`forecastdata`, damit der Skill ohne dieses Repo arbeiten kann. Lesen geht anonym über
+`https://wetterkartenviewer.blob.core.windows.net/forecastdata/<pfad>`. Hochgeladen wird nur, was
+sich geändert hat; Blobs ohne lokale Datei werden gelöscht, eine Historie gibt es nicht. Zum
+Hochladen braucht es `pip install azure-storage-blob` und eine `.env` im Repo-Root (nicht committet):
+
+```
+BLOB_STORAGE_ID=<account-name oder resource-id>
+BLOB_STORAGE_KEY=<account-key>
+```
+
+Ohne `.env` wird der Schritt übersprungen; schlägt der Upload fehl, warnt das Skript nur, und der
+nächste Aufruf holt ihn nach.
+
+Von `maps/` ist nur `manifest.json` committet. Welche Videos nach `maps/` kommen, bestimmt allein
 `src/config/viewer.config.json`. Nach einer Änderung dort genügt `download_data`: Gibt es
 keinen neuen Lauf, kodiert es nur die Layer ohne Video nach. Videos entfernter Layer bleiben bis
 zum nächsten Lauf liegen. Ein neuer Lauf leert die Fenster seines Modells in `maps/` und baut sie

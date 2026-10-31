@@ -14,7 +14,7 @@ The API sections follow Javadoc: intro, fields, methods per module or class.
 - Render WebP charts for three windows into `data/`, encode each tile layer of the viewer as `maps/<window>/<product>.mp4` (one frame per step), write `maps/manifest.json`.
 - Upload the videos to a GitHub release, push a manifest commit; GitHub Actions builds and deploys the app with them.
 - IFS updates every 12 h, ICON-D2 every 3 h; `download_loop.sh` runs the whole chain every 10 min on an always-on machine.
-- `data/` is also the data directory of the skill synop (`~/.claude/skills/synop`), see *Contract with the skill synop*.
+- `data/` is also the data directory of the skill synop (`~/.claude/skills/synop`), see *Contract with the skill synop*; `blob_mirror.py` mirrors it into a public Azure blob container so the skill works without this repository.
 
 ## Diagrams
 
@@ -34,6 +34,7 @@ title download_data.cmd / .sh: update_maps.py, then publish_maps.py; download_lo
 cloud "ECMWF Open Data" as ecmwf
 cloud "DWD Open Data" as dwd
 cloud "Google Drive" as gdrive
+cloud "Azure Blob Storage\ncontainer forecastdata" as blob
 component update_maps [
  **update_maps.py**
  Orchestrates downloads, renders stale
@@ -69,10 +70,15 @@ component publish_maps [
  Uploads changed videos,
  commits the manifest, pushes.
 ]
+component blob_mirror [
+ **blob_mirror.py**
+ Mirrors data/ into the
+ blob container.
+]
 component synop [
  **Skill synop**
- Reads data/ as its
- data directory.
+ Reads data/ or its blob
+ mirror as data directory.
 ]
 folder "data/" as data_dir {
  artifact "ecmwf_<run>.grb2" as ecmwf_grib
@@ -103,6 +109,7 @@ update_maps ..> download_icon : subprocess
 update_maps ..> render_charts : subprocess\nper stale window
 update_maps ..> tile_videos : encode_video()
 update_maps ..> maps_manifest : write_manifest()
+update_maps ..> blob_mirror : mirror()
 ecmwf --> download_ecmwf
 dwd --> download_icon
 gdrive --> era5 : by hand
@@ -128,6 +135,10 @@ repo --> pages : push triggers Actions:\nnpm run build, manifest
 release --> pages : videos via\nfetch_maps.py
 data_dir --> synop : GRIB, charts.md
 window_dir --> synop : charts,\ngeometry.json
+data_dir --> blob_mirror
+window_dir --> blob_mirror
+blob_mirror --> blob : changed files,\ndelete the rest
+blob --> synop : anonymous\nHTTPS
 @enduml
 ```
 
@@ -181,6 +192,11 @@ note right
  ThreadPool(PARALLEL_ENCODES) x encode_video
 end note
 :write_manifest;
+:blob_mirror.mirror(data);
+note right
+ no credentials: notice, skip
+ AzureError: warning, exit 0
+end note
 stop
 @enduml
 ```
@@ -512,7 +528,7 @@ Entries of other products in an existing file are kept, so single-product runs a
 
 ### Contract with the skill synop
 
-The skill reads `data/` (docstrings scripts/update_maps.py, scripts/lib/local_params.py). Changing any of these breaks it until the skill is updated:
+The skill reads `data/` (docstrings scripts/update_maps.py, scripts/lib/local_params.py), locally or as its mirror `https://wetterkartenviewer.blob.core.windows.net/forecastdata/<path relative to data/>` (container-level public access: blobs and the listing `?restype=container&comp=list` need no credentials; see *blob_mirror.py*). Changing any of these breaks it until the skill is updated:
 product names and the folder layout above, `geometry.json` keys, GRIB short names, levels, units and `stepRange` of the daily extremes, the local parameter numbers 0–5 in category 192, `charts.md`.
 The skill has its own copies of `ForecastGrib` and `ClimateArchive`.
 Its `ChartGeometry` (`~/.claude/skills/synop/scripts/lib/chart_geometry.py`) ignores `cone`/`lon0`: right for `opencharts_*` (cone 1, lon0 0), wrong markers on `icon-d2` until updated.
@@ -574,6 +590,7 @@ update_maps.py <data> <maps> [--base YYYYMMDDHH] [--icon-run YYYYMMDDHH] [--forc
 maps_manifest.py <data> <maps> --run YYYYMMDDHH
 publish_maps.py <maps> (gh and git run in the repo root)
 fetch_maps.py <maps> <target> --repository owner/name
+blob_mirror.py <data> (credentials from the environment or .env)
 download_ecmwf_data.py <out file|existing dir> [--base YYYYMMDDHH] [--max-step N] [--keep-raw]
 download_icon_d2.py <out file|existing dir> [--run YYYYMMDDHH] [--keep-raw]
 render_charts.py <grib> <outdir> [--climate DIR] [--projection icon-d2|opencharts_central_europe|opencharts_europe]
@@ -586,8 +603,8 @@ download_loop.sh [--yes] every 600 s: git fetch, reset --hard origin/main, downl
 ```
 
 Status on stdout, errors on stderr. Downloaders print the absolute GRIB path as their last stdout line and exit 0 with "already on disk" if the target is complete.
-`download_ecmwf_data.py` and `download_icon_d2.py`, `render_charts.py`, `make_icon_test_grib.py` put their own folder on `sys.path` (work with `python -I`); `update_maps.py`, `maps_manifest.py`, `publish_maps.py`, `fetch_maps.py` import their sibling modules without `-I`.
-Python packages (no requirements file): `ecmwf-opendata`, `eccodes`, `numpy`, `scipy`, `matplotlib` (Agg), `Pillow`, `requests`; build_borders.py also `pyshp`, `shapely` ≥ 2.1, `pyproj`. `ffmpeg` with `libaom-av1` must be on PATH.
+`download_ecmwf_data.py` and `download_icon_d2.py`, `render_charts.py`, `make_icon_test_grib.py` put their own folder on `sys.path` (work with `python -I`); `update_maps.py`, `maps_manifest.py`, `publish_maps.py`, `fetch_maps.py`, `blob_mirror.py` import their sibling modules without `-I`.
+Python packages (no requirements file): `ecmwf-opendata`, `eccodes`, `numpy`, `scipy`, `matplotlib` (Agg), `Pillow`, `requests`, `azure-storage-blob` (update_maps.py imports it also without credentials); build_borders.py also `pyshp`, `shapely` ≥ 2.1, `pyproj`. `ffmpeg` with `libaom-av1` must be on PATH.
 
 ## API: scripts/ (command line and modules)
 
@@ -615,6 +632,29 @@ Without a new run a call takes ≈ 3.5 s.
 | `render(grib, data, window) -> str` | run render_charts.py for one window; `sys.exit` with its output if it fails |
 | `stale_windows(data, maps, windows, same_run, run) -> list` | windows to render; empties `maps/<window>/` unless same run; same run: window folder missing or a tile path without charts (incomplete product folders are not checked) |
 | `encode_missing(data, maps, run)` | encode config paths without video; exits before the first encode if a non-ICON path has no charts |
+
+### blob_mirror.py
+
+`mirror(data)` makes the container `forecastdata` hold exactly the finished files of `data/` (all but paths with a part ending in `.part`/`.raw`); blob name = path relative to `data/`. Called last in update_maps.py, also when nothing was rendered, so a failed upload heals on the next call; without changes it only lists the container.
+Changed = blob missing, other size, or metadata `mtime` ≠ local `st_mtime_ns` (no hash). Uploads first, then batch deletes of blobs without a local file: readers see the old GRIB until the new one is complete, but re-rendered charts change in place, so a reader during an upload can get charts of two runs.
+Tier hot per blob although the account defaults to cool: cool blobs deleted within 30 days are billed for 30 days, and every run replaces GB. No versioning, soft delete off (per user).
+Credentials: `BLOB_STORAGE_ID` (account name or its resource ID, last segment taken) and `BLOB_STORAGE_KEY` (account key); environment before `.env` in the repo root (`KEY=VALUE` lines, ignored by git). Missing → notice on stdout, nothing happens.
+
+| Field | Meaning |
+| --- | --- |
+| `CONTAINER = 'forecastdata'`, `ENV_FILE` | |
+| `UNFINISHED = ('.part', '.raw')` | suffixes of unfinished downloads, never uploaded |
+| `CONTENT_TYPES` | grb2 octet-stream, md `text/markdown; charset=utf-8`, json, webp |
+| `MTIME = 'mtime'` | metadata key of the local modification time |
+| `PARALLEL_UPLOADS = 8`, `BLOCK_UPLOADS = 4` | files at once, blocks at once per large file |
+| `DELETE_BATCH = 256` | service limit of one batch request |
+
+| Function | Summary |
+| --- | --- |
+| `credentials() -> (account, key) \| None` | |
+| `local_files(data) -> dict[name, Path]`, `stale_files(files, blobs) -> list[str]` | |
+| `upload(container, name, path)`, `delete(container, names)` | |
+| `mirror(data)` | raises `AzureError`; update_maps.py catches it and only warns |
 
 ### maps_manifest.py
 
@@ -1111,6 +1151,7 @@ chart_styles.py holds every scale and threshold:
 | climatology missing | update_maps: exit 1 before anything; render_charts directly with a CLIMATE product: `FileNotFoundError` |
 | ICON file with `--products` outside `IconProducts.ALL` | argparse error, exit 2 |
 | upload breaks off | `sys.exit`; some assets replaced, manifest not committed; the next call uploads what `changed_videos` detects |
+| blob upload fails (network, key) | update_maps.py: warning on stderr, exit 0, publish still runs; uploaded files stay, the next call sends the rest |
 | push rejected | `sys.exit`; local manifest commit stays (download_loop.sh discards it on its next reset) |
 
 No logging framework, no tests, no cleanup of `.part` files after an exception. The stress test (fake ECMWF server, ICON 404, random bytes) existed only in a session scratchpad.
