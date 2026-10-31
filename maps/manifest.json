@@ -362,8 +362,8 @@
    "run": "2026103112",
    "end": 240
   },
-  "icon-d2/t2m_wind1000": {
-   "file": "icon-d2/t2m_wind1000.mp4",
+  "icon-d2/t2m_wind10m": {
+   "file": "icon-d2/t2m_wind10m.mp4",
    "steps": [
     9,
     10,
@@ -418,8 +418,8 @@
    "run": "2026103121",
    "end": 57
   },
-  "opencharts_central_europe/t2m_wind1000": {
-   "file": "opencharts_central_europe/t2m_wind1000.mp4",
+  "opencharts_central_europe/t2m_wind10m": {
+   "file": "opencharts_central_europe/t2m_wind10m.mp4",
    "steps": [
     0,
     3,
