@@ -110,3 +110,71 @@ npm run dev
 Der Dev-Server liefert `maps/` direkt aus. Die App lädt jedes Video ganz und springt per
 `currentTime` zum Frame des Termins. Pfeiltasten springen zum vorigen/nächsten Termin, Esc schließt
 die große Ansicht.
+
+## Quellen
+
+### ECMWF Open Data (GRIB)
+
+- Portal: https://www.ecmwf.int/en/forecasts/datasets/open-data
+- Download: https://data.ecmwf.int/forecasts/
+
+Pro Lauf und Prognoseschritt gibt es eine globale GRIB2-Datei mit allen Feldern, etwa
+`forecasts/20261101/00z/ifs/0p25/oper/20261101000000-0h-oper-fc.grib2` (Auflösung `0p25` bzw. `0p1`).
+Daneben liegt eine gleichnamige `.index`-Datei mit einer JSON-Zeile pro Feld. Sie nennt Parameter,
+Fläche und Schritt sowie die Byte-Position in der GRIB-Datei:
+
+```
+{"step": "0", "levtype": "sfc", "param": "2t", "_offset": 224, "_length": 312381, ...}
+```
+
+Damit lädt man per HTTP-Range-Request (`Range: bytes=224-312604`) nur die Felder, die man braucht,
+statt der ganzen Datei. Genau das macht das Python-Paket `ecmwf-opendata` (`pip install ecmwf-opendata`),
+das `scripts/download_ecmwf_data.py` verwendet: `Client.retrieve(param=..., levelist=..., step=...)`
+liest den Index und holt die passenden Byte-Bereiche.
+
+### ICON-D2 (GRIB)
+
+- Download: https://opendata.dwd.de/weather/nwp/icon-d2/grib/
+
+### ERA5-Klimatologie
+
+- Portal: https://cds.climate.copernicus.eu/
+- Dafür braucht es eine Registrierung und einen API-Key in `~/.cdsapirc` (Anleitung:
+  https://cds.climate.copernicus.eu/how-to-api). Im Profil muss außerdem die Lizenz
+  **„CC-BY licence“** akzeptiert sein, sonst antwortet der CDS mit *403 required licences not accepted*.
+- Geladen wird über den Climate Data Store mit dem Python-Paket `cdsapi` (`pip install cdsapi`).
+  Die Daten sind T850 und T2m 1991–2020, alle 3 h, im 0,25°-Gitter, zugeschnitten auf die Box
+  des Europafensters plus 1° Rand. Pro Anfrage wurden 10 Jahre geladen:
+
+```python
+import cdsapi
+
+client = cdsapi.Client()
+common = {
+    "product_type": ["reanalysis"],
+    "year": [str(y) for y in range(1991, 2001)],  # likewise 2001-2010 and 2011-2020
+    "month": [f"{m:02d}" for m in range(1, 13)],
+    "day": [f"{d:02d}" for d in range(1, 32)],     # days a month lacks are ignored
+    "time": [f"{h:02d}:00" for h in range(0, 24, 3)],
+    "area": [75.25, -70.25, 11.75, 76.75],         # north, west, south, east
+    "data_format": "grib",
+    "download_format": "unarchived",
+}
+client.retrieve("reanalysis-era5-pressure-levels",
+                {**common, "variable": ["temperature"], "pressure_level": ["850"]}, "t850_1991-2000.grib")
+client.retrieve("reanalysis-era5-single-levels",
+                {**common, "variable": ["2m_temperature"]}, "t2m_1991-2000.grib")
+```
+
+Aus diesen Rohdaten (rund 75 MB pro Monat und Variable) entstehen Mittel und Streuung pro
+Kalendertag, Termin und Monat in `era5_means.grb2`. Das Skript dafür ist nicht in diesem Repo.
+
+### Ländergrenzen (GeoJSON)
+
+- Portal: https://hub.arcgis.com/datasets/esri::world-countries-generalized
+- Daraus stammt `scripts/lib/world_countries.geojson`.
+
+### Österreichische Bundesländer
+
+- Portal: https://data.bev.gv.at/geonetwork/srv/api/records/6b225349-2bf6-4aa4-8a6c-3a012a79ddea
+- Verwendet wird VGD 1:50 000 als Shapefile, die Eingabe von `scripts/build_borders.py`.
