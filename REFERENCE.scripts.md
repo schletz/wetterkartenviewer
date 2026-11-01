@@ -862,6 +862,7 @@ Parameters are DWD folder names, `<folder>@<hPa>` on pressure levels; each folde
 | Field | Meaning |
 | --- | --- |
 | `BASE_URL`, `RUN_HOURS` (`00`…`21`), `MAX_STEP = 48`, `TIMEOUT_S = 30` | |
+| `RETRIES = 3`, `RETRY_DELAY = 10` s × attempt | per listing; DWD now and then resets a connection (`ConnectionResetError`) |
 | `FOLDER`, `FILE` | regexes on the nginx listing and on `…_icosahedral_…_<run>_<step>_<level>_….grib2.bz2`; a changed listing format means no run is found |
 | `SINGLE_LEVEL, TIME_INVARIANT = '2d', '0'` | level token without `@` |
 
@@ -871,7 +872,8 @@ Parameters are DWD folder names, `<folder>@<hPa>` on pressure levels; each folde
 | `run(run) -> IconRun` | given run if its folder still holds it complete, else `RuntimeError` |
 | `complete_run(hour) -> IconRun \| None` | |
 | `_every_step(run, listed)` | every step from the first listed to 48, also those missing in the listing (they end as 404 and placeholders) |
-| `_split(param)`, `_files(hour, folder)` | `t@850` → (`t`, `850`); HTTP error of a listing is not caught (traceback) |
+| `_split(param)`, `_files(hour, folder)` | `t@850` → (`t`, `850`); a listing still failing after the retries raises `requests.RequestException` |
+| `_listing(url) -> str` | HTML of a listing with retries, used by `_files` and `_folder_time` |
 
 ### IconDownloader (icon_downloader.py)
 
@@ -1168,7 +1170,7 @@ Line: `render opencharts_europe [######..............]  30 % 390/1300 charts, 0:
 | IFS step file missing or message damaged | step left out / skipped; placeholder, warning; derived fields of the step missing; exit 0 |
 | other download error | 3 attempts, then the original exception → traceback (only `RuntimeError` is caught) |
 | aborted download | rerun skips complete raw groups / raw files |
-| ICON: no complete run, `--run` too old, listing HTTP error | `RuntimeError`/`HTTPError`, exit 1; in update_maps only a warning, the ICON window keeps its charts and video (steps recomputed) |
+| ICON: no complete run, `--run` too old, listing still failing after 3 attempts | `RuntimeError`/`RequestException` caught in `main`: one line on stderr, exit 1; in update_maps only a warning, the ICON window keeps its charts and video (steps recomputed) |
 | ICON file lost after retries or damaged | placeholder, warning, exit 0; network down entirely → all placeholders or no templates (exit 1) |
 | first ICON download ever failed | `encode_missing` warns and skips; layer missing in the manifest; the next call renders ICON |
 | renderer fails | `sys.exit` with its output; no manifest; on a new run `maps/<window>/` is already empty (published videos stay in the release) |

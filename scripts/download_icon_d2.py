@@ -54,6 +54,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import requests
+
 # Keep imports working under "python -I", which drops the script directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.forecast_writer import message_spans  # noqa: E402
@@ -86,7 +88,7 @@ def main(argv: list[str]) -> int:
     runs = IconRuns(FORECAST_PARAMS, STATIC_PARAMS)
     try:
         run = runs.run(args.run) if args.run else runs.latest()
-    except RuntimeError as error:
+    except (RuntimeError, requests.RequestException) as error:
         print(error, file=sys.stderr)
         return 1
     print(f"run {run.run}: {len(run.urls)} files", flush=True)

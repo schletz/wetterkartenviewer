@@ -1,6 +1,7 @@
 """Which ICON-D2 runs are published on the open data server of DWD, and which files make up one."""
 
 import re
+import time
 from datetime import datetime
 
 import requests
@@ -12,6 +13,9 @@ BASE_URL = "https://opendata.dwd.de/weather/nwp/icon-d2/grib/"
 RUN_HOURS = tuple(f"{hour:02d}" for hour in range(0, 24, 3))
 MAX_STEP = 48
 TIMEOUT_S = 30
+# The server now and then resets a connection; a listing is requested again after 10 s, then 20 s.
+RETRIES = 3
+RETRY_DELAY = 10
 # "<a href="clct/">clct/</a>   31-Oct-2026 07:22:12   -" in the nginx listings.
 FOLDER = re.compile(r'<a href="([^"/]+)/">[^<]*</a>\s+(\d{2}-\w{3}-\d{4} \d{2}:\d{2}:\d{2})')
 # icon-d2_germany_icosahedral_single-level_2026103106_012_2d_clct.grib2.bz2; the level is "2d" for
@@ -106,7 +110,7 @@ class IconRuns:
     def _folder_time(self, hour: str) -> datetime:
         """Newest time stamp of the parameter folders of a run folder; the oldest possible if unreadable."""
         try:
-            listing = requests.get(f"{BASE_URL}{hour}/", timeout=TIMEOUT_S).text
+            listing = self._listing(f"{BASE_URL}{hour}/")
         except requests.RequestException:
             return datetime.min
         wanted = {self._split(param)[0] for param in (*self.static_params, *self.forecast_params)}
@@ -117,6 +121,23 @@ class IconRuns:
     @staticmethod
     def _files(hour: str, folder: str) -> list[tuple[str, int, str, str]]:
         """(run, step, level, file name) of the icosahedral files in a parameter folder of a run folder."""
-        listing = requests.get(f"{BASE_URL}{hour}/{folder}/", timeout=TIMEOUT_S)
-        listing.raise_for_status()
-        return [(run, int(step), level, name) for name, run, step, level in FILE.findall(listing.text)]
+        listing = IconRuns._listing(f"{BASE_URL}{hour}/{folder}/")
+        return [(run, int(step), level, name) for name, run, step, level in FILE.findall(listing)]
+
+    @staticmethod
+    def _listing(url: str) -> str:
+        """HTML of a directory listing, requested up to RETRIES times.
+
+        Raises:
+            requests.RequestException: if the last attempt fails as well.
+        """
+        for attempt in range(1, RETRIES + 1):
+            try:
+                response = requests.get(url, timeout=TIMEOUT_S)
+                response.raise_for_status()
+                break
+            except requests.RequestException:
+                if attempt == RETRIES:
+                    raise
+                time.sleep(RETRY_DELAY * attempt)
+        return response.text
