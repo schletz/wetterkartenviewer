@@ -13,7 +13,7 @@
     {
       "layers": [
         "opencharts_europe/z500_t850",
-        "opencharts_central_europe/t850_anomaly"
+        "opencharts_europe/t850_anomaly"
       ]
     },
     {
