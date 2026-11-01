@@ -59,6 +59,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.forecast_writer import message_spans  # noqa: E402
 from lib.icon_downloader import IconDownloader  # noqa: E402
 from lib.icon_runs import IconRuns  # noqa: E402
+from lib.progress import Progress  # noqa: E402
 
 # Pressure levels (hPa) of the height profile: they bracket 2000 m (mountain_2000) everywhere;
 # ICON-D2 has no 925 hPa.
@@ -98,9 +99,16 @@ def main(argv: list[str]) -> int:
     raw_dir = out.with_name(out.name + ".raw")
     raw_dir.mkdir(parents=True, exist_ok=True)
     downloader = IconDownloader(raw_dir)
+    progress = Progress("ICON-D2 download", len(run.urls), "files")
+
+    def fetch(url: str) -> Path | None:
+        raw = downloader.fetch(url)
+        progress.advance()
+        return raw
+
     with ThreadPoolExecutor(max_workers=PARALLEL_REQUESTS) as pool:
-        raw_files = list(pool.map(downloader.fetch, run.urls))
-    print(f"downloaded in {time.monotonic() - started:.0f}s", flush=True)
+        raw_files = list(pool.map(fetch, run.urls))
+    print(f"downloaded in {time.monotonic() - started:.0f}s, joining the files", flush=True)
     part = out.with_name(out.name + ".part")
     count = downloader.join(list(run.urls), raw_files, part)
     if count != len(run.urls):

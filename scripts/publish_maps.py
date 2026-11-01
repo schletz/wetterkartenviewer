@@ -23,13 +23,17 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
+from lib.progress import Progress
 from maps_manifest import MANIFEST, read_run, read_window_runs, video_files
 from maps_release import TAG, asset_name
 
 ROOT = Path(__file__).resolve().parent.parent
+# gh processes uploading at a time, one video each.
+PARALLEL_UPLOADS = 4
 
 
 def call(*command: str) -> str:
@@ -61,14 +65,23 @@ def changed_videos(maps: Path, files: list[str]) -> list[str]:
 
 
 def upload_videos(maps: Path, files: list[str]) -> None:
-    """Upload the videos under their asset names, replacing assets of the same name."""
+    """Upload the videos under their asset names, replacing assets of the same name.
+
+    One gh call per video, PARALLEL_UPLOADS at a time, so the progress shows each finished video.
+    """
+    progress = Progress("upload", len(files), "videos", every=0)
     with tempfile.TemporaryDirectory() as staging:
-        # gh names an asset after its file, so the videos are copied under the flat asset names first.
-        paths = []
-        for file in files:
-            paths.append(str(Path(staging) / asset_name(file)))
-            shutil.copyfile(maps / file, paths[-1])
-        call("gh", "release", "upload", TAG, *paths, "--clobber")
+
+        def send(file: str) -> str:
+            # gh names an asset after its file, so the video is copied under its flat asset name first.
+            path = Path(staging) / asset_name(file)
+            shutil.copyfile(maps / file, path)
+            call("gh", "release", "upload", TAG, str(path), "--clobber")
+            return file
+
+        with ThreadPoolExecutor(PARALLEL_UPLOADS) as pool:
+            for future in as_completed([pool.submit(send, file) for file in files]):
+                progress.advance(future.result())
     print(f"uploaded {len(files)} videos to release {TAG}")
 
 
@@ -103,12 +116,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("maps", type=Path, help="video directory of the viewer")
     args = parser.parse_args()
+    # Whole lines at once, also when the output goes to a file or an agent.
+    sys.stdout.reconfigure(line_buffering=True)
     run, files = read_run(args.maps), video_files(args.maps)
     if run is None or not files:
         sys.exit(f"{args.maps / MANIFEST} is missing or lists no video; run update_maps.py first")
     missing = [file for file in files if not (args.maps / file).is_file()]
     if missing:
         sys.exit(f"videos listed in the manifest are missing: {', '.join(missing)}; run update_maps.py")
+    print(f"comparing {len(files)} videos with the assets of release {TAG}")
     ensure_release()
     changed = changed_videos(args.maps, files)
     if changed:
@@ -117,6 +133,7 @@ def main() -> None:
         print("every video is up to date in the release")
     prune_assets(files)
     commit_manifest(args.maps, run)
+    print("pushing")
     # Pushes also local commits of code changes; a push of an unchanged HEAD is a no-op.
     call("git", "push", "-q", "origin", "HEAD")
     print(f"charts of run {run} published")

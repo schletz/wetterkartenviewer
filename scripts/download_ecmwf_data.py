@@ -74,6 +74,7 @@ from lib.forecast_writer import ForecastWriter  # noqa: E402
 from lib.grib_cropper import GribCropper  # noqa: E402
 from lib.group_downloader import GroupDownloader  # noqa: E402
 from lib.open_data_runs import MAX_STEP, OpenDataRuns  # noqa: E402
+from lib.progress import Progress  # noqa: E402
 from lib.projection import PROJECTIONS  # noqa: E402
 from lib.request_plan import RequestPlan  # noqa: E402
 
@@ -122,14 +123,17 @@ def main(argv: list[str]) -> int:
     # re-raised by result() after the block.
     with open(os.devnull, "w", encoding="utf-8") as devnull, contextlib.redirect_stderr(devnull):
         # A few groups in parallel; each one already fetches its steps by byte ranges.
+        progress = Progress("ECMWF download", len(plan.groups), "groups", every=0)
         with ThreadPoolExecutor(max_workers=PARALLEL_REQUESTS) as pool:
             futures = [pool.submit(downloader.retrieve, name, req) for name, req in plan.groups.items()]
+            for future in futures:
+                future.add_done_callback(lambda _: progress.advance())
     try:
         raw_files = [future.result() for future in futures]
     except RuntimeError as error:
         print(error, file=sys.stderr)
         return 1
-    print(f"downloaded in {time.monotonic() - started:.0f}s", flush=True)
+    print(f"downloaded in {time.monotonic() - started:.0f}s, cropping the fields", flush=True)
 
     cropper = GribCropper.for_windows(list(PROJECTIONS.values()))
     part = out.with_name(out.name + ".part")

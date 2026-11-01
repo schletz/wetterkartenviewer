@@ -38,6 +38,8 @@ from pathlib import Path
 
 from azure.storage.blob import BlobServiceClient, ContainerClient, ContentSettings, StandardBlobTier
 
+from lib.progress import Progress
+
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 ACCOUNT_VARIABLE, KEY_VARIABLE = "BLOB_STORAGE_ID", "BLOB_STORAGE_KEY"
 CONTAINER = "forecastdata"
@@ -146,13 +148,22 @@ def mirror(data: Path) -> None:
     files = local_files(data)
     blobs = {blob.name: blob for blob in container.list_blobs(include=["metadata"])}
     marked = blobs.pop(RUN_FILE, None) is not None
-    uploads = stale_files(files, blobs)
+    # Largest first: the GRIBs keep their threads busy while the charts fill the others.
+    uploads = sorted(stale_files(files, blobs), key=lambda name: files[name].stat().st_size, reverse=True)
     obsolete = sorted(set(blobs) - set(files))
     if (uploads or obsolete) and marked:
         container.delete_blob(RUN_FILE)
-    with ThreadPoolExecutor(PARALLEL_UPLOADS) as pool:
-        # list() collects the results, so the first failed upload raises here.
-        list(pool.map(lambda name: upload(container, name, files[name]), uploads))
+    if uploads:
+        # Counted in MB, as one GRIB weighs as much as hundreds of charts.
+        progress = Progress("blob upload", sum(files[name].stat().st_size for name in uploads) / MB, "MB")
+
+        def send(name: str) -> None:
+            upload(container, name, files[name])
+            progress.advance(amount=files[name].stat().st_size / MB)
+
+        with ThreadPoolExecutor(PARALLEL_UPLOADS) as pool:
+            # list() collects the results, so the first failed upload raises here.
+            list(pool.map(send, uploads))
     delete(container, obsolete)
     if uploads or obsolete or not marked:
         write_run_file(container, current_runs(files))

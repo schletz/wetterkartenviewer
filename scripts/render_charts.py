@@ -84,6 +84,7 @@ from lib.icon_products import IconProducts  # noqa: E402
 from lib.icon_surface import IconSurface  # noqa: E402
 from lib.model_surface import ModelSurface  # noqa: E402
 from lib.pixel_grid import PixelGrid  # noqa: E402
+from lib.progress import Progress  # noqa: E402
 from lib.projection import EUROPE, ICON_D2, PROJECTIONS, Projection  # noqa: E402
 from lib.t850_climate import T850Climate  # noqa: E402
 from lib.triangle_grid import TriangleGrid  # noqa: E402
@@ -218,10 +219,16 @@ def main(argv: list[str]) -> int:
     climate_dir = args.climate if any(name in ChartProducts.CLIMATE for name in args.products) else None
     products = build_products(args.grib, projection, climate_dir)
     tasks = [(name, key, out_dir) for name in args.products for key in products.keys(name)]
-    print(f"run {products.grib.base_time:%Y%m%d%H}, {projection.name}: {len(tasks)} charts", flush=True)
+    print(f"run {products.grib.base_time:%Y%m%d%H}, {projection.name}: {len(args.products)} products", flush=True)
+    progress = Progress(f"render {projection.name}", len(tasks), "charts")
+    written = []
     with ProcessPoolExecutor(max_workers=args.workers, initializer=init_worker,
                              initargs=(args.grib, projection.name, climate_dir)) as pool:
-        written = list(pool.map(render, tasks, chunksize=2))
+        # map yields in task order, so a line can lag behind a chunk that finished out of turn.
+        for path in pool.map(render, tasks, chunksize=2):
+            written.append(path)
+            progress.advance()
+    print(f"{projection.name}: contact sheets and geometry", flush=True)
     sheet = ContactSheet()
     sheets = write_sheets(products, args.products, out_dir, sheet)
     write_geometry(projection, products, sheet, sheets, out_dir)

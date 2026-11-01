@@ -38,16 +38,20 @@ Usage: python scripts/update_maps.py data maps [--base YYYYMMDDHH] [--icon-run Y
 """
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
-from concurrent.futures import ThreadPoolExecutor
+import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from pathlib import Path
 
 from azure.core.exceptions import AzureError
 
 from blob_mirror import mirror
 from lib.climate_archive import DIRECTORY as CLIMATE_DIRECTORY, ClimateArchive
+from lib.progress import Progress
 from maps_manifest import (MANIFEST, chart_frames, read_run, read_window_runs, tile_chart_paths, video_file,
                            write_manifest)
 from tile_videos import encode_video
@@ -60,6 +64,25 @@ ICON_WINDOWS = {"icon-d2": None}
 ECMWF_PREFIX, ICON_PREFIX = "ecmwf_", "icon-d2_"
 # ffmpeg processes at a time; libaom uses several threads each.
 PARALLEL_ENCODES = 3
+
+
+def stage(text: str) -> None:
+    """Announce a phase of the update with the local time, so a log shows where the time goes."""
+    print(f"[{datetime.now():%H:%M:%S}] {text}")
+
+
+def run_live(command: list[str], stderr=None) -> tuple[int, str]:
+    """Run a script and pass its stdout on line by line as it comes; returns the exit code and its last non-empty line.
+
+    PYTHONUNBUFFERED makes the script write each line at once instead of in blocks into the pipe.
+    """
+    last = ""
+    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=stderr, text=True, encoding="utf-8",
+                          env={**os.environ, "PYTHONUNBUFFERED": "1"}) as process:
+        for line in process.stdout:
+            print(line, end="")
+            last = line.strip() or last
+    return process.returncode, last
 
 
 def check_climate(data: Path) -> None:
@@ -79,14 +102,9 @@ def check_climate(data: Path) -> None:
 
 def download(script: str, data: Path, options: list[str]) -> Path | None:
     """Run a downloader with its output shown live; returns the GRIB path (its last line), None if it failed."""
-    command = [sys.executable, str(SCRIPTS / script), str(data), *options]
-    last = ""
-    with subprocess.Popen(command, stdout=subprocess.PIPE, text=True, encoding="utf-8") as process:
-        for line in process.stdout:
-            print(line, end="", flush=True)
-            last = line.strip() or last
-    if process.returncode:
-        print(f"{script} failed with exit code {process.returncode}", file=sys.stderr)
+    code, last = run_live([sys.executable, str(SCRIPTS / script), str(data), *options])
+    if code:
+        print(f"{script} failed with exit code {code}", file=sys.stderr)
         return None
     return Path(last)
 
@@ -103,16 +121,21 @@ def remove_old_runs(data: Path, grib: Path, prefix: str) -> None:
             print(f"removed {old}")
 
 
-def render(grib: Path, data: Path, window: str) -> str:
-    """Render the products of one window into data/; returns the output of the renderer."""
+def render(grib: Path, data: Path, window: str) -> None:
+    """Render the products of one window into data/, with the progress of the renderer shown live.
+
+    Its stderr is held back and shown only if it fails.
+    """
     command = [sys.executable, str(SCRIPTS / "render_charts.py"), str(grib), str(data), "--projection", window]
     products = {**WINDOWS, **ICON_WINDOWS}[window]
     if products:
         command += ["--products", products]
-    result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
-    if result.returncode:
-        sys.exit(f"rendering {window} failed:\n{result.stdout}{result.stderr}")
-    return result.stdout
+    # A file instead of a pipe: a pipe nobody reads until the end could fill up and block the renderer.
+    with tempfile.TemporaryFile() as errors:
+        code, _ = run_live(command, stderr=errors)
+        if code:
+            errors.seek(0)
+            sys.exit(f"rendering {window} failed (output above):\n{errors.read().decode('utf-8', 'replace')}")
 
 
 def stale_windows(data: Path, maps: Path, windows: dict, same_run: bool, run: str) -> list[str]:
@@ -145,13 +168,18 @@ def encode_missing(data: Path, maps: Path, run: str) -> None:
     if missing:
         sys.exit(f"no charts in {data} for {', '.join(missing)}; render them or remove them from the tiles")
 
+    if not paths:
+        print("every video is encoded")
+        return
+
     def encode(path: str) -> str:
         encode_video([chart for _, chart in chart_frames(data, path, run)], maps / video_file(path))
         return path
 
+    progress = Progress("encode", len(paths), "videos", every=0)
     with ThreadPoolExecutor(PARALLEL_ENCODES) as pool:
-        for path in pool.map(encode, paths):
-            print(f"encoded {video_file(path)}", flush=True)
+        for future in as_completed([pool.submit(encode, path) for path in paths]):
+            progress.advance(video_file(future.result()))
 
 
 def main() -> None:
@@ -162,15 +190,19 @@ def main() -> None:
     parser.add_argument("--icon-run", help="ICON-D2 run YYYYMMDDHH instead of the newest one")
     parser.add_argument("--force", action="store_true", help="render and encode even if the manifest has the runs")
     args = parser.parse_args()
+    # Whole lines at once, also when the output goes to a file or an agent.
+    sys.stdout.reconfigure(line_buffering=True)
     args.data.mkdir(parents=True, exist_ok=True)
     args.maps.mkdir(parents=True, exist_ok=True)
 
     check_climate(args.data)
+    stage("ECMWF download")
     grib = download("download_ecmwf_data.py", args.data, ["--base", args.base] if args.base else [])
     if grib is None:
         sys.exit("ECMWF download failed")
     run = grib.stem.removeprefix(ECMWF_PREFIX)
     remove_old_runs(args.data, grib, ECMWF_PREFIX)
+    stage("ICON-D2 download")
     icon_grib = download("download_icon_d2.py", args.data, ["--run", args.icon_run] if args.icon_run else [])
     if icon_grib is None:
         print("warning: ICON-D2 download failed; its window keeps the charts it has", file=sys.stderr)
@@ -193,16 +225,21 @@ def main() -> None:
         print(f"charts of runs {run} (ECMWF) and {icon_run or 'unchanged'} (ICON-D2) are already rendered")
     for window in renders:
         shutil.rmtree(args.data / window, ignore_errors=True)
+    if renders:
+        stage(f"render {', '.join(renders)}")
     # The renderer spreads over all CPUs; the windows in parallel still finish sooner than one after the other.
+    # list() collects the results, so a failed renderer exits here.
     with ThreadPoolExecutor(max(len(renders), 1)) as pool:
-        for output in pool.map(lambda window: render(renders[window], args.data, window), renders):
-            print(output, end="")
+        list(pool.map(lambda window: render(renders[window], args.data, window), renders))
+    stage("encode videos")
     encode_missing(args.data, args.maps, run)
     print(write_manifest(args.data, args.maps, run))
+    stage("blob mirror")
     try:
         mirror(args.data)
     except AzureError as error:
         print(f"warning: blob mirror failed, the next call uploads the rest: {error}", file=sys.stderr)
+    stage("done")
 
 
 if __name__ == "__main__":

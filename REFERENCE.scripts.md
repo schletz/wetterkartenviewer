@@ -20,7 +20,7 @@ The API sections follow Javadoc: intro, fields, methods per module or class.
 
 Stereotypes: `<<script>>` command line, `<<module>>` functions and constants only, a `D` spot names the diagram that describes the element.
 Class diagrams: solid arrow = holds an instance (constructor injection), dashed = creates or calls, triangle = inherits.
-Not drawn: the constant modules `constants.py`, `local_params.py`, `fonts.py`.
+Not drawn: the constant modules `constants.py`, `local_params.py`, `fonts.py`, and `progress.py` (used by every long step, see *Progress*).
 
 ### pipeline: data flow between scripts, files and external systems
 
@@ -603,6 +603,7 @@ download_loop.sh [--yes] every 600 s: git fetch, reset --hard origin/main, downl
 ```
 
 Status on stdout, errors on stderr. Downloaders print the absolute GRIB path as their last stdout line and exit 0 with "already on disk" if the target is complete.
+Output is whole lines only, never `\r`, so a terminal, a log file and an agent reading redirected output see the same. update_maps.py prints `[HH:MM:SS] <phase>` before each phase (ECMWF download, ICON-D2 download, render, encode videos, blob mirror, done) and passes its subprocesses' stdout on line by line; long steps print `Progress` lines (*Progress*). update_maps.py and publish_maps.py set `sys.stdout` to line buffering.
 `download_ecmwf_data.py` and `download_icon_d2.py`, `render_charts.py`, `make_icon_test_grib.py` put their own folder on `sys.path` (work with `python -I`); `update_maps.py`, `maps_manifest.py`, `publish_maps.py`, `fetch_maps.py`, `blob_mirror.py` import their sibling modules without `-I`.
 Python packages (no requirements file): `ecmwf-opendata`, `eccodes`, `numpy`, `scipy`, `matplotlib` (Agg), `Pillow`, `requests`, `azure-storage-blob` (update_maps.py imports it also without credentials); build_borders.py also `pyshp`, `shapely` ≥ 2.1, `pyproj`. `ffmpeg` with `libaom-av1` must be on PATH.
 
@@ -626,17 +627,19 @@ Without a new run a call takes ≈ 3.5 s.
 
 | Function | Summary |
 | --- | --- |
+| `stage(text)` | `[HH:MM:SS] text`, local time |
+| `run_live(command, stderr=None) -> (code, last line)` | Popen with `PYTHONUNBUFFERED=1` (else the child writes the pipe in blocks), prints each stdout line as it arrives |
 | `check_climate(data)` | exit if `data/era5_means` has no `*.grb2`, before any download or delete |
-| `download(script, data, options) -> Path \| None` | run a downloader with live output; last non-empty line = GRIB path; None on exit ≠ 0 |
+| `download(script, data, options) -> Path \| None` | `run_live`, stderr inherited; last non-empty line = GRIB path; None on exit ≠ 0 |
 | `remove_old_runs(data, grib, prefix)` | delete `<prefix>*.grb2*` (file, `.part`, `.raw/`) of other runs |
-| `render(grib, data, window) -> str` | run render_charts.py for one window; `sys.exit` with its output if it fails |
+| `render(grib, data, window)` | `run_live` of render_charts.py for one window, stdout live; stderr goes to a temp file (an unread pipe could block the renderer) and is shown only in the `sys.exit` on failure. Windows render in parallel threads, so their lines interleave; every renderer line names its window |
 | `stale_windows(data, maps, windows, same_run, run) -> list` | windows to render; empties `maps/<window>/` unless same run; same run: window folder missing or a tile path without charts (incomplete product folders are not checked) |
-| `encode_missing(data, maps, run)` | encode config paths without video; exits before the first encode if a non-ICON path has no charts |
+| `encode_missing(data, maps, run)` | encode config paths without video; exits before the first encode if a non-ICON path has no charts; `Progress` line per finished video (`as_completed`) |
 
 ### blob_mirror.py
 
 `mirror(data)` makes the container `forecastdata` hold exactly the finished files of `data/` (all but paths with a part ending in `.part`/`.raw`); blob name = path relative to `data/`. Called last in update_maps.py, also when nothing was rendered, so a failed upload heals on the next call; without changes it only lists the container.
-Changed = blob missing, other size, or metadata `mtime` ≠ local `st_mtime_ns` (no hash). Order when something changed: delete `current_run.json`, upload, batch-delete blobs without a local file, write `current_run.json` (`{"ecmwf": run, "icon-d2": run, "updated": UTC ISO}`, runs from the top-level GRIB names, `Cache-Control: no-cache`). Re-rendered charts change in place, so the container is consistent only while `current_run.json` exists; the skill's `fetch_data.py` reads it before and after downloading and rejects a missing or changed one. A call without changes leaves it alone or writes it if a failed call left none.
+Changed = blob missing, other size, or metadata `mtime` ≠ local `st_mtime_ns` (no hash). Uploads go largest first (the GRIBs occupy threads while charts fill the rest), with `Progress` counted in MB, since one GRIB weighs as much as hundreds of charts. Order when something changed: delete `current_run.json`, upload, batch-delete blobs without a local file, write `current_run.json` (`{"ecmwf": run, "icon-d2": run, "updated": UTC ISO}`, runs from the top-level GRIB names, `Cache-Control: no-cache`). Re-rendered charts change in place, so the container is consistent only while `current_run.json` exists; the skill's `fetch_data.py` reads it before and after downloading and rejects a missing or changed one. A call without changes leaves it alone or writes it if a failed call left none.
 Tier hot per blob although the account defaults to cool: cool blobs deleted within 30 days are billed for 30 days, and every run replaces GB. No versioning, soft delete off (per user).
 Credentials: `BLOB_STORAGE_ID` (account name or its resource ID, last segment taken) and `BLOB_STORAGE_KEY` (account key); environment before `.env` in the repo root (`KEY=VALUE` lines, ignored by git). Missing → notice on stdout, nothing happens.
 
@@ -698,12 +701,16 @@ Uploads first, then pushes, so the deploy of the new manifest finds every video.
 Pushes `HEAD` without asking, including local code commits; the commit holds only the manifest, other staged changes stay staged. History grows ≈ 20 KB per run. `gh` must be installed and logged in.
 Aborts before any upload without manifest, without videos in it, or if one is missing.
 
+| Field | Meaning |
+| --- | --- |
+| `PARALLEL_UPLOADS = 4` | gh processes at once, one video each |
+
 | Function | Summary |
 | --- | --- |
-| `call(*command) -> str` | run in the repo root; `sys.exit` with stderr on failure |
+| `call(*command) -> str` | run in the repo root; `sys.exit` with stderr on failure (in an upload thread it surfaces via `future.result()`) |
 | `ensure_release()` | create release `tile-videos` on first use, `--latest=false` |
 | `changed_videos(maps, files) -> list` | asset missing, other size, or `updatedAt` older than the file mtime; no hash, so equal size + older mtime from another machine goes unnoticed |
-| `upload_videos(maps, files)` | copies under asset names into a temp dir, `gh release upload --clobber` |
+| `upload_videos(maps, files)` | per video: copy under its asset name into a temp dir, `gh release upload --clobber` (deletes the old asset first); one gh call per video so `Progress` can report each |
 | `prune_assets(files)` | delete assets the manifest does not list: videos of earlier runs exist nowhere afterwards |
 | `commit_message(maps, run) -> str` | "Data update <run>z" + ", <window> <run>z" per window of another run |
 | `commit_manifest(maps, run)` | `git add` + `git commit -- maps/manifest.json` if it changed |
@@ -717,7 +724,7 @@ Workflow `.github/workflows/deploy.yml`: on push to `main` or manually; Node 24,
 ### download_ecmwf_data.py
 
 `main`: `OpenDataRuns.latest()` (or `--base`, 00/12 only) → `RequestPlan` → "already on disk" if `output_complete` → `GroupDownloader.retrieve` × 4 threads into `<out>.raw/` → `ForecastWriter.write` into `<out>.part` → `DerivedWriter.append` → rename → delete `.raw/` unless `--keep-raw`.
-stderr is redirected to devnull during the group downloads (the client's progress bars cannot be switched off), so warnings go to stdout there.
+stderr is redirected to devnull during the group downloads (the client's progress bars cannot be switched off), so warnings go to stdout there; `Progress` counts finished groups via `add_done_callback`. The crop and derived-field steps print one line each when done.
 `out` is treated as a folder only if it exists. `--max-step` with a folder target still writes `ecmwf_<run>.grb2`; a later full call sees another count and downloads again.
 
 | Field | Meaning |
@@ -728,7 +735,7 @@ stderr is redirected to devnull during the group downloads (the client's progres
 ### download_icon_d2.py
 
 `main`: `IconRuns.latest()` (or `run(--run)`, only runs DWD still holds) → "already on disk" if the target has one message per URL (the listings are always queried, no offline mode) → `IconDownloader.fetch` × 8 threads → `join` into `<out>.part` → exit 1 if messages ≠ URLs (`.part`, `.raw/` stay) → rename → delete `.raw/`.
-Measured: 1130 files, 820 MB, 43–138 s depending on the network.
+Measured: 1130 files, 820 MB, 43–138 s depending on the network. `Progress` counts files (every 10 %), the wrapper `fetch` advances it in the worker threads.
 
 | Field | Meaning |
 | --- | --- |
@@ -740,6 +747,7 @@ Measured: 1130 files, 820 MB, 43–138 s depending on the network.
 
 `main`: `parse_args` picks the class by `is_icon` and the default window (`icon-d2` or `opencharts_europe`) and products (`DEFAULTS[window]` of the class; `KeyError` if the window has no entry and no `--products`). `build_products` once in the main process (for `keys`, sheets, geometry), then a process pool (`init_worker` builds the products per process, chunksize 2) renders every `(product, key)`; then `write_sheets` (reads the written WebPs, so it must run after the workers) and `write_geometry`.
 Measured ICON, all products: 199 charts + 6 sheets ≈ 43 s with a warm file cache, ≈ 148 s right after the download.
+Output: `run <run>, <window>: N products`, `Progress` lines `render <window>` per 10 % of the charts (from `pool.map` in task order, so a line can lag behind chunks that finished out of turn), `<window>: contact sheets and geometry`, summary.
 On Windows the pool uses spawn; worker state lives in the module global `_products`.
 
 | Function | Summary |
@@ -1133,6 +1141,24 @@ chart_styles.py holds every scale and threshold:
 | `MOUNTAIN_HEIGHT_M = 2000`, `SUMMIT_CLOUD_RH = 95` | chart height (defined apart from `MOUNTAIN_HEIGHTS`), IFS in cloud |
 | `ICON_SUMMIT_CLOUD_RH = 90`, `SUMMIT_CLOUD_AREA = 50` | ICON cell in cloud, hatched share |
 | `VALUE_SPACING_PX = 80` | printed values, detail windows only |
+
+## API: scripts/lib/ — shared
+
+### Progress (progress.py)
+
+Line-wise progress for every long step; used by update_maps.py (encode), render_charts.py, both downloaders, blob_mirror.py, publish_maps.py (upload). Prints a first line on construction (the task's size before its first item), then whenever a step of `every` percent is passed, for the last item, and `HEARTBEAT_S` after the previous line. Plain ASCII, so a cp1252 console and the UTF-8 pipe of update_maps.py both work. Thread-safe (`threading.Lock`); time left = elapsed × remaining / done, so `amount` should reflect the work (MB in blob_mirror).
+Line: `render opencharts_europe [######..............]  30 % 390/1300 charts, 0:45, 1:45 left[: <item>]`.
+
+| Field | Meaning |
+| --- | --- |
+| `BAR_WIDTH = 20` | characters of the bar |
+| `HEARTBEAT_S = 30` | a finished item prints a line at the latest after this, also within the same percent step |
+
+| Method | Summary |
+| --- | --- |
+| `Progress(label, total, unit='', every=10)` | `every=0`: a line per item (videos, ECMWF groups); `total=0` prints 100 % at once |
+| `advance(item='', amount=1)` | count done; `item` ends the line |
+| `duration(seconds) -> str` (static) | `m:ss`, from one hour `h:mm:ss` |
 
 ## Errors
 
