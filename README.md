@@ -1,5 +1,7 @@
 # Wetterkartenviewer
 
+![Screenshot des Viewers](screenshot.jpg)
+
 Zeigt selbst gerenderte Karten des ECMWF IFS und des DWD-Modells ICON-D2 (Österreich, stündlich
 bis +48 h) mit einem Zeitslider und auf der Startseite drei ECMWF-ENS-Meteogramme.
 Die Seite: https://schletz.github.io/wetterkartenviewer/
