@@ -1,6 +1,6 @@
 ---
 name: synop
-description: Synoptische 10-Tage-Analyse für einen Ort oder eine Region in Europa als HTML-Bericht (Fließtext pro Tag, Diagramm von T850 und Schichtdicke), aus einem Datenordner mit GRIB-Dateien und Karten eines ECMWF-Laufs und eines ICON-D2-Laufs (stündlich bis +48 h für den Alpenraum und Deutschland) und Zahlentabellen am Ort. Deutet Tröge, Rücken, Höhentiefs, Fronten, Luftmassen, Föhn, Inversionen und Hochnebel, sagt in den ersten zwei Tagen Gewitter, Nebel, Niederschlag und Böen aus ICON-D2 vorher, liefert Bergwetter (Temperatur und Wind auf 2000–3000 m, Nullgradgrenze, Schneefallgrenze, z. B. für Schifahrer) und bewertet Anomalien gegen eine Klimatologie 1991–2020 (T850, T2m). Nutze diesen Skill immer bei Fragen nach Wetterlage, Großwetterlage, Wettertrend, Mittelfristprognose oder Bergwetter, zum Deuten von ECMWF- oder ICON-D2-Daten oder ob die vorhergesagte Luftmasse für die Jahreszeit ungewöhnlich ist, z. B. "wie wird das Wetter in Wien die nächsten Tage", "Prognose für Österreich", "kommt nächste Woche Kaltluft nach Graz", "wie ist das Schiwetter am Arlberg", "wo wird es nächste Woche abnormal kalt", "ist die Kaltluft für Ende März normal", auch englisch ("synoptic analysis", "weather outlook for Vienna"). NICHT für aktuelle Messwerte, vergangenes Wetter, reine Klimastatistik ohne Vorhersage, andere Modelle (GFS, ICON global oder ICON-EU) oder Orte außerhalb Europas.
+description: Wetterprognose und synoptische 10-Tage-Analyse für Orte in Europa aus ECMWF- und ICON-D2-Daten, im Chat oder als HTML-Bericht. Nur aufrufen, wenn der Nutzer den Skill synop ausdrücklich anfordert (/synop oder "mit dem Skill synop"), nie von dir aus, auch nicht bei Wetterfragen: Der Skill lädt über 1 GB Modelldaten.
 ---
 
 # Synoptische Analyse aus ECMWF- und ICON-D2-Daten
@@ -48,6 +48,24 @@ Die Analyse beruht auf je einem Lauf pro Modell (Open Data). Daraus folgt zweier
 
 Zieh deshalb keine anderen Quellen heran (Wetterdienste, Meteogramme, Websuche). Der Nutzer will
 sehen, was die Modelle hergeben, und eine Mischung verschleiert, woher eine Aussage stammt.
+
+## Chat oder Bericht
+
+Entscheide anhand der Anfrage, was der Nutzer braucht. Ein Laie will wissen, wie das Wetter wird;
+ein ausführlicher Bericht mit Luftmassen und Diagramm wäre für ihn nur Ballast.
+
+- **Chat** bei Fragen wie von einem Laien: „Wie wird das Wetter in Wien?“, „Wie wird das Wetter
+  der kommenden Tage?“, „Kann ich am Wochenende wandern gehen?“. Gib nur den Absatz für Endkunden
+  (siehe „Absatz für Endkunden“) im Chat aus, davor eine Zeile mit den beiden Läufen. Keine Datei, kein
+  Diagramm. Eine gezielte Einzelfrage („Ist die Kaltluft für Ende März normal?“) beantwortest du
+  direkt in wenigen Sätzen.
+- **HTML-Bericht**, wenn der Nutzer eine Analyse verlangt: „Erstelle eine synoptische Analyse“,
+  „Erstelle eine Analyse“, „Mach mir einen Bericht“. Dann liest du zusätzlich
+  `references/html_report.md`.
+
+Im Zweifel nimm den Chat und biete am Ende den Bericht an. Die Analyse dahinter (Schritte 1–5 und
+das Deuten) ist in beiden Fällen dieselbe: Der Absatz für Endkunden ist nur so gut wie die Deutung
+der einzelnen Tage, auch wenn sie nicht ausgegeben wird.
 
 ## Ablauf
 
@@ -382,18 +400,16 @@ Zum Auswerten:
   7 ms, danach ist es zwischengespeichert. Ein Jahresgang braucht so rund 2,5 s, und für die ganze
   Region hat er Millionen Zeilen. Schneide deshalb früh auf Tag, Monat oder Punkt zu.
 
-## Ausgabe: HTML-Bericht
+## Ausgabe
 
-Das Ergebnis ist eine eigenständige HTML-Datei. Sie enthält die Analyse und ein eingebettetes
-SVG-Diagramm von T850 und Schichtdicke, darunter die Datentabelle zum Aufklappen. Du schreibst nur
-den Text als Markdown, Diagramm und HTML erzeugen Skripte deterministisch. So bleibt der Bericht bei
-jedem Aufruf gleich aufgebaut, und das SVG muss nicht durch deinen Kontext. Bei einer Region nimm
-für Diagramm und Tabelle den wichtigsten Punkt.
+Schreib in der Sprache des Nutzers. Im Chat gibst du den Absatz für Endkunden aus (siehe „Chat oder
+Bericht“). Für den HTML-Bericht lies zusätzlich `references/html_report.md`: Aufbau des Texts,
+Tagestexte, Diagramm und HTML. Die folgenden Regeln gelten für beides.
 
-### Text schreiben
+### Tage einteilen
 
-Schreib die Analyse nach `<arbeitsverzeichnis>/analyse_<ort>.md`, in der Sprache des Nutzers. Teile
-nach Kalendertagen in Ortszeit ein (Daten in UTC, für Mitteleuropa z. B. MEZ = UTC+1, MESZ = UTC+2).
+Teile nach Kalendertagen in Ortszeit ein (Daten in UTC, für Mitteleuropa z. B. MEZ = UTC+1, MESZ =
+UTC+2).
 
 - **Start:** Beim 00z-Lauf ist Tag 1 der heutige Tag. Beschreib ihn ab der aktuellen Uhrzeit,
   Vergangenes interessiert nicht. Beim 12z-Lauf, der erst abends verfügbar ist, ist Tag 1 morgen.
@@ -409,21 +425,11 @@ nach Kalendertagen in Ortszeit ein (Daten in UTC, für Mitteleuropa z. B. MEZ = 
   Christi Himmelfahrt oder Fronleichnam hängen am Ostertermin, und beim Kopfrechnen passieren dabei
   leicht Fehler.
 
-```
-# Synoptische Analyse <Ort> – ECMWF <TT.MM.JJJJ HH>z, ICON-D2 <TT.MM. HH>z
+### Absatz für Endkunden
 
-<Absatz für Endkunden: das Wetter am Boden für die 10 Tage>
-
-<2–4 Sätze synoptischer Überblick: welche Großwetterlagen in welcher Abfolge, wichtigste Umstellung>
-
-## <Wochentag, TT.MM.>
-
-<Fließtext, ein bis zwei Absätze>
-```
-
-**Der Absatz für Endkunden** steht ganz oben und richtet sich an Leser ohne meteorologisches
-Vorwissen. Sie wollen wissen, wie das Wetter wird, nicht warum. Schreib ihn deshalb zuletzt, wenn
-die Tage analysiert sind, als einen zusammenhängenden Absatz von etwa 6–10 Sätzen.
+Der Absatz richtet sich an Leser ohne meteorologisches Vorwissen. Sie wollen wissen, wie das Wetter
+wird, nicht warum. Im Bericht steht er ganz oben, im Chat ist er die Antwort. Schreib ihn zuletzt,
+wenn die Tage analysiert sind, als einen zusammenhängenden Absatz von etwa 6–10 Sätzen.
 
 - **Gliederung:** nach Wetterabschnitten, nicht Tag für Tag. Eine Phase umfasst die Tage mit
   ähnlichem Wetter, benannt mit Wochentagen in Ortszeit („Am Wochenende …“, „Ab Dienstag …“).
@@ -446,65 +452,9 @@ die Tage analysiert sind, als einen zusammenhängenden Absatz von etwa 6–10 S�
 - **Sprache:** kein Fachjargon wie T850, Trog, Advektion oder dam.
 - **Schluss:** ein Satz, ab wann die Aussagen unsicher werden.
 
-Jeder Tagestext behandelt der Reihe nach:
-
-1. die Großwetterlage in der Höhe und am Boden und wo der Ort darin liegt,
-2. die Luftmasse mit Werten aus der Tabelle (T850, Dicke),
-3. das daraus folgende Wetter am Ort: Bewölkung, Niederschlag und seine Art, Wind, Höchstwerte als
-   Spanne, bei Bedarf das Bergwetter,
-4. bei Ereignissen auch den Zeitpunkt.
+### Unsicherheit
 
 Ab Tag 5 (Tag 1 wie oben definiert) werden die Aussagen unsicherer. Formuliere entsprechend
 vorsichtiger („laut diesem Lauf“, „Tendenz“) und beschränke dich in den Tagen 7–10 auf
 Großwetterlage, Luftmasse und die Temperaturtendenz. Nenne keine Niederschlagsmengen und keine
 exakten Temperaturen, die Daten geben sie nicht her.
-
-Der Konverter kennt nur die Elemente der Vorlage: Überschriften `#` bis `###`, Absätze, Listen mit
-`- ` sowie `**fett**` und `*kursiv*`. Tabellen, Links und Bilder lässt du weg.
-
-### Diagramm
-
-```
-python <skill-dir>/scripts/generate_diagram.py <arbeitsverzeichnis>/data_<ort>_ecmwf.tsv --climate <data>/era5_means --lat 48.21 --lng 16.37 --out <arbeitsverzeichnis>/diagram_<ort>.svg
-```
-
-Die x-Achse zeigt Tage in UTC mit Strichen alle 3 h, links T850, rechts die Schichtdicke.
-
-Eine graue Linie zeigt das Mittel von T850 der Klimatologie am Ort, für Tageszeit und Kalendertag jedes
-Termins. Die Fläche zwischen ihr und der Vorhersage ist rot, wo die Vorhersage wärmer ist, und
-blau, wo sie kälter ist. Jenseits von 1, 2 und 3 σ wird sie jeweils eine Stufe kräftiger, der
-Tooltip nennt die Abweichung in σ. So sieht der Leser auf einen Blick, ob die Luftmasse für die
-Jahreszeit ungewöhnlich ist. Deshalb braucht das Skript Breite und Länge des Ortes, bei einer
-Region die des Punkts aus der Tabelle.
-
-Mittel und Streuung stammen aus der Klimatologie derselben Tageszeit wie der Termin
-(`lib/t850_climate.py`). Die Tagesmittel nimmt das Skript nicht, weil sie den Tagesgang wegmitteln.
-
-Beide Skalen sind gekoppelt: 1,6 dam pro K, 0 °C entspricht 544 dam. Bei typischen Luftmassen
-liegen deshalb beide Kurven übereinander. Liegt die Dicke deutlich unter der T850-Kurve, ist die
-Luftsäule im Mittel kälter, als T850 vermuten lässt. Das ist typisch für Kaltluft in der Höhe unter
-einem Höhentief. Liegt sie darüber, ist die Säule wärmer.
-
-Ohne Parameter passt das Skript die Skala an die Daten an, auf volle 4 K gerundet, sodass keine der
-beiden Kurven abgeschnitten wird. Mit `--min-850`, `--max-850`, `--min-thickness` und
-`--max-thickness` legst du Grenzen fest. Das braucht es nur, wenn mehrere Berichte dieselbe Skala
-haben sollen, etwa um Orte zu vergleichen. Eine nicht angegebene Dickegrenze folgt über die Kopplung
-aus der T850-Grenze.
-
-### HTML zusammenbauen
-
-```
-python <skill-dir>/scripts/build_report.py --markdown <arbeitsverzeichnis>/analyse_<ort>.md --svg <arbeitsverzeichnis>/diagram_<ort>.svg --tsv <arbeitsverzeichnis>/data_<ort>_ecmwf.tsv --caption "<Bildunterschrift>" --table-summary "<Datentabelle>" --lang de --out <ziel>/synop_<ort>_<base-time>.html
-```
-
-- `--caption` und `--table-summary` schreibst du in der Sprache des Nutzers. Die Bildunterschrift
-  nennt den Ort und sagt, dass die Zeitachse in UTC läuft, während der Text Ortszeit verwendet.
-- Das Diagramm landet nach dem synoptischen Überblick, vor dem ersten Tag. Der Absatz für Endkunden
-  ist hervorgehoben.
-- Als `<ziel>` nimmst du das Arbeitsverzeichnis des Nutzers, sofern er keinen anderen Ort nennt. Nur
-  Rohdaten und Zwischendateien gehören in den Scratchpad.
-- **Karten:** Will der Nutzer die Karten haben, kopierst du die markierten Kopien (`marked_<ort>`)
-  nach `<ziel>/synop_charts_<YYYYMMDDHH>/`. Die unmarkierten liegen ohnehin im Datenordner.
-
-Im Chat gibst du danach den Pfad der HTML-Datei und den Überblick in zwei bis drei Sätzen aus. Die
-Tagestexte stehen im Bericht und müssen nicht noch einmal in den Chat.

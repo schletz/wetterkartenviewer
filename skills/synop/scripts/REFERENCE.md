@@ -1,6 +1,6 @@
 # synop `scripts/` — Agent reference
 
-Reference for the six entry-point scripts and the package `lib/` of the synop skill, so that a later agent can extend, debug or refactor them without reading the whole source. Paths are relative to `scripts/` (the folder holding this file). How the analysing agent uses the outputs is in `../SKILL.md`; what the data directory holds and how each chart reads is in `charts.md` of the data directory.
+Reference for the six entry-point scripts and the package `lib/` of the synop skill, so that a later agent can extend, debug or refactor them without reading the whole source. Paths are relative to `scripts/` (the folder holding this file). How the analysing agent uses the outputs is in `../SKILL.md` (diagram and HTML report in `../references/html_report.md`); what the data directory holds and how each chart reads is in `charts.md` of the data directory.
 
 ## Purpose
 
@@ -245,9 +245,9 @@ No logging framework, no tests, no retries; only fetch_data.py uses the network.
 
 **Switch the climatology** — pass `period` to `ClimateArchive` or change `PERIOD` (lib/climate_archive.py:27). Requirements on the files: GRIB2 `*.grb2` with template 4.8 identified as in `_key`, exactly one message per key; an `HHz` kind for every hour that occurs among valid times (T850Climate); `daily`/`monthly` only for GribAnalyze; levels 850 and 2, in K; regular grid with rows north → south. lib/climate_archive.py and lib/t850_climate.py are identical copies of the files in the wetterkartenviewer repository (scripts/lib/). `period` feeds the diagram legend ("Ø <period>"); text in `../SKILL.md` naming the period is separate.
 
-**Diagram look** — `SIGMA_STEPS` (generate_diagram.py:34), `LAYER_OPACITY` and CSS variables in `STYLE` (lib/forecast_diagram.py:23-57), coupling `THICKNESS_AT_ZERO`/`THICKNESS_PER_KELVIN` (lib/coupled_axes.py:23-24; the module docstring and `../SKILL.md` repeat the formula), size/margins in lib/diagram_layout.py. An additional series needs a TSV column in `ForecastTsv.air_mass` (and both positional unpackings, see TSV), a `DiagramRow` field, a `_series_path` call, a `_legend` entry and a `_tooltip` part.
+**Diagram look** — `SIGMA_STEPS` (generate_diagram.py:34), `LAYER_OPACITY` and CSS variables in `STYLE` (lib/forecast_diagram.py:23-57), coupling `THICKNESS_AT_ZERO`/`THICKNESS_PER_KELVIN` (lib/coupled_axes.py:23-24; the module docstring and `../references/html_report.md` repeat the formula), size/margins in lib/diagram_layout.py. An additional series needs a TSV column in `ForecastTsv.air_mass` (and both positional unpackings, see TSV), a `DiagramRow` field, a `_series_path` call, a `_legend` entry and a `_tooltip` part.
 
-**Report Markdown features** — `MarkdownHtml.inline`/`blocks` (lib/markdown_html.py:11-52); unsupported syntax renders as escaped text, not dropped. The list of supported elements is repeated in `../SKILL.md`.
+**Report Markdown features** — `MarkdownHtml.inline`/`blocks` (lib/markdown_html.py:11-52); unsupported syntax renders as escaped text, not dropped. The list of supported elements is repeated in `../references/html_report.md`.
 
 **New chart window** — nothing to change: mark_location takes every folder of the data directory that holds a `geometry.json`.
 
