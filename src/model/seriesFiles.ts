@@ -111,12 +111,22 @@ export interface ThicknessFile {
   ecmwf: EcmwfBlock & { thickness: number[] }
 }
 
+/** ECMWF T500 in °C; no climatology. */
+export interface T500File {
+  version: string
+  box: Box
+  scale: number
+  ecmwf: EcmwfBlock & { t500: number[] }
+}
+
 export interface SeriesFiles {
   t850: T850File
   t2m: T2mFile
   heights: HeightsFile
   /** Missing in manifests of older pipelines. */
   thickness?: ThicknessFile
+  /** Missing in manifests of older pipelines. */
+  t500?: T500File
 }
 
 /** Values of one point over time, in units of the file (°C or K). */

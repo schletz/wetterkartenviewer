@@ -1,6 +1,6 @@
 """Write the temperature series of Austria that the start page of the viewer draws for its location.
 
-Four JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
+Five JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
 
     t850.json      ECMWF T850 of every step on the 0.1 deg grid of the box, with the ERA5
                    climatology of T850 (mean, stdev) for the days of the run
@@ -8,6 +8,7 @@ Four JSON files in maps/austria/ (published like the videos, listed in the manif
                    (both ECMWF blocks also hold the model orography ``orog`` in m)
     heights.json   the ICON-D2 cells of Austria: centre and model orography (hsurf)
     thickness.json ECMWF 1000-500 hPa thickness in dam (no climatology)
+    t500.json      ECMWF T500 (no climatology), for the vertical totals T850 - T500
 
 Every series is stored as whole tenths of a degree (of a dam for the
 thickness), as deltas along time and
@@ -178,7 +179,7 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     ecmwf_run = ecmwf_grib.stem.split("_")[-1]
     icon_run = icon_grib.stem.split("_")[-1] if icon_grib else "none"
     targets = {name: maps / file for name, file in SERIES_FILES.items()}
-    versions = {"t850": ecmwf_run, "t2m": f"{ecmwf_run}-{icon_run}", "thickness": ecmwf_run}
+    versions = {"t850": ecmwf_run, "t2m": f"{ecmwf_run}-{icon_run}", "thickness": ecmwf_run, "t500": ecmwf_run}
     stale = [name for name, version in versions.items() if force or read_version(targets[name]) != version]
     heights_missing = icon_grib is not None and (force or read_version(targets["heights"]) is None)
     if not stale and not heights_missing:
@@ -197,6 +198,9 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
         # gpm to dam
         write_document(targets["thickness"], {"version": versions["thickness"], **common,
                                               "ecmwf": ecmwf_block(ecmwf, "thick", None, "thickness", 0.0, 0.1)})
+    if "t500" in stale:
+        write_document(targets["t500"], {"version": versions["t500"], **common,
+                                         "ecmwf": ecmwf_block(ecmwf, "t", 500, "t500")})
     icon = cells = None
     if icon_grib is not None and ("t2m" in stale or heights_missing):
         icon = ForecastGrib(icon_grib, ICON_NAMES)

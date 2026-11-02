@@ -12,7 +12,7 @@ The API sections follow Javadoc: intro, fields, methods per module or class.
 
 - Download one ECMWF IFS HRES run (0.1°, cropped to Europe, derived fields appended) and one DWD ICON-D2 run (icosahedral grid ≈ 2.2 km, unchanged) into `data/`.
 - Render WebP charts for three windows into `data/`, encode each tile layer of the viewer as `maps/<window>/<product>.mp4` (one frame per step), write `maps/manifest.json`.
-- Cut T850 and the 1000–500 hPa thickness (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to an Austria box as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
+- Cut T850, T500 and the 1000–500 hPa thickness (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to an Austria box as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
 - Upload the videos and series files to a GitHub release, push a manifest commit; GitHub Actions builds and deploys the app with them.
 - IFS updates every 12 h, ICON-D2 every 3 h; `download_loop.sh` runs the whole chain every 10 min on an always-on machine.
 - `data/` is also the data directory of the skill synop (source in `skills/synop`, installed to `~/.claude/skills/synop`), see *Contract with the skill synop*; `blob_mirror.py` mirrors it into a public Azure blob container so the skill works without this repository.
@@ -98,7 +98,7 @@ folder "data/<window>/" as window_dir {
 }
 folder "maps/" {
  artifact "<window>/<product>.mp4" as videos
- artifact "austria/t850, t2m,\nheights, thickness.json" as series
+ artifact "austria/t850, t2m, heights,\nthickness, t500.json" as series
  artifact "manifest.json" as manifest
 }
 artifact "src/config/viewer.config.json" as config
@@ -130,7 +130,7 @@ render_charts --> charts
 render_charts --> geometry
 charts --> tile_videos
 tile_videos --> videos
-ecmwf_grib --> point_series : t850, 2t,\nthick, orog
+ecmwf_grib --> point_series : t850, t500,\n2t, thick, orog
 icon_grib --> point_series : 2t, hsurf
 era5 --> point_series
 point_series --> series
@@ -518,7 +518,8 @@ Written by `build_manifest` (scripts/maps_manifest.py), typed as `Manifest` (src
  "series": { "t850": { "file": "austria/t850.json", "version": "2026110112" },
  "t2m": { "file": "austria/t2m.json", "version": "2026110112-2026110206" },
  "heights": { "file": "austria/heights.json", "version": "2026110206-25344" },
- "thickness": { "file": "austria/thickness.json", "version": "2026110112" } } }
+ "thickness": { "file": "austria/thickness.json", "version": "2026110112" },
+ "t500": { "file": "austria/t500.json", "version": "2026110112" } } }
 ```
 
 - `run` (top): the ECMWF run. The slider and all `steps`, ICON ones included, count from it.
@@ -543,6 +544,7 @@ Regular grids (`grid`: `lat0` northernmost row, `lon0`, `dlat` step southwards, 
 | `t850.json`, ECMWF run | `ecmwf`: `run`, `steps`, `grid` (0.1°, 29×78), `orog` (m, per point), `t850`; `climate`: ERA5 T850 | 566 KB, gzip 104 KB |
 | `t2m.json`, `<ecmwf run>-<icon run or none>` | `ecmwf` with `t2m`; `climate`: ERA5 T2m; `icon` (only with an ICON file): `run`, `steps`, `cells`, `t2m` on the cells of heights.json | 3.8 MB, gzip 700 KB |
 | `thickness.json`, ECMWF run | `ecmwf` with `thickness` in dam (`thick` gpm × 0.1); no climate | 388 KB, gzip 77 KB |
+| `t500.json`, ECMWF run | `ecmwf` with `t500` (°C); no climate; the app forms T850 − T500 | 396 KB, gzip 68 KB (run 2026103112) |
 | `heights.json`, `<icon run>-<cells>` | ICON cells within `BORDER_MARGIN` of Austria in file order (25 344): `lat`, `lon` as deltas of `coord_scale` 1e-4°, `hsurf` (m) | 316 KB, gzip 78 KB |
 
 `climate` (both levels): `period`, `grid` (0.25°, 12×32), `first_day` (00 UTC of the ECMWF run), `days` (to the last step, 11), `hours` (00…21), `months` (touched by the days); `term` (per day and hour, day-major), `daily`, `monthly`, each `{mean (°C), std (K)}`.
@@ -681,8 +683,8 @@ Without a new run a call takes ≈ 3.5 s.
 
 ### point_series.py
 
-Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t`850, `2t`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours`).
-A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850 and thickness per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
+Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 850 and 500, `2t`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours`).
+A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness and t500 per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
 A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. ICON cells with NaN `hsurf` (boundary zone) are dropped. Without any ICON file t2m.json has no `icon` and heights.json is not written; the app then shows nothing (it needs heights).
 
 | Field | Meaning |

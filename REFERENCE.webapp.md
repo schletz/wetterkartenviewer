@@ -11,7 +11,7 @@ The API sections follow Javadoc: intro, fields, methods per module.
 ## Purpose
 
 - Static single-page app (React 19, Vite, TypeScript) on GitHub Pages: https://schletz.github.io/wetterkartenviewer/
-- Start page: for a location in Austria a temperature diagram (T850 of ECMWF with its anomaly against ERA5, T2m of ECMWF and ICON-D2, 1000–500 hPa thickness of ECMWF) from the pipeline's series files, beside it ECMWF ENS meteograms for the location, queried live by the browser; all in equal columns, each opens in a new tab.
+- Start page: for a location in Austria a temperature diagram (T850 of ECMWF with its anomaly against ERA5, T2m of ECMWF and ICON-D2, 1000–500 hPa thickness and vertical totals T850 − T500 of ECMWF) from the pipeline's series files, beside it ECMWF ENS meteograms for the location, queried live by the browser; all in equal columns, each opens in a new tab.
 - Map page (`#/maps`): a grid of tiles with the charts of one ECMWF IFS run (to +240 h) and one ICON-D2 run (Austria, to +48 h), and a step slider 0–240 h.
   Every chart path is an AV1 video with one frame per step; the app seeks the frame with `currentTime`.
   A tile layer can be a fallback chain of paths (ICON-D2 within its 48 h, ECMWF otherwise).
@@ -176,8 +176,8 @@ class TemperaturePanel <<component>> {
  axis, day labels, lines, areas.
 }
 class useSeriesFiles <<hook>> {
- Manifest, then t850, t2m, heights
- and thickness.json, once per page.
+ Manifest, then t850, t2m, heights,
+ thickness, t500.json, once per page.
 }
 class TemperatureSeries {
  Series, grid points and heights
@@ -194,6 +194,10 @@ class ValueAxis {
 class anomalyBands <<module>> {
  Polygons beyond mean ± k sigma,
  port of the synop skill.
+}
+class moistAdiabat <<module>> {
+ Moist-adiabatic T850 − T500,
+ reference of the vertical totals.
 }
 class seriesFiles <<module>> {
  Types of the series files
@@ -213,6 +217,7 @@ useSeriesFiles ..> seriesFiles : SeriesFiles
 TemperatureSeries ..> seriesFiles : pointSeries(),\ngridIndex()
 TemperatureDiagram ..> panelLayout : placePanels()
 TemperatureDiagram ..> anomalyBands : anomalyPolygons()
+TemperatureDiagram ..> moistAdiabat : moistAdiabaticTotals()
 TemperatureDiagram --> TemperaturePanel
 TemperatureDiagram --> useElementSize
 TemperaturePanel ..> ValueAxis : creates
@@ -238,7 +243,8 @@ The JSON is trusted, not validated.
   "series": { "t850": { "file": "austria/t850.json", "version": "2026110112" },
               "t2m": { "file": "austria/t2m.json", "version": "2026110112-2026110206" },
               "heights": { "file": "austria/heights.json", "version": "2026110206-25344" },
-              "thickness": { "file": "austria/thickness.json", "version": "2026110112" } } }
+              "thickness": { "file": "austria/thickness.json", "version": "2026110112" },
+              "t500": { "file": "austria/t500.json", "version": "2026110112" } } }
 ```
 
 - `run` (top): the ECMWF run; the slider and every `steps`, ICON ones included, count from it.
@@ -247,14 +253,14 @@ The JSON is trusted, not validated.
 - `end`: last step the video covers (a daily chart covers its whole day); later steps have no frame.
 - `charts[…].run`: run of the video's model, the cache parameter of its URL; optional.
 - `fps`: frame `i` covers `[i / fps, (i + 1) / fps)`.
-- `series[name]`: a series file of the temperature diagram, `version` = cache parameter `?v=`; optional; without t850, t2m and heights the start page shows no diagram, without thickness no thickness line.
+- `series[name]`: a series file of the temperature diagram, `version` = cache parameter `?v=`; optional; without t850, t2m and heights the start page shows no diagram, without thickness no thickness panel, without t500 no vertical totals panel.
 
 ### maps/austria/*.json (temperature series)
 
 Written by scripts/point_series.py; format, sizes and box in REFERENCE.scripts.md (*maps/austria/*.json*), typed in src/model/seriesFiles.ts. Trusted, not validated.
 Every series: flat list of whole multiples of `scale` (0.1), **time-major** (all points of time 0, then time 1 …), **deltas along time** (time 0 absolute); `pointSeries(deltas, points, index, scale)` undoes it for one point.
 Regular grids: row j at `lat0 − j·dlat`, column i at `lon0 + i·dlon`, index `j·ni + i`. `steps` count from each block's own `run` (ECMWF and ICON differ).
-t850.json and t2m.json: `ecmwf {run, steps, grid, orog, t850|t2m}`, `climate {period, grid, first_day, days, hours, months, term, daily, monthly}` with `{mean °C, std K}`; t2m.json also `icon {run, steps, cells, t2m}`. thickness.json: `ecmwf` with `thickness` (dam), no `climate`. heights.json: `cells`, `lat`/`lon` (cumulative deltas × `coord_scale`), `hsurf` (m), one entry per ICON cell in the order of `icon.t2m`.
+t850.json and t2m.json: `ecmwf {run, steps, grid, orog, t850|t2m}`, `climate {period, grid, first_day, days, hours, months, term, daily, monthly}` with `{mean °C, std K}`; t2m.json also `icon {run, steps, cells, t2m}`. thickness.json: `ecmwf` with `thickness` (dam), t500.json `ecmwf` with `t500` (°C), both without `climate`. heights.json: `cells`, `lat`/`lon` (cumulative deltas × `coord_scale`), `hsurf` (m), one entry per ICON cell in the order of `icon.t2m`.
 
 ### viewer.config.json
 
@@ -286,16 +292,18 @@ Types: `ChartVideo {file, steps, run?, end?}`, `ChartFrame {index, step}`, `Seri
 Same formula as `Projection`. `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 690`, `MAP_HEIGHT = 600`. `PROJECTIONS` holds the Python values; for `icon-d2` as literals computed by Python (`print(ICON_D2)`): change both sides together.
 `toPixel(location)` → null outside 1200×600. `projectionOf(chartPath)` → null for an unknown window (no marker).
 
-### Temperature diagram (src/components/TemperatureChart.tsx, TemperatureDiagram.tsx, src/model/TemperaturePanel.tsx, src/model/TemperatureSeries.ts, panelLayout.ts, ValueAxis.ts, anomalyBands.ts, seriesFiles.ts)
+### Temperature diagram (src/components/TemperatureChart.tsx, TemperatureDiagram.tsx, src/model/TemperaturePanel.tsx, src/model/TemperatureSeries.ts, panelLayout.ts, ValueAxis.ts, anomalyBands.ts, moistAdiabat.ts, seriesFiles.ts)
 
 `TemperatureChart` is the first cell of the meteogram grid (StartPage), shaped like an ENS meteogram (`aspect-ratio: 650 / 800`). It renders nothing while loading, without series in the manifest, or when `TemperatureSeries.at` returns null; only a failed download shows a text. `TemperatureSeries` decodes the ICON cell coordinates once per file set (`useMemo` on the state), `at(location)` runs on every location change (linear search over 25 344 cells).
 `at` → null outside `box` or when no ICON cell lies within `MAX_CELL_DISTANCE = 0.03°` (cells are ≈ 2.2 km apart; the files hold cells up to 0.15° beyond the border), so the diagram shows in Austria and its margin only. The ICON part is dropped if `icon.cells` ≠ `heights.cells`.
 Nearest point everywhere, no interpolation: ECMWF 0.1° (its `orog`), ERA5 0.25° (no height in the climatology), ICON cell (its `hsurf`). The legends name every point with position and height. `LocationTemperatures.height` (ICON `hsurf`) is no longer drawn.
 Climate per T850 valid time: the `term` value of its day and hour (null if the hour is no analysis hour); `daily`/`monthly` are in the files but unused.
 
-`TemperatureDiagram` is laid out like the ENS plume meteogram: panels one below the other, each with title, legend lines, its own value axis and day labels („Mo 2“, Sundays and holidays red) under the plot: T2m (ECMWF green, ICON-D2 violet dashed; ICON points outside the ECMWF range dropped), T850 (anomaly polygons for `SIGMA_STEPS = [0, 1, 2, 3]`, `fill-opacity 0.2` each, red warm, blue cold, then climate mean, then T850 in the text colour), thickness (orange; panel only with thickness file). All panels share the time axis (first to last ECMWF step, ticks every 6 h, day lines at 00 UTC); hover columns span the plots, one native `<title>` per ECMWF step (time, both T2m, T850, Ø, σ, thickness). `useElementSize` measures the whole diagram box and the SVG is drawn in its pixels (viewBox = box size, absolutely positioned so it never sizes the box): text stays 11/12 px at any cell size, nothing is drawn before the first measurement.
+`TemperatureDiagram` is laid out like the ENS plume meteogram: panels one below the other, each with title, legend lines, its own value axis and day labels („Mo 2“, Sundays and holidays red) under the plot: T2m (ECMWF green, ICON-D2 violet dashed; ICON points outside the ECMWF range dropped), T850 (anomaly polygons for `SIGMA_STEPS = [0, 1, 2, 3]`, `fill-opacity 0.2` each, red warm, blue cold, then climate mean, then T850 in the text colour), thickness (orange; panel only with thickness file), vertical totals T850 − T500 (magenta, only at times T500 has; panel only with t500 file) under the grey reference `moistAdiabaticTotals(T850)`: above it, saturated air lifted from 850 hPa is warmer than its surroundings at 500 hPa (conditional instability); unlike a fixed threshold (28 K in data/charts.md) it follows the air mass: ≈ 33 K at T850 −10 °C, 30 K at 0 °C, 27 K at +5 °C, 22 K at +15 °C. All panels share the time axis (first to last ECMWF step, ticks every 6 h, day lines at 00 UTC); hover columns span the plots, one native `<title>` per ECMWF step (time, both T2m, T850, Ø, σ, thickness, T500, VT and its reference). `useElementSize` measures the whole diagram box and the SVG is drawn in its pixels (viewBox = box size, absolutely positioned so it never sizes the box): text stays 11/12 px at any cell size, nothing is drawn before the first measurement.
 
 `placePanels(panels, top, height, gap)` (panelLayout.ts): every panel gets title (16 px), 14 px per legend line, 6 px and 24 px of day labels; the plots share the rest by `weight` (all 1). `ValueAxis(values, top, bottom, steps)`: range of all values of the panel ± 0.5, rounded outward to the smallest step of `TEMPERATURE_STEPS` (1, 2, 5, 10 … K) or `THICKNESS_STEPS` (1, 2, 4, 8 … dam) that keeps labels ≥ 22 px apart; zero line dashed.
+
+`moistAdiabaticTotals(t850)` (moistAdiabat.ts) integrates the pseudo-adiabat (lapse formula of MetPy's `moist_lapse`, saturation over water after Bolton) from 850 to 500 hPa by RK4 in 35 steps of 10 hPa; error < 0.01 K against 350 steps.
 
 `anomalyBands.ts` is a port of `AnomalyBands` (skills/synop/scripts/lib/anomaly_bands.py): crossings are inserted so areas end exactly at the threshold; a null point breaks lines and areas.
 
@@ -318,7 +326,7 @@ Climate per T850 valid time: the `term` value of its day and hour (null if the h
 | `useHashRoute()` (src/hooks/useHashRoute.ts) | only `#/maps` is the map page |
 | `useStoredLocation()` (src/hooks/useStoredLocation.ts) | localStorage `wetterkartenviewer.location`; blocked or invalid → default; write errors ignored; `load` runs stored objects through `isValidLocation` |
 | `useChartIndex()` (src/hooks/useChartIndex.ts) | `fetchManifest`; error state shown as text by MapViewer, no retry |
-| `useSeriesFiles()` (src/hooks/useSeriesFiles.ts) | manifest, then the files of `REQUIRED` (t850, t2m, heights) and those of `OPTIONAL` (thickness) the manifest lists, in parallel with default caching (`?v=` changes per run), once per page; `loading`, `missing` (a required one absent), `error`, `ready` |
+| `useSeriesFiles()` (src/hooks/useSeriesFiles.ts) | manifest, then the files of `REQUIRED` (t850, t2m, heights) and those of `OPTIONAL` (thickness, t500) the manifest lists, in parallel with default caching (`?v=` changes per run), once per page; `loading`, `missing` (a required one absent), `error`, `ready` |
 | `useElementSize(ref)` (src/hooks/useElementSize.ts) | content box in whole pixels via `ResizeObserver`, 0 × 0 before the first measurement; same size keeps the same object (no render) |
 | `useLoadedVideo(url)` (src/hooks/useLoadedVideo.ts) | `{shown: {url, objectUrl}, failed}`: the previous video stays until the new one loaded |
 

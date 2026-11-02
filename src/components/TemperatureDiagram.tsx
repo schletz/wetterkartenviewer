@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { useElementSize } from '../hooks/useElementSize'
 import { anomalyPolygons } from '../model/anomalyBands'
+import { moistAdiabaticTotals } from '../model/moistAdiabat'
 import type { GeoLocation } from '../model/GeoLocation'
 import { placePanels, type PanelSpec, type TimeAxis } from '../model/panelLayout'
 import type { LocationTemperatures, ValuePoint } from '../model/TemperatureSeries'
@@ -39,13 +40,14 @@ function timeLabel(time: Date): string {
 }
 
 /**
- * Meteogram of T2m (ECMWF and ICON-D2), T850 (ECMWF) with its anomaly against the ERA5 climate and the
- * ECMWF 1000–500 hPa thickness, in panels one below the other like the ENS meteograms. Fills its parent.
+ * Meteogram of T2m (ECMWF and ICON-D2), T850 (ECMWF) with its anomaly against the ERA5 climate, the
+ * ECMWF 1000–500 hPa thickness and the vertical totals T850 − T500 against the moist adiabat, in panels
+ * one below the other like the ENS meteograms. Fills its parent.
  */
 export default function TemperatureDiagram({ temperatures }: TemperatureDiagramProps) {
   const box = useRef<HTMLDivElement>(null)
   const size = useElementSize(box)
-  const { t850, climate850, t2mEcmwf, t2mIcon, thickness } = temperatures
+  const { t850, climate850, t2mEcmwf, t2mIcon, thickness, t500 } = temperatures
 
   const plotRight = size.width - MARGIN_RIGHT
   const start = t850.values[0].valid.getTime()
@@ -66,6 +68,14 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     const climate = climate850[i]
     return climate === null ? null : { valid: p.valid, value: climate.mean }
   })
+  // Vertical totals at the valid times of T850 that T500 has too; the reference follows T850.
+  const t500ByTime = new Map(t500?.values.map((p) => [+p.valid, p.value]) ?? [])
+  const totals = t850.values.map((p) => {
+    const upper = t500ByTime.get(+p.valid)
+    return upper === undefined ? null : { valid: p.valid, value: p.value - upper }
+  })
+  const moistTotals = t850.values.map((p) => ({ valid: p.valid, value: moistAdiabaticTotals(p.value) }))
+
   const bands = anomalyPolygons(t850.values.map((p, i) => {
     const climate = climate850[i]
     return climate === null ? null : { x: x(p.valid), value: p.value, mean: climate.mean, std: climate.std }
@@ -109,6 +119,20 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
       steps: THICKNESS_STEPS,
       weight: 1,
     }]),
+    ...(t500 === null ? [] : [{
+      key: 'totals',
+      title: 'Vertical Totals T850 − T500 (K)',
+      legend: [
+        { line: styles.totals, text: `ECMWF ${pointLabel(t500.point, t500.height)}` },
+        { line: styles.moistAdiabat, text: 'Feuchtadiabate ab 850 hPa, darüber bedingt labil' },
+      ],
+      lines: [
+        { values: moistTotals, className: styles.moistAdiabat },
+        { values: totals, className: styles.totals },
+      ],
+      steps: TEMPERATURE_STEPS,
+      weight: 1,
+    }]),
   ]
 
   const placed = placePanels(panels, MARGIN_TOP, size.height, PANEL_GAP)
@@ -134,6 +158,11 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     }
     const thicknessValue = thicknessByTime.get(+point.valid)
     if (thicknessValue !== undefined) parts.push(`Z1000–500 ${decimals(thicknessValue, 1)} dam`)
+    const upper = t500ByTime.get(+point.valid)
+    if (upper !== undefined) {
+      parts.push(`T500 ${decimals(upper, 1)} °C`)
+      parts.push(`VT ${decimals(point.value - upper, 1)} K (feuchtadiabatisch ${decimals(moistTotals[i].value, 1)} K)`)
+    }
     return parts.join(' · ')
   }
 
@@ -141,7 +170,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     <div ref={box} className={styles.diagram}>
       {size.width > 0 && size.height > 0 && (
         <svg className={styles.svg} viewBox={`0 0 ${size.width} ${size.height}`} role="img"
-          aria-label="T2m von ECMWF und ICON-D2, T850 von ECMWF mit Abweichung vom Klimamittel, Schichtdicke 1000–500 hPa">
+          aria-label="T2m von ECMWF und ICON-D2, T850 von ECMWF mit Abweichung vom Klimamittel, Schichtdicke 1000–500 hPa, Vertical Totals">
           {placed.map((p) => <TemperaturePanel key={p.panel.key} placed={p} time={time} left={PLOT_LEFT} right={plotRight} />)}
           {t850.values.map((point, i) => {
             // Each hover column reaches halfway to its neighbours, so the 3 h and 6 h steps cover the plots without gaps.

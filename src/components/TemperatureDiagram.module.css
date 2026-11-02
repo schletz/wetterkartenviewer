@@ -4,6 +4,7 @@
   --t2m-ecmwf: #1f8a4c;
   --t2m-icon: #8a3fd1;
   --thickness: #e0661f;
+  --totals: #c2387a;
   --climate: #8a8984;
   --warm: #e0453a;
   --cold: #3a7be0;
@@ -85,6 +86,16 @@
 }
 
 .climate {
+  stroke: var(--climate);
+  stroke-width: 1.5;
+}
+
+.totals {
+  stroke: var(--totals);
+}
+
+/* Reference of the vertical totals, grey like the climate mean of T850. */
+.moistAdiabat {
   stroke: var(--climate);
   stroke-width: 1.5;
 }
