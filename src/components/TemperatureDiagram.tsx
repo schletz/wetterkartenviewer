@@ -20,6 +20,17 @@ const SIGMA_STEPS = [0, 1, 2, 3] as const
 const TICK_HOURS = 6
 const HOUR_MS = 3_600_000
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
+/**
+ * Vertical totals share the thickness axis: TOTALS_MEAN K lies at THICKNESS_MEAN dam, 1 K spans
+ * THICKNESS_PER_KELVIN dam. Only their position against the moist adiabat counts, so they need no axis of
+ * their own. The means are those of Austria: ERA5 1991–2020 monthly T850 over its 163 grid points averages
+ * 5.0 °C, i.e. 552 dam with the coupling 544 dam + 1.6 dam/K × T850 of the synop skill, and the moist-adiabatic
+ * totals of the monthly means average 27.2 K. With the skill's 1.6 dam/K, 1 K of vertical totals is as tall as
+ * 1 K of T850, and their swings stay as large as those of the thickness.
+ */
+const THICKNESS_MEAN = 552
+const TOTALS_MEAN = 27
+const THICKNESS_PER_KELVIN = 1.6
 
 interface TemperatureDiagramProps {
   temperatures: LocationTemperatures
@@ -41,8 +52,8 @@ function timeLabel(time: Date): string {
 
 /**
  * Meteogram of T2m (ECMWF and ICON-D2), T850 (ECMWF) with its anomaly against the ERA5 climate, the
- * ECMWF 1000–500 hPa thickness and the vertical totals T850 − T500 against the moist adiabat, in panels
- * one below the other like the ENS meteograms. Fills its parent.
+ * ECMWF 1000–500 hPa thickness with the vertical totals T850 − T500 against the moist adiabat on its axis,
+ * in panels one below the other like the ENS meteograms. Fills its parent.
  */
 export default function TemperatureDiagram({ temperatures }: TemperatureDiagramProps) {
   const box = useRef<HTMLDivElement>(null)
@@ -75,6 +86,9 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     return upper === undefined ? null : { valid: p.valid, value: p.value - upper }
   })
   const moistTotals = t850.values.map((p) => ({ valid: p.valid, value: moistAdiabaticTotals(p.value) }))
+  const onThicknessAxis = (point: ValuePoint | null) => point === null
+    ? null
+    : { valid: point.valid, value: THICKNESS_MEAN + THICKNESS_PER_KELVIN * (point.value - TOTALS_MEAN) }
 
   const bands = anomalyPolygons(t850.values.map((p, i) => {
     const climate = climate850[i]
@@ -113,24 +127,22 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     },
     ...(thickness === null ? [] : [{
       key: 'thickness',
-      title: 'Schichtdicke 1000–500 hPa (dam)',
-      legend: [{ line: styles.thickness, text: `ECMWF ${pointLabel(thickness.point, thickness.height)}` }],
-      lines: [{ values: thickness.values, className: styles.thickness }],
-      steps: THICKNESS_STEPS,
-      weight: 1,
-    }]),
-    ...(t500 === null ? [] : [{
-      key: 'totals',
-      title: 'Vertical Totals T850 − T500 (K)',
+      title: t500 === null ? 'Schichtdicke 1000–500 hPa (dam)' : 'Schichtdicke 1000–500 hPa (dam), Vertical Totals',
       legend: [
-        { line: styles.totals, text: `ECMWF ${pointLabel(t500.point, t500.height)}` },
-        { line: styles.moistAdiabat, text: 'Feuchtadiabate ab 850 hPa, darüber bedingt labil' },
+        { line: styles.thickness, text: `ECMWF ${pointLabel(thickness.point, thickness.height)}` },
+        ...(t500 === null ? [] : [
+          { line: styles.totals, text: `T850 − T500, 1 K ≙ ${decimals(THICKNESS_PER_KELVIN, 1)} dam` },
+          { line: styles.moistAdiabat, text: 'T850 − T500 feuchtadiabatisch ab 850 hPa, darüber bedingt labil' },
+        ]),
       ],
       lines: [
-        { values: moistTotals, className: styles.moistAdiabat },
-        { values: totals, className: styles.totals },
+        ...(t500 === null ? [] : [
+          { values: moistTotals.map(onThicknessAxis), className: styles.moistAdiabat },
+          { values: totals.map(onThicknessAxis), className: styles.totals },
+        ]),
+        { values: thickness.values, className: styles.thickness },
       ],
-      steps: TEMPERATURE_STEPS,
+      steps: THICKNESS_STEPS,
       weight: 1,
     }]),
   ]

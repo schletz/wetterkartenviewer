@@ -90,14 +90,16 @@
   stroke-width: 1.5;
 }
 
+/* Thin like its reference: the thickness is the main line of the panel. */
 .totals {
   stroke: var(--totals);
+  stroke-width: 1.25;
 }
 
 /* Reference of the vertical totals, grey like the climate mean of T850. */
 .moistAdiabat {
   stroke: var(--climate);
-  stroke-width: 1.5;
+  stroke-width: 1.25;
 }
 
 /* Every anomaly layer adds the same translucent shade on top. */
