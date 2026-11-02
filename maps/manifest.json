@@ -961,6 +961,10 @@
   "thickness": {
    "file": "austria/thickness.json",
    "version": "2026110200"
+  },
+  "t500": {
+   "file": "austria/t500.json",
+   "version": "2026110200"
   }
  }
 }
