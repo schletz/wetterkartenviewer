@@ -1,15 +1,17 @@
-/* Three meteograms side by side on a wide screen, each at most its natural width. */
+/* A cell of the meteogram grid (StartPage.module.css) in the shape of the image, also while it loads. */
 .frame {
-  flex: 1 1 520px;
-  max-width: calc((100% - 24px) / 3);
-  min-width: 420px;
-  min-height: 300px;
+  aspect-ratio: 650 / 800;
   margin: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--surface);
   border: 1px solid var(--border);
+}
+
+.link {
+  display: block;
+  width: 100%;
 }
 
 .image {
@@ -20,4 +22,6 @@
 
 .status {
   color: var(--muted);
+  padding: 8px;
+  text-align: center;
 }

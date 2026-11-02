@@ -1,7 +1,8 @@
-/* One full row above the meteograms. */
+/* A cell of the meteogram grid in the shape of an ENS meteogram (see Meteogram.module.css). */
 .frame {
-  margin: 0 0 12px;
-  padding: 8px 8px 10px;
+  aspect-ratio: 650 / 800;
+  margin: 0;
+  padding: 6px 4px 4px;
   background: var(--surface);
   border: 1px solid var(--border);
 }

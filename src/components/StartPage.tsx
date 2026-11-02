@@ -20,8 +20,8 @@ export default function StartPage({ location, onLocationChange, onOpenMaps }: St
         <LocationForm location={location} onSave={onLocationChange} />
         <button className={styles.open} onClick={onOpenMaps}>Zu den Karten</button>
       </header>
-      <TemperatureChart location={location} />
       <section className={styles.meteograms}>
+        <TemperatureChart location={location} />
         {viewerConfig.meteograms.map((name) => (
           <Meteogram key={name} name={name} location={location} />
         ))}

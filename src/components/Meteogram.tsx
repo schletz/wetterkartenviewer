@@ -11,7 +11,7 @@ interface MeteogramProps {
 /** Outcome of one request; ``request`` tells a stale outcome from the current one. */
 type Outcome = { request: string } & ({ url: string } | { error: string })
 
-/** One ECMWF ENS meteogram, requested anew whenever the location changes. */
+/** One ECMWF ENS meteogram, requested anew whenever the location changes; a click opens the image in a new tab. */
 export default function Meteogram({ name, location }: MeteogramProps) {
   const [attempt, setAttempt] = useState(0)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
@@ -38,7 +38,11 @@ export default function Meteogram({ name, location }: MeteogramProps) {
           {current.error} <button onClick={() => setAttempt((a) => a + 1)}>Erneut laden</button>
         </span>
       )}
-      {current !== null && 'url' in current && <img className={styles.image} src={current.url} alt={name} />}
+      {current !== null && 'url' in current && (
+        <a className={styles.link} href={current.url} target="_blank" rel="noreferrer" title="In neuem Tab öffnen">
+          <img className={styles.image} src={current.url} alt={name} />
+        </a>
+      )}
     </figure>
   )
 }

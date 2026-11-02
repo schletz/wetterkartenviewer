@@ -25,9 +25,26 @@
   font-weight: 600;
 }
 
+/*
+ * Temperature chart and meteograms in equal columns, each at least 400 px and at most 650 px
+ * (natural width of a meteogram): four side by side from 4 × 400 px + gaps + page padding,
+ * two from 2 × 400 px, one below. Never three, so four items always fill whole rows.
+ */
 .meteograms {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 650px);
   gap: 12px;
-  align-items: flex-start;
+  align-items: start;
+}
+
+@media (min-width: 844px) {
+  .meteograms {
+    grid-template-columns: repeat(2, minmax(0, 650px));
+  }
+}
+
+@media (min-width: 1668px) {
+  .meteograms {
+    grid-template-columns: repeat(4, minmax(0, 650px));
+  }
 }

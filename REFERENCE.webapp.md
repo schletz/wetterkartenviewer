@@ -11,7 +11,7 @@ The API sections follow Javadoc: intro, fields, methods per module.
 ## Purpose
 
 - Static single-page app (React 19, Vite, TypeScript) on GitHub Pages: https://schletz.github.io/wetterkartenviewer/
-- Start page: for a location in Austria a temperature diagram (T850 of ECMWF with its anomaly against ERA5, T2m of ECMWF and ICON-D2, 1000–500 hPa thickness of ECMWF) from the pipeline's series files; below it ECMWF ENS meteograms for the location, queried live by the browser.
+- Start page: for a location in Austria a temperature diagram (T850 of ECMWF with its anomaly against ERA5, T2m of ECMWF and ICON-D2, 1000–500 hPa thickness of ECMWF) from the pipeline's series files, beside it ECMWF ENS meteograms for the location, queried live by the browser; all in equal columns, each opens in a new tab.
 - Map page (`#/maps`): a grid of tiles with the charts of one ECMWF IFS run (to +240 h) and one ICON-D2 run (Austria, to +48 h), and a step slider 0–240 h.
   Every chart path is an AV1 video with one frame per step; the app seeks the frame with `currentTime`.
   A tile layer can be a fallback chain of paths (ICON-D2 within its 48 h, ECMWF otherwise).
@@ -38,8 +38,8 @@ package "components" {
  shows StartPage or MapViewer.
  }
  class StartPage <<component>> {
- Header with location form, the
- temperature chart, one Meteogram per name.
+ Header with location form; grid of
+ temperature chart and Meteograms.
  }
  class TemperatureChart << (D,#fdebd1) temperature >>
  class LocationForm <<component>> {
@@ -47,8 +47,8 @@ package "components" {
  and fills the coordinates.
  }
  class Meteogram <<component>> {
- One ECMWF meteogram with
- loading and error state.
+ One ECMWF meteogram, a link to
+ the image in a new tab.
  }
  class MapViewer <<component>> {
  Loads the manifest,
@@ -168,8 +168,12 @@ class TemperatureChart <<component>> {
  the location; nothing outside Austria.
 }
 class TemperatureDiagram <<component>> {
- SVG with two shifted axes,
- anomaly areas, legend, tooltips.
+ Builds the panels, stacks them,
+ shared time axis and tooltips.
+}
+class TemperaturePanel <<component>> {
+ One panel: title, legend, value
+ axis, day labels, lines, areas.
 }
 class useSeriesFiles <<hook>> {
  Manifest, then t850, t2m, heights
@@ -179,9 +183,13 @@ class TemperatureSeries {
  Series, grid points and heights
  of one location.
 }
-class TemperatureAxes {
- T2m left, T850 and thickness right;
- T850 shifted by 1 K per 100 m.
+class panelLayout <<module>> {
+ Panel content types; stacks the
+ panels, plots share the rest.
+}
+class ValueAxis {
+ Round value range of one panel
+ mapped onto its plot rows.
 }
 class anomalyBands <<module>> {
  Polygons beyond mean ± k sigma,
@@ -191,6 +199,10 @@ class seriesFiles <<module>> {
  Types of the series files
  and their decoding.
 }
+class useElementSize <<hook>> {
+ Pixel size of the diagram box,
+ on every resize.
+}
 class manifestLoader << (D,#fdebd1) app >>
 class holidays << (D,#fdebd1) app >>
 TemperatureChart --> useSeriesFiles
@@ -199,9 +211,12 @@ TemperatureChart --> TemperatureDiagram
 useSeriesFiles ..> manifestLoader : fetchManifest(),\nmapsUrl()
 useSeriesFiles ..> seriesFiles : SeriesFiles
 TemperatureSeries ..> seriesFiles : pointSeries(),\ngridIndex()
-TemperatureDiagram ..> TemperatureAxes : creates
+TemperatureDiagram ..> panelLayout : placePanels()
 TemperatureDiagram ..> anomalyBands : anomalyPolygons()
-TemperatureDiagram ..> holidays : holidayName()
+TemperatureDiagram --> TemperaturePanel
+TemperatureDiagram --> useElementSize
+TemperaturePanel ..> ValueAxis : creates
+TemperaturePanel ..> holidays : holidayName()
 @enduml
 ```
 
@@ -244,7 +259,7 @@ t850.json and t2m.json: `ecmwf {run, steps, grid, orog, t850|t2m}`, `climate {pe
 ### viewer.config.json
 
 `src/config/viewer.config.json`, edited by hand, read by the app (bundled) and by `tile_chart_paths`.
-`meteograms`: epsgram names (`classical_10d`, `classical_15d_with_climate`, `classical_plume`).
+`meteograms`: epsgram names in display order (`classical_15d_with_climate`, `classical_10d`, `classical_plume`), after the temperature diagram.
 `tiles[].layers[]`: a layer is a path or a list of paths in order of preference (fallback chain, e.g. `["icon-d2/wind10m", "opencharts_central_europe/wind10m"]`).
 Currently 6 tiles; ICON is first in the chains of t2m_wind10m, mountain_2000, weather_summary and wind10m.
 
@@ -271,16 +286,16 @@ Types: `ChartVideo {file, steps, run?, end?}`, `ChartFrame {index, step}`, `Seri
 Same formula as `Projection`. `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 690`, `MAP_HEIGHT = 600`. `PROJECTIONS` holds the Python values; for `icon-d2` as literals computed by Python (`print(ICON_D2)`): change both sides together.
 `toPixel(location)` → null outside 1200×600. `projectionOf(chartPath)` → null for an unknown window (no marker).
 
-### Temperature diagram (src/components/TemperatureChart.tsx, TemperatureDiagram.tsx, src/model/TemperatureSeries.ts, TemperatureAxes.ts, anomalyBands.ts, seriesFiles.ts)
+### Temperature diagram (src/components/TemperatureChart.tsx, TemperatureDiagram.tsx, src/model/TemperaturePanel.tsx, src/model/TemperatureSeries.ts, panelLayout.ts, ValueAxis.ts, anomalyBands.ts, seriesFiles.ts)
 
-`TemperatureChart` sits above the meteograms; it renders nothing while loading, without series in the manifest, or when `TemperatureSeries.at` returns null; only a failed download shows a text. `TemperatureSeries` decodes the ICON cell coordinates once per file set (`useMemo` on the state), `at(location)` runs on every location change (linear search over 25 344 cells).
+`TemperatureChart` is the first cell of the meteogram grid (StartPage), shaped like an ENS meteogram (`aspect-ratio: 650 / 800`). It renders nothing while loading, without series in the manifest, or when `TemperatureSeries.at` returns null; only a failed download shows a text. `TemperatureSeries` decodes the ICON cell coordinates once per file set (`useMemo` on the state), `at(location)` runs on every location change (linear search over 25 344 cells).
 `at` → null outside `box` or when no ICON cell lies within `MAX_CELL_DISTANCE = 0.03°` (cells are ≈ 2.2 km apart; the files hold cells up to 0.15° beyond the border), so the diagram shows in Austria and its margin only. The ICON part is dropped if `icon.cells` ≠ `heights.cells`.
-Nearest point everywhere, no interpolation: ECMWF 0.1° (its `orog`), ERA5 0.25° (no height in the climatology), ICON cell (its `hsurf`). The legend names every point with position and height; the ICON `hsurf` is the height of the location.
+Nearest point everywhere, no interpolation: ECMWF 0.1° (its `orog`), ERA5 0.25° (no height in the climatology), ICON cell (its `hsurf`). The legends name every point with position and height. `LocationTemperatures.height` (ICON `hsurf`) is no longer drawn.
 Climate per T850 valid time: the `term` value of its day and hour (null if the hour is no analysis hour); `daily`/`monthly` are in the files but unused.
 
-`TemperatureAxes(t2m, t850, thickness, height, top, bottom)`: one pixel scale; T2m left, T850 right, shifted by `offset = (HEIGHT_850 − height) · LAPSE_RATE` K (`HEIGHT_850 = 1457` m, ICAO standard atmosphere; `LAPSE_RATE = 0.01` K/m, dry adiabatic per user), so dry adiabatic mixing puts both lines on top of each other. Thickness axis coupled to T850 as in the synop skill (coupled_axes.py): `THICKNESS_AT_ZERO = 544` dam + `THICKNESS_PER_KELVIN = 1.6` dam/K · T850, so both lines coincide for typical central European air masses; labels every 4/8/16/32 dam (first with ≤ 12 intervals). Range: all T2m, T850 (forecast and climate mean) and thickness (as T850 equivalent) values ± 1 K, rounded to `step` 2/5/10 K by span (≤ 16/≤ 40/more); the right ticks are round T850 values.
+`TemperatureDiagram` is laid out like the ENS plume meteogram: panels one below the other, each with title, legend lines, its own value axis and day labels („Mo 2“, Sundays and holidays red) under the plot: T2m (ECMWF green, ICON-D2 violet dashed; ICON points outside the ECMWF range dropped), T850 (anomaly polygons for `SIGMA_STEPS = [0, 1, 2, 3]`, `fill-opacity 0.2` each, red warm, blue cold, then climate mean, then T850 in the text colour), thickness (orange; panel only with thickness file). All panels share the time axis (first to last ECMWF step, ticks every 6 h, day lines at 00 UTC); hover columns span the plots, one native `<title>` per ECMWF step (time, both T2m, T850, Ø, σ, thickness). `useElementSize` measures the whole diagram box and the SVG is drawn in its pixels (viewBox = box size, absolutely positioned so it never sizes the box): text stays 11/12 px at any cell size, nothing is drawn before the first measurement.
 
-`TemperatureDiagram`: SVG viewBox 1000×340, plot 52…900 × 24…296, right of it the T850 labels and at `THICKNESS_LABEL_X` the thickness labels (orange); time axis from the first to the last ECMWF step (ICON points outside are dropped); day lines at 00 UTC, labels „Mo 2.11.“ (Sundays and holidays red), ticks every 3 h. Layers from bottom: anomaly polygons (`anomalyPolygons` for `SIGMA_STEPS = [0, 1, 2, 3]`, `fill-opacity 0.2` each, red warm, blue cold), climate mean, T2m ECMWF (green), T2m ICON-D2 (violet, dashed), thickness (orange, dash-dot), T850 (text colour), then hover columns with a native `<title>` per ECMWF step (T850, Ø, σ, both T2m, thickness). Legend in HTML below the SVG.
+`placePanels(panels, top, height, gap)` (panelLayout.ts): every panel gets title (16 px), 14 px per legend line, 6 px and 24 px of day labels; the plots share the rest by `weight` (all 1). `ValueAxis(values, top, bottom, steps)`: range of all values of the panel ± 0.5, rounded outward to the smallest step of `TEMPERATURE_STEPS` (1, 2, 5, 10 … K) or `THICKNESS_STEPS` (1, 2, 4, 8 … dam) that keeps labels ≥ 22 px apart; zero line dashed.
 
 `anomalyBands.ts` is a port of `AnomalyBands` (skills/synop/scripts/lib/anomaly_bands.py): crossings are inserted so areas end exactly at the threshold; a null point breaks lines and areas.
 
@@ -304,6 +319,7 @@ Climate per T850 valid time: the `term` value of its day and hour (null if the h
 | `useStoredLocation()` (src/hooks/useStoredLocation.ts) | localStorage `wetterkartenviewer.location`; blocked or invalid → default; write errors ignored; `load` runs stored objects through `isValidLocation` |
 | `useChartIndex()` (src/hooks/useChartIndex.ts) | `fetchManifest`; error state shown as text by MapViewer, no retry |
 | `useSeriesFiles()` (src/hooks/useSeriesFiles.ts) | manifest, then the files of `REQUIRED` (t850, t2m, heights) and those of `OPTIONAL` (thickness) the manifest lists, in parallel with default caching (`?v=` changes per run), once per page; `loading`, `missing` (a required one absent), `error`, `ready` |
+| `useElementSize(ref)` (src/hooks/useElementSize.ts) | content box in whole pixels via `ResizeObserver`, 0 × 0 before the first measurement; same size keeps the same object (no render) |
 | `useLoadedVideo(url)` (src/hooks/useLoadedVideo.ts) | `{shown: {url, objectUrl}, failed}`: the previous video stays until the new one loaded |
 
 ### Components
@@ -312,7 +328,7 @@ Climate per T850 valid time: the `term` value of its day and hour (null if the h
 | --- | --- |
 | `App` (src/App.tsx) | start or maps page |
 | `TemperatureChart`, `TemperatureDiagram` | see *Temperature diagram* |
-| `StartPage`, `LocationForm`, `Meteogram` | form: a typed name wins and fills the coordinates (`DECIMALS = 4`; number inputs `step="any"`); meteogram: `AbortController` on location change, stale answers dropped by request key, retry button increments `attempt` |
+| `StartPage`, `LocationForm`, `Meteogram` | form: a typed name wins and fills the coordinates (`DECIMALS = 4`; number inputs `step="any"`); meteogram: `AbortController` on location change, stale answers dropped by request key, retry button increments `attempt`; the image is a link to itself (`target="_blank"`) |
 | `MapViewer` (src/components/MapViewer.tsx) | |
 | `ChartGrid` (src/components/ChartGrid.tsx) | state step, layer per tile, enlarged; start step `currentStep` = hours since run, floored, clamped 0…240; arrow keys jump to the next/previous step any path of a *visible* layer has (native 1 h on a focused slider input); Escape closes the large view |
 | `StepSlider` (src/components/StepSlider.tsx) | `MAX_STEP = 240`; label „So, 1. 00Z“ (`WEEKDAYS`, no month), `+N h` tooltip, day bar at 00 UTC (`midnightSteps`), Sundays and holidays red |
@@ -321,7 +337,7 @@ Climate per T850 valid time: the `term` value of its day and hour (null if the h
 | `LargeView` (src/components/LargeView.tsx) | draggable, chart 1200 px wide; same URL, so the same cached video |
 
 While a new layer loads, the previous video stays on its last frame and the slider does not move it; the same happens when a fallback chain switches path (e.g. ICON → ECMWF after `end`). Only displayed layers load, no prefetch.
-CSS that must match the image size: `aspect-ratio: 1200 / 690` in ChartImage.module.css, `.chart { width: 1200px }` in LargeView.module.css. Tiles three per row (min 480, max 1200 px), meteograms three per row (min 420 px).
+CSS that must match the image size: `aspect-ratio: 1200 / 690` in ChartImage.module.css, `.chart { width: 1200px }` in LargeView.module.css. Tiles three per row (min 480, max 1200 px). Start page grid (`.meteograms` in StartPage.module.css): columns of at most 650 px (natural meteogram width), four from 1668 px viewport width (4 × 400 px + gaps + page padding), two from 844 px, else one; never three, so the four cells fill whole rows (1920 px: four cells of 463 × 570 px, no scrolling). Meteogram and TemperatureChart cells both have `aspect-ratio: 650 / 800`, so a row is even before the images load.
 
 ## Pitfalls
 
@@ -331,7 +347,7 @@ CSS that must match the image size: `aspect-ratio: 1200 / 690` in ChartImage.mod
 - **Steps hang on the ECMWF run**: relating steps to the ICON run means changing `ChartIndex`, `currentStep` and the pipeline's `chart_frames` together.
 - **Time zones**: run, steps and file names are UTC; the slider and chart legends show UTC.
 - **Meteograms** are queried again on every location change, no cache except the browser image cache.
-- **Series format** shared with scripts/point_series.py (keys, encoding, grid convention, `NAMES` vs `SERIES_FILES`); the anomaly shading (`SIGMA_STEPS`, opacity, colours) and the thickness coupling (544 dam, 1.6 dam/K) follow the synop skill's diagram (`SIGMA_STEPS` in generate_diagram.py, `LAYER_OPACITY`, coupled_axes.py).
+- **Series format** shared with scripts/point_series.py (keys, encoding, grid convention, `NAMES` vs `SERIES_FILES`); the anomaly shading (`SIGMA_STEPS`, opacity, colours) follows the synop skill's diagram (`SIGMA_STEPS` in generate_diagram.py, `LAYER_OPACITY`).
 - **Start page loads ≈ 1 MB (gzip)** of series on every visit, also outside Austria: availability is known only after heights.json is loaded.
 - **T850 climate in the Alps**: ERA5 0.25° places the ground of many Alpine points above 850 hPa, so the climate mean there is extrapolated and can look warm.
 
@@ -342,6 +358,6 @@ CSS that must match the image size: `aspect-ratio: 1200 / 690` in ChartImage.mod
 - **Slider range**: `MAX_STEP` in StepSlider.tsx; `currentStep` in ChartGrid clamps with the same value.
 - **Keyboard shortcut**: `onKey` in ChartGrid.tsx; arrow keys in `<input>` are ignored on purpose.
 - **Location fields** (e.g. name, altitude): `GeoLocation` and `isValidLocation`; stored old objects pass `isValidLocation` in `load`.
-- **Meteogram**: a name in `meteograms`; layout in Meteogram.module.css.
+- **Meteogram**: a name in `meteograms`; with a fifth cell the grid needs another column count (StartPage.module.css).
 - **New chart window**: its values in `PROJECTIONS` of ChartProjection.ts, besides the pipeline changes.
-- **Another line in the temperature diagram**: field in point_series.py (REFERENCE.scripts.md), type in seriesFiles.ts, a new file also in `OPTIONAL` of useSeriesFiles.ts (or `REQUIRED`), series in `LocationTemperatures`/`TemperatureSeries.at`, path, legend entry and tooltip in TemperatureDiagram.tsx, colour in TemperatureDiagram.module.css; include its values in `TemperatureAxes`.
+- **Another line in the temperature diagram**: field in point_series.py (REFERENCE.scripts.md), type in seriesFiles.ts, a new file also in `OPTIONAL` of useSeriesFiles.ts (or `REQUIRED`), series in `LocationTemperatures`/`TemperatureSeries.at`, a `PanelLine` (and legend entry) in an existing `PanelSpec` or a new panel in `panels` of TemperatureDiagram.tsx, tooltip there, colour in TemperatureDiagram.module.css.
