@@ -1,0 +1,11 @@
+/* One full row above the meteograms. */
+.frame {
+  margin: 0 0 12px;
+  padding: 8px 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.status {
+  color: var(--muted);
+}

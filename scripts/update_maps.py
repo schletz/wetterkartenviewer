@@ -16,9 +16,11 @@ depend on it; the synop skill reads it as its data directory:
 At the end data/ is mirrored into the Azure blob container of the skill (blob_mirror.py), if
 .env holds its credentials; a failed upload only warns, the next call sends the rest.
 
-maps/ holds only what the web app loads: manifest.json (committed) and one
+maps/ holds only what the web app loads: manifest.json (committed), one
 AV1 video <window>/<product>.mp4 per tile layer in src/config/viewer.config.json
-(tile_videos.py, published as release assets by publish_maps.py).
+(tile_videos.py) and the temperature series austria/*.json of the start page
+(point_series.py, rewritten only when a run changes); publish_maps.py publishes
+the videos and series as release assets.
 
 Files of older runs in data/ are deleted. What else happens depends on the run, separately
 for ECMWF (every 12 h) and ICON-D2 (every 3 h), so a new ICON run renders only its window:
@@ -54,6 +56,7 @@ from lib.climate_archive import DIRECTORY as CLIMATE_DIRECTORY, ClimateArchive
 from lib.progress import Progress
 from maps_manifest import (MANIFEST, chart_frames, read_run, read_window_runs, tile_chart_paths, video_file,
                            write_manifest)
+from point_series import newest, write_series
 from tile_videos import encode_video
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -233,6 +236,9 @@ def main() -> None:
         list(pool.map(lambda window: render(renders[window], args.data, window), renders))
     stage("encode videos")
     encode_missing(args.data, args.maps, run)
+    stage("temperature series")
+    # A failed ICON download leaves the previous ICON file, which still feeds the series.
+    write_series(args.data, args.maps, grib, icon_grib or newest(args.data, ICON_PREFIX), args.force)
     print(write_manifest(args.data, args.maps, run))
     stage("blob mirror")
     try:

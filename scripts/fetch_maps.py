@@ -1,8 +1,9 @@
-"""Put the committed manifest and the videos it lists from the release into the Pages build.
+"""Put the committed manifest and the files it lists from the release into the Pages build.
 
 Runs in the deploy workflow: copies maps/manifest.json to <target> and
-downloads every video it lists from the release (maps_release.py) to
-<target>/<window>/<product>.mp4. The repository is public, so the downloads
+downloads every video and series file it lists from the release
+(maps_release.py) to the same path below <target>, e.g.
+<target>/<window>/<product>.mp4 or <target>/austria/t850.json. The repository is public, so the downloads
 need no token. Needs only the standard library.
 
 Usage: python3 scripts/fetch_maps.py maps dist/maps --repository owner/name
@@ -15,7 +16,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from maps_manifest import MANIFEST, video_files
+from maps_manifest import MANIFEST, published_files
 from maps_release import download_url
 
 TIMEOUT_S = 60
@@ -27,9 +28,9 @@ def main() -> None:
     parser.add_argument("target", type=Path, help="chart directory of the build, e.g. dist/maps")
     parser.add_argument("--repository", required=True, help="owner/name of the repository with the release")
     args = parser.parse_args()
-    files = video_files(args.maps)
+    files = published_files(args.maps)
     if not files:
-        sys.exit(f"{args.maps / MANIFEST} is missing or lists no video")
+        sys.exit(f"{args.maps / MANIFEST} is missing or lists no file")
     args.target.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(args.maps / MANIFEST, args.target / MANIFEST)
     for file in files:

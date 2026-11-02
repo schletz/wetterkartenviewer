@@ -1,7 +1,7 @@
 # wetterkartenviewer pipeline — agent reference
 
 Reference for the Python data pipeline in `scripts/` (download, derived fields, charts, videos, publishing), so an agent can extend, debug or refactor it without reading all the code.
-The web app that shows the result is described in REFERENCE.webapp.md; both meet only in `maps/manifest.json` and `src/config/viewer.config.json`.
+The web app that shows the result is described in REFERENCE.webapp.md; both meet only in `maps/manifest.json`, `maps/austria/*.json` and `src/config/viewer.config.json`.
 Paths are relative to the repository root. Symbols are named so that a search finds them.
 All times are UTC. A *step* is hours after the ECMWF run. Charts, messages, code and comments are English; data/charts.md is German.
 
@@ -12,7 +12,8 @@ The API sections follow Javadoc: intro, fields, methods per module or class.
 
 - Download one ECMWF IFS HRES run (0.1°, cropped to Europe, derived fields appended) and one DWD ICON-D2 run (icosahedral grid ≈ 2.2 km, unchanged) into `data/`.
 - Render WebP charts for three windows into `data/`, encode each tile layer of the viewer as `maps/<window>/<product>.mp4` (one frame per step), write `maps/manifest.json`.
-- Upload the videos to a GitHub release, push a manifest commit; GitHub Actions builds and deploys the app with them.
+- Cut T850 and the 1000–500 hPa thickness (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to an Austria box as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
+- Upload the videos and series files to a GitHub release, push a manifest commit; GitHub Actions builds and deploys the app with them.
 - IFS updates every 12 h, ICON-D2 every 3 h; `download_loop.sh` runs the whole chain every 10 min on an always-on machine.
 - `data/` is also the data directory of the skill synop (source in `skills/synop`, installed to `~/.claude/skills/synop`), see *Contract with the skill synop*; `blob_mirror.py` mirrors it into a public Azure blob container so the skill works without this repository.
 
@@ -60,6 +61,11 @@ component tile_videos [
  Encodes the charts of one
  layer into an AV1 video.
 ]
+component point_series [
+ **point_series.py**
+ Cuts temperatures, climate and heights
+ of the Austria box into JSON.
+]
 component maps_manifest [
  **maps_manifest.py**
  Builds and reads
@@ -67,7 +73,7 @@ component maps_manifest [
 ]
 component publish_maps [
  **publish_maps.py**
- Uploads changed videos,
+ Uploads changed videos and series,
  commits the manifest, pushes.
 ]
 component blob_mirror [
@@ -92,6 +98,7 @@ folder "data/<window>/" as window_dir {
 }
 folder "maps/" {
  artifact "<window>/<product>.mp4" as videos
+ artifact "austria/t850, t2m,\nheights, thickness.json" as series
  artifact "manifest.json" as manifest
 }
 artifact "src/config/viewer.config.json" as config
@@ -100,14 +107,15 @@ node "GitHub" {
  artifact "branch main" as repo
  artifact pages [
  **GitHub Pages**
- Viewer app with manifest
- and videos in maps/.
+ Viewer app with manifest,
+ videos and series in maps/.
  ]
 }
 update_maps ..> download_ecmwf : subprocess
 update_maps ..> download_icon : subprocess
 update_maps ..> render_charts : subprocess\nper stale window
 update_maps ..> tile_videos : encode_video()
+update_maps ..> point_series : write_series()
 update_maps ..> maps_manifest : write_manifest()
 update_maps ..> blob_mirror : mirror()
 ecmwf --> download_ecmwf
@@ -122,17 +130,23 @@ render_charts --> charts
 render_charts --> geometry
 charts --> tile_videos
 tile_videos --> videos
+ecmwf_grib --> point_series : t850, 2t,\nthick, orog
+icon_grib --> point_series : 2t, hsurf
+era5 --> point_series
+point_series --> series
 config --> maps_manifest : tile paths
 charts --> maps_manifest : steps
 geometry --> maps_manifest : window run
+series --> maps_manifest : version
 maps_manifest --> manifest
 manifest --> update_maps : published runs
 videos --> publish_maps
+series --> publish_maps
 manifest --> publish_maps
 publish_maps --> release : gh release upload
 publish_maps --> repo : git commit, push
 repo --> pages : push triggers Actions:\nnpm run build, manifest
-release --> pages : videos via\nfetch_maps.py
+release --> pages : videos and series\nvia fetch_maps.py
 data_dir --> synop : GRIB, charts.md
 window_dir --> synop : charts,\ngeometry.json
 data_dir --> blob_mirror
@@ -190,6 +204,12 @@ note right
  ICON path without charts: warn, skip
  other path without charts: sys.exit before encoding
  ThreadPool(PARALLEL_ENCODES) x encode_video
+end note
+:write_series with icon_grib or the newest
+icon-d2_*.grb2 left in data/;
+note right
+ a file is written only if its version changed
+ or --force; ≈ 1.5 min per new ECMWF run
 end note
 :write_manifest;
 :blob_mirror.mirror(data);
@@ -494,7 +514,11 @@ Written by `build_manifest` (scripts/maps_manifest.py), typed as `Manifest` (src
  "run": "2026103012", "end": 240 },
  "icon-d2/weather_summary":
  { "file": "icon-d2/weather_summary.mp4", "steps": [22, 23, ..., 69],
- "run": "2026103109", "end": 69 } } }
+ "run": "2026103109", "end": 69 } },
+ "series": { "t850": { "file": "austria/t850.json", "version": "2026110112" },
+ "t2m": { "file": "austria/t2m.json", "version": "2026110112-2026110206" },
+ "heights": { "file": "austria/heights.json", "version": "2026110206-25344" },
+ "thickness": { "file": "austria/thickness.json", "version": "2026110112" } } }
 ```
 
 - `run` (top): the ECMWF run. The slider and all `steps`, ICON ones included, count from it.
@@ -505,6 +529,24 @@ Written by `build_manifest` (scripts/maps_manifest.py), typed as `Manifest` (src
 - `end`: step of the last frame, for a daily chart + 23 h, so a daily chart covers its day. `frame` returns null after `end`.
 - `fps`: `FPS` (10), used for encoding too; the app only uses the manifest value.
 - Steps are irregular: IFS 3-hourly to +144, then 6-hourly (65 frames; products start differently, `weather_summary` at +3, `dt850_24h` at +24). ICON hourly, 49 frames (48 for `weather_summary`), offset by the gap between the two runs (e.g. +21…+69); tmax/tmin one frame per day.
+- `series` (`series_entries`): the files of `SERIES_FILES` present in `maps/`, with the `version` read from each file; the app's cache parameter. Missing → the app shows no temperature diagram. Optional in TS.
+
+### maps/austria/*.json — temperature series of the start page
+
+Written by `write_series` (scripts/point_series.py), typed in src/model/seriesFiles.ts, read by `TemperatureSeries` (REFERENCE.webapp.md). Compact JSON; GitHub Pages serves it gzip'd.
+
+Encoding of every series: whole multiples of `scale` (0.1 K, 0.1 dam for the thickness), **time-major** (all points of time 0, then all of time 1 …), **deltas along time** (time 0 absolute). Measured: about a fifth of the raw size after gzip; time-major packs ≈ 20 % better than one series per point, binary Int16 is no smaller after gzip, 0.2 K would save another quarter of ICON.
+Regular grids (`grid`: `lat0` northernmost row, `lon0`, `dlat` step southwards, `dlon`, `nj`, `ni`; index = row × ni + col) cover `BOX` (46.3–49.1° N, 9.5–17.2° E); the ERA5 window is wider by half a grid step so the nearest point of every box location is in it.
+
+| File, version | Content | Size (run 2026110112) |
+| --- | --- | --- |
+| `t850.json`, ECMWF run | `ecmwf`: `run`, `steps`, `grid` (0.1°, 29×78), `orog` (m, per point), `t850`; `climate`: ERA5 T850 | 566 KB, gzip 104 KB |
+| `t2m.json`, `<ecmwf run>-<icon run or none>` | `ecmwf` with `t2m`; `climate`: ERA5 T2m; `icon` (only with an ICON file): `run`, `steps`, `cells`, `t2m` on the cells of heights.json | 3.8 MB, gzip 700 KB |
+| `thickness.json`, ECMWF run | `ecmwf` with `thickness` in dam (`thick` gpm × 0.1); no climate | 388 KB, gzip 77 KB |
+| `heights.json`, `<icon run>-<cells>` | ICON cells within `BORDER_MARGIN` of Austria in file order (25 344): `lat`, `lon` as deltas of `coord_scale` 1e-4°, `hsurf` (m) | 316 KB, gzip 78 KB |
+
+`climate` (both levels): `period`, `grid` (0.25°, 12×32), `first_day` (00 UTC of the ECMWF run), `days` (to the last step, 11), `hours` (00…21), `months` (touched by the days); `term` (per day and hour, day-major), `daily`, `monthly`, each `{mean (°C), std (K)}`.
+Values in °C (T) and K (std); `box` and `scale` at the top of t850/t2m.
 
 ### data/ layout
 
@@ -518,7 +560,7 @@ Written by `build_manifest` (scripts/maps_manifest.py), typed as `Manifest` (src
 | `charts.md` | by hand, committed | German description of files, GRIB fields, products for the skill |
 
 Windows: `opencharts_europe` (all IFS products), `opencharts_central_europe` (IFS defaults), `icon-d2` (all ICON products).
-`data/` is ignored by git except `charts.md`; `maps/` except `manifest.json`; `docs/` holds the diagram sources and PNGs.
+`data/` is ignored by git except `charts.md`; `maps/` except `manifest.json` (so `maps/austria/` reaches Pages only through the release); `docs/` holds the diagram sources and PNGs.
 Sizes (run 2026103000): europe 266 MB, central_europe 125 MB, `maps/` ≈ 67 MB with 14 videos of 2.2–7.3 MB.
 
 ### geometry.json
@@ -588,6 +630,7 @@ Total 4 + 22 × 49 + 48 = 1130 messages. The aliases give ICON fields the IFS na
 ```
 update_maps.py <data> <maps> [--base YYYYMMDDHH] [--icon-run YYYYMMDDHH] [--force]
 maps_manifest.py <data> <maps> --run YYYYMMDDHH
+point_series.py <data> <maps> [--force] (newest ecmwf_*/icon-d2_*.grb2 of data)
 publish_maps.py <maps> (gh and git run in the repo root)
 fetch_maps.py <maps> <target> --repository owner/name
 blob_mirror.py <data> (credentials from the environment or .env)
@@ -603,8 +646,8 @@ download_loop.sh [--yes] every 600 s: git fetch, reset --hard origin/main, downl
 ```
 
 Status on stdout, errors on stderr. Downloaders print the absolute GRIB path as their last stdout line and exit 0 with "already on disk" if the target is complete.
-Output is whole lines only, never `\r`, so a terminal, a log file and an agent reading redirected output see the same. update_maps.py prints `[HH:MM:SS] <phase>` before each phase (ECMWF download, ICON-D2 download, render, encode videos, blob mirror, done) and passes its subprocesses' stdout on line by line; long steps print `Progress` lines (*Progress*). update_maps.py and publish_maps.py set `sys.stdout` to line buffering.
-`download_ecmwf_data.py` and `download_icon_d2.py`, `render_charts.py`, `make_icon_test_grib.py` put their own folder on `sys.path` (work with `python -I`); `update_maps.py`, `maps_manifest.py`, `publish_maps.py`, `fetch_maps.py`, `blob_mirror.py` import their sibling modules without `-I`.
+Output is whole lines only, never `\r`, so a terminal, a log file and an agent reading redirected output see the same. update_maps.py prints `[HH:MM:SS] <phase>` before each phase (ECMWF download, ICON-D2 download, render, encode videos, temperature series, blob mirror, done) and passes its subprocesses' stdout on line by line; long steps print `Progress` lines (*Progress*). update_maps.py and publish_maps.py set `sys.stdout` to line buffering.
+`download_ecmwf_data.py` and `download_icon_d2.py`, `render_charts.py`, `make_icon_test_grib.py` put their own folder on `sys.path` (work with `python -I`); `update_maps.py`, `maps_manifest.py`, `point_series.py`, `publish_maps.py`, `fetch_maps.py`, `blob_mirror.py` import their sibling modules without `-I`; maps_manifest.py and fetch_maps.py need only the standard library (fetch_maps runs in the deploy workflow).
 Python packages (no requirements file): `ecmwf-opendata`, `eccodes`, `numpy`, `scipy`, `matplotlib` (Agg), `Pillow`, `requests`, `azure-storage-blob` (update_maps.py imports it also without credentials); build_borders.py also `pyshp`, `shapely` ≥ 2.1, `pyproj`. `ffmpeg` with `libaom-av1` must be on PATH.
 
 ## API: scripts/ (command line and modules)
@@ -635,6 +678,27 @@ Without a new run a call takes ≈ 3.5 s.
 | `render(grib, data, window)` | `run_live` of render_charts.py for one window, stdout live; stderr goes to a temp file (an unread pipe could block the renderer) and is shown only in the `sys.exit` on failure. Windows render in parallel threads, so their lines interleave; every renderer line names its window |
 | `stale_windows(data, maps, windows, same_run, run) -> list` | windows to render; empties `maps/<window>/` unless same run; same run: window folder missing or a tile path without charts (incomplete product folders are not checked) |
 | `encode_missing(data, maps, run)` | encode config paths without video; exits before the first encode if a non-ICON path has no charts; `Progress` line per finished video (`as_completed`) |
+
+### point_series.py
+
+Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t`850, `2t`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours`).
+A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850 and thickness per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
+A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. ICON cells with NaN `hsurf` (boundary zone) are dropped. Without any ICON file t2m.json has no `icon` and heights.json is not written; the app then shows nothing (it needs heights).
+
+| Field | Meaning |
+| --- | --- |
+| `BOX` | 46.3–49.1° N, 9.5–17.2° E: Austria plus ≈ 10 km |
+| `BORDER_MARGIN = 0.15` | ICON cells farther from Austria (degrees of latitude, longitudes × cos 47.7°) are left out; outline from `AUSTRIA_BORDERS` (`ISO` AT, `LEVEL` country, outer rings, `matplotlib.path`), distance by `cKDTree` |
+| `SCALE = 0.1`, `COORD_SCALE = 1e-4` | value (K or dam) and coordinate units |
+
+| Function | Summary |
+| --- | --- |
+| `write_series(data, maps, ecmwf_grib, icon_grib, force=False)` | write the stale files; `icon_grib` None → t2m without ICON |
+| `time_major_deltas(fields, scale) -> list[int]` | the encoding |
+| `box_window(grid, margin) -> (rows, cols, grid)` | part of a regular grid inside `BOX` ± margin |
+| `ecmwf_block(grib, name, level, key, offset=-KELVIN, factor=1)`, `icon_block(grib, cells)`, `climate_block(archive, level, run, last_step)`, `heights_document(grib, cells)` | the parts of the files |
+| `austria_cells(lat, lon)`, `icon_cells(grib)` | cell indices in file order |
+| `newest(data, prefix) -> Path \| None` | newest finished `<prefix>*.grb2` (also used by update_maps.py when the ICON download failed) |
 
 ### blob_mirror.py
 
@@ -679,8 +743,9 @@ ICON steps count from the ECMWF run: with a new ECMWF run and the same ICON run 
 | `chart_frames(data, path, run) -> list[(step, Path)]` | the frames of a layer's video, sorted by step |
 | `video_file(path) -> str` | `<path>.mp4` |
 | `window_run(data, window) -> str \| None` | `run` of `data/<window>/geometry.json`; missing → the next call re-renders an ICON window every time |
-| `build_manifest(data, maps, run, paths) -> dict` | only paths with a video in `maps/` (else warning) |
-| `read_run(maps)`, `read_window_runs(maps)`, `video_files(maps)` | read the manifest; None/empty if unreadable |
+| `build_manifest(data, maps, run, paths) -> dict` | only paths with a video in `maps/` (else warning); `series` from `series_entries` |
+| `read_run(maps)`, `read_window_runs(maps)`, `published_files(maps)` | read the manifest; None/empty if unreadable; `published_files` = videos + series files |
+| `SERIES_FILES`, `read_version(path)`, `series_entries(maps) -> dict` | series name → `austria/<name>.json`; `version` of a file (None if missing/unreadable); the manifest's `series` |
 | `write_manifest(data, maps, run) -> Path` | write it; prints the path |
 
 ### tile_videos.py
@@ -709,15 +774,15 @@ Aborts before any upload without manifest, without videos in it, or if one is mi
 | --- | --- |
 | `call(*command) -> str` | run in the repo root; `sys.exit` with stderr on failure (in an upload thread it surfaces via `future.result()`) |
 | `ensure_release()` | create release `tile-videos` on first use, `--latest=false` |
-| `changed_videos(maps, files) -> list` | asset missing, other size, or `updatedAt` older than the file mtime; no hash, so equal size + older mtime from another machine goes unnoticed |
-| `upload_videos(maps, files)` | per video: copy under its asset name into a temp dir, `gh release upload --clobber` (deletes the old asset first); one gh call per video so `Progress` can report each |
+| `changed_files(maps, files) -> list` | asset missing, other size, or `updatedAt` older than the file mtime; no hash, so equal size + older mtime from another machine goes unnoticed |
+| `upload_files(maps, files)` | videos and series files alike; per file: copy under its asset name into a temp dir, `gh release upload --clobber` (deletes the old asset first); one gh call per file so `Progress` can report each |
 | `prune_assets(files)` | delete assets the manifest does not list: videos of earlier runs exist nowhere afterwards |
 | `commit_message(maps, run) -> str` | "Data update <run>z" + ", <window> <run>z" per window of another run |
 | `commit_manifest(maps, run)` | `git add` + `git commit -- maps/manifest.json` if it changed |
 
 ### fetch_maps.py and maps_release.py
 
-`fetch_maps.main` runs in the deploy workflow: copies `maps/manifest.json` to `<target>`, downloads every listed video anonymously (repo must be public) from `https://github.com/<repo>/releases/download/tile-videos/<asset>`, `TIMEOUT_S = 60`; any failure → `sys.exit` with the URL, the old site stays.
+`fetch_maps.main` runs in the deploy workflow: copies `maps/manifest.json` to `<target>`, downloads every listed video and series file anonymously (repo must be public) from `https://github.com/<repo>/releases/download/tile-videos/<asset>`, `TIMEOUT_S = 60`; any failure → `sys.exit` with the URL, the old site stays.
 maps_release.py: `TAG = 'tile-videos'`; `asset_name(file)` replaces `/` with `.`; `download_url(repository, file)`.
 Workflow `.github/workflows/deploy.yml`: on push to `main` or manually; Node 24, `npm ci`, `npm run build`, `fetch_maps.py maps dist/maps`, deploy Pages; `concurrency: pages`, `cancel-in-progress`.
 
@@ -977,7 +1042,7 @@ ICON's `max_2t`/`min_2t` restart every `RESTART_HOURS = 6` h from the run start 
 
 `ClimateArchive(directory, period=PERIOD)` indexes **every** `<dir>/*.grb2` on first access without ecCodes, from the bytes of each header (`_headers`, `_key`): section 1 month/day/hour (year ignored), template 4.8 first surface (type 100 Pa → hPa, 103 m), number of time ranges (1 = term, 2 = `daily`, 3 = `monthly`) and statistic of the **outermost** range (0 mean, 6 std). ecCodes needs ≈ 4.8 s for the 13 224 headers, the bytes ≈ 0.09 s, and every render worker builds its own archive. Do not use shortName: ecCodes calls the std `avg_t` too. Another template or a header beyond `HEADER_BYTES = 512` → `ValueError`. No archive → `FileNotFoundError`.
 Keys `(kind, statistic, level, month, day)`: kind `HHz` (term hours present), `daily`, `monthly`; statistic `mean`/`std`; level 850 (T850) or 2 (T2m); day None for monthly; values in K. Fields are decoded on demand, cache unbounded. `PERIOD = '1991–2020'` (label only), `DIRECTORY = 'era5_means'`.
-`T850Climate(archive)`: needs an `HHz` kind for **every** hour of the valid times, else `ValueError` from `term_kind`. Only `t850_anomaly` uses it (`period` in its title).
+`T850Climate(archive)`: needs an `HHz` kind for **every** hour of the valid times, else `ValueError` from `term_kind`. Only `t850_anomaly` uses it (`period` in its title). point_series.py reads `ClimateArchive` directly (all kinds, both levels).
 
 | Method | Summary |
 | --- | --- |
@@ -1180,15 +1245,17 @@ Line: `render opencharts_europe [######..............]  30 % 390/1300 charts, 0:
 | field lost or placeholder in a product | "No data available" chart, everything else as usual (stress test 31.10.2026: exit 0, 33 "No data" charts) |
 | climatology missing | update_maps: exit 1 before anything; render_charts directly with a CLIMATE product: `FileNotFoundError` |
 | ICON file with `--products` outside `IconProducts.ALL` | argparse error, exit 2 |
-| upload breaks off | `sys.exit`; some assets replaced, manifest not committed; the next call uploads what `changed_videos` detects |
+| upload breaks off | `sys.exit`; some assets replaced, manifest not committed; the next call uploads what `changed_files` detects |
 | blob upload fails (network, key) | update_maps.py: warning on stderr, exit 0, publish still runs; uploaded files stay, `current_run.json` stays missing (readers refuse the container), the next call sends the rest and writes it |
 | push rejected | `sys.exit`; local manifest commit stays (download_loop.sh discards it on its next reset) |
+| ICON download failed | `write_series` takes the newest `icon-d2_*.grb2` still in `data/`; none → t2m.json without `icon`, the app shows no diagram until heights.json exists |
 
 No logging framework, no tests, no cleanup of `.part` files after an exception. The stress test (fake ECMWF server, ICON 404, random bytes) existed only in a session scratchpad.
 
 ## Pitfalls
 
 - **Values that must stay in sync**: projection parameters (Python, TS); image size 1200×690 (chart_canvas.py, tile_videos.py, TS, CSS); `MOUNTAIN_HEIGHT_M` vs `MOUNTAIN_HEIGHTS`; `PER_STEP` vs `step_messages`; product names in the classes vs render_charts.py docstring (`--help`) and data/charts.md; window names in `PROJECTIONS`, `WINDOWS`/`ICON_WINDOWS`, `DEFAULTS`, TS `PROJECTIONS`; `PREFIX` vs `ICON_PREFIX` vs `blob_mirror.MODELS` (also the keys of `current_run.json` the skill reads); layer format TS vs Python; two profile level lists (IFS `constants.PROFILE_LEVELS`, ICON `PROFILE_LEVELS`).
+- **Series format** (point_series.py vs src/model/seriesFiles.ts, `TemperatureSeries`): encoding, key names, grid convention; `SERIES_FILES` names vs `REQUIRED`/`OPTIONAL` in src/hooks/useSeriesFiles.ts. t2m.json's ICON part must have the cells of heights.json (`cells` equal; the app drops ICON otherwise). Changing the format without changing the runs needs `point_series.py --force` (or `update_maps.py --force`), else the files stay.
 - **Video and steps can drift**: whoever changes `data/<window>/<product>/` outside update_maps.py must delete the video.
 - **Fallback chains switch videos**; an ICON daily product in a chain covers only its day until 23 UTC.
 - **ICON steps hang on the ECMWF run**; relating steps to the ICON run means changing `chart_frames`, `ChartIndex` and `currentStep` together.
@@ -1214,4 +1281,5 @@ No logging framework, no tests, no cleanup of `.part` files after an exception. 
 - **New pressure level**: IFS `constants.PROFILE_LEVELS` (only published levels, no 800 hPa) and the wind groups `uvw700`/`uv_low`; ICON both lists.
 - **New chart window**: `Projection` in `PROJECTIONS` (Lambert via `lambert`); IFS: `ChartProducts.DEFAULTS` and `WINDOWS`; ICON: `IconProducts.DEFAULTS`, `ICON_WINDOWS`, window inside the ICON domain (render_charts.py defaults to `icon-d2` for ICON files); always TS `PROJECTIONS`. The IFS crop box grows automatically; old files keep the old box. Another image size touches `IMAGE_*`, `WIDTH`/`HEIGHT`, both CSS files and `ContactSheet`.
 - **Other climatology**: `PERIOD`/`DIRECTORY` or `--climate`; GRIB2 template 4.8, one message per field, `HHz` for every hour 00…21, T850 in K, regular grid north → south. Remove `check_climate` if no CLIMATE product remains. Update the README link.
+- **Another series field or region**: block in `write_series` (new file: name in `SERIES_FILES`, its version rule), type in src/model/seriesFiles.ts and use in `TemperatureSeries`; the manifest, publish and fetch follow `SERIES_FILES`. Another region: `BOX`, the border feature in `austria_cells`, the folder name in `SERIES_FILES`.
 - **Rare weather test**: `make_icon_test_grib.py data/icon-d2_<run>.grb2 <dir>/icon-d2_<run>.grb2 --step N`, then `render_charts.py <copy> <dir>`.

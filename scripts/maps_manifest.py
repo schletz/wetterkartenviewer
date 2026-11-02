@@ -17,6 +17,11 @@ or the last hour of the day of its last daily chart. The viewer shows
 nothing beyond it, instead of the last frame of a short run, and falls
 back to the next path of a layer with several (viewer.config.json).
 
+``series`` lists the temperature series of the start page (point_series.py)
+present in maps/, each with its file and ``version`` (the runs it comes
+from), which the viewer uses as cache parameter like ``run`` of a video.
+Needs only the standard library (fetch_maps.py runs in the deploy workflow).
+
 Usage: python scripts/maps_manifest.py data maps --run 2026103000
 """
 
@@ -30,6 +35,8 @@ MANIFEST = "manifest.json"
 # Frame rate of the tile videos (tile_videos.py); the viewer seeks by it.
 FPS = 10
 HOURS_PER_DAY = 24
+# Temperature series of the start page (point_series.py): name -> file relative to maps/.
+SERIES_FILES = {name: f"austria/{name}.json" for name in ("t850", "t2m", "heights", "thickness")}
 
 
 def tile_chart_paths(config: Path = CONFIG) -> list[str]:
@@ -90,7 +97,25 @@ def build_manifest(data: Path, maps: Path, run: str, paths: list[str]) -> dict:
         if frames:
             chart["end"] = frames[-1][0] + (0 if len(frames[-1][1].stem) == 10 else HOURS_PER_DAY - 1)
         charts[path] = chart
-    return {"run": run, "fps": FPS, "charts": charts}
+    return {"run": run, "fps": FPS, "charts": charts, "series": series_entries(maps)}
+
+
+def read_version(path: Path) -> str | None:
+    """``version`` of a series file, None if it is missing or unreadable."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))["version"]
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def series_entries(maps: Path) -> dict[str, dict]:
+    """Manifest entries {name: {file, version}} of the series files present in ``maps``."""
+    entries = {}
+    for name, file in SERIES_FILES.items():
+        version = read_version(maps / file)
+        if version is not None:
+            entries[name] = {"file": file, "version": version}
+    return entries
 
 
 def read_run(maps: Path) -> str | None:
@@ -110,17 +135,18 @@ def read_window_runs(maps: Path) -> dict[str, str]:
     return {path.split("/")[0]: chart["run"] for path, chart in charts.items() if "run" in chart}
 
 
-def video_files(maps: Path) -> list[str]:
-    """Videos the manifest in ``maps`` lists, relative to ``maps``; empty if there is no readable manifest."""
+def published_files(maps: Path) -> list[str]:
+    """Videos and series files the manifest in ``maps`` lists, relative to ``maps``; empty if there is no readable manifest."""
     try:
-        charts = json.loads((maps / MANIFEST).read_text(encoding="utf-8"))["charts"]
+        manifest = json.loads((maps / MANIFEST).read_text(encoding="utf-8"))
+        charts = manifest["charts"]
     except (OSError, ValueError, KeyError):
         return []
-    return [chart["file"] for chart in charts.values()]
+    return [chart["file"] for chart in charts.values()] + [entry["file"] for entry in manifest.get("series", {}).values()]
 
 
 def write_manifest(data: Path, maps: Path, run: str) -> Path:
-    """Write the manifest of the tile videos into ``maps``; returns its path."""
+    """Write the manifest of the tile videos and series files into ``maps``; returns its path."""
     target = maps / MANIFEST
     manifest = build_manifest(data, maps, run, tile_chart_paths())
     target.write_text(json.dumps(manifest, indent=1), encoding="utf-8")

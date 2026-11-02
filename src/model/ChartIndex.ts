@@ -18,6 +18,14 @@ export interface ChartFrame {
   step: number
 }
 
+/** A temperature series file of the start page (scripts/point_series.py). */
+export interface SeriesEntry {
+  /** Path of the file relative to maps/. */
+  file: string
+  /** The runs the file comes from; cache parameter of its URL. */
+  version: string
+}
+
 /** maps/manifest.json as written by scripts/maps_manifest.py. */
 export interface Manifest {
   /** Base time of the run, YYYYMMDDHH in UTC. */
@@ -26,6 +34,8 @@ export interface Manifest {
   fps: number
   /** Video per chart path. */
   charts: Record<ChartPath, ChartVideo>
+  /** Series files by name (t850, t2m, heights); missing in older manifests. */
+  series?: Record<string, SeriesEntry>
 }
 
 /** Looks up the videos and frames of one run. */

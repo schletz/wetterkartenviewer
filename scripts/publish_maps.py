@@ -1,8 +1,9 @@
-"""Publish maps/: upload the tile videos to the release, commit the manifest and push.
+"""Publish maps/: upload the tile videos and series files to the release, commit the manifest and push.
 
-maps/ holds only the manifest and one video per tile layer (update_maps.py
-encodes them from the charts in data/), so viewer.config.json alone
-decides what is published. The videos (about 50 MB per ECMWF run) replace
+maps/ holds only the manifest, one video per tile layer (update_maps.py
+encodes them from the charts in data/) and the temperature series of the
+start page (point_series.py), so viewer.config.json alone decides which
+videos are published. The videos (about 50 MB per ECMWF run) replace
 the assets of the release (maps_release.py); only videos that changed since
 their upload are sent again (another size, or a file newer than the asset),
 so a new ICON-D2 run every 3 h uploads only its own videos. Assets the
@@ -28,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from lib.progress import Progress
-from maps_manifest import MANIFEST, read_run, read_window_runs, video_files
+from maps_manifest import MANIFEST, published_files, read_run, read_window_runs
 from maps_release import TAG, asset_name
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -52,8 +53,8 @@ def ensure_release() -> None:
         print(f"created release {TAG}")
 
 
-def changed_videos(maps: Path, files: list[str]) -> list[str]:
-    """Videos without an asset of the same size uploaded after the file was written."""
+def changed_files(maps: Path, files: list[str]) -> list[str]:
+    """Files without an asset of the same size uploaded after the file was written."""
     assets = {asset["name"]: asset for asset in json.loads(call("gh", "release", "view", TAG, "--json", "assets"))["assets"]}
     changed = []
     for file in files:
@@ -64,16 +65,16 @@ def changed_videos(maps: Path, files: list[str]) -> list[str]:
     return changed
 
 
-def upload_videos(maps: Path, files: list[str]) -> None:
-    """Upload the videos under their asset names, replacing assets of the same name.
+def upload_files(maps: Path, files: list[str]) -> None:
+    """Upload the files under their asset names, replacing assets of the same name.
 
-    One gh call per video, PARALLEL_UPLOADS at a time, so the progress shows each finished video.
+    One gh call per file, PARALLEL_UPLOADS at a time, so the progress shows each finished file.
     """
-    progress = Progress("upload", len(files), "videos", every=0)
+    progress = Progress("upload", len(files), "files", every=0)
     with tempfile.TemporaryDirectory() as staging:
 
         def send(file: str) -> str:
-            # gh names an asset after its file, so the video is copied under its flat asset name first.
+            # gh names an asset after its file, so the file is copied under its flat asset name first.
             path = Path(staging) / asset_name(file)
             shutil.copyfile(maps / file, path)
             call("gh", "release", "upload", TAG, str(path), "--clobber")
@@ -82,11 +83,11 @@ def upload_videos(maps: Path, files: list[str]) -> None:
         with ThreadPoolExecutor(PARALLEL_UPLOADS) as pool:
             for future in as_completed([pool.submit(send, file) for file in files]):
                 progress.advance(future.result())
-    print(f"uploaded {len(files)} videos to release {TAG}")
+    print(f"uploaded {len(files)} files to release {TAG}")
 
 
 def prune_assets(files: list[str]) -> None:
-    """Delete the assets of videos the manifest no longer lists."""
+    """Delete the assets of files the manifest no longer lists."""
     keep = {asset_name(file) for file in files}
     for name in call("gh", "release", "view", TAG, "--json", "assets", "--jq", ".assets[].name").splitlines():
         if name not in keep:
@@ -118,19 +119,19 @@ def main() -> None:
     args = parser.parse_args()
     # Whole lines at once, also when the output goes to a file or an agent.
     sys.stdout.reconfigure(line_buffering=True)
-    run, files = read_run(args.maps), video_files(args.maps)
+    run, files = read_run(args.maps), published_files(args.maps)
     if run is None or not files:
-        sys.exit(f"{args.maps / MANIFEST} is missing or lists no video; run update_maps.py first")
+        sys.exit(f"{args.maps / MANIFEST} is missing or lists no file; run update_maps.py first")
     missing = [file for file in files if not (args.maps / file).is_file()]
     if missing:
-        sys.exit(f"videos listed in the manifest are missing: {', '.join(missing)}; run update_maps.py")
-    print(f"comparing {len(files)} videos with the assets of release {TAG}")
+        sys.exit(f"files listed in the manifest are missing: {', '.join(missing)}; run update_maps.py")
+    print(f"comparing {len(files)} files with the assets of release {TAG}")
     ensure_release()
-    changed = changed_videos(args.maps, files)
+    changed = changed_files(args.maps, files)
     if changed:
-        upload_videos(args.maps, changed)
+        upload_files(args.maps, changed)
     else:
-        print("every video is up to date in the release")
+        print("every file is up to date in the release")
     prune_assets(files)
     commit_manifest(args.maps, run)
     print("pushing")
