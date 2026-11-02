@@ -944,5 +944,23 @@
    "run": "2026110112",
    "end": 240
   }
+ },
+ "series": {
+  "t850": {
+   "file": "austria/t850.json",
+   "version": "2026110112"
+  },
+  "t2m": {
+   "file": "austria/t2m.json",
+   "version": "2026110112-2026110206"
+  },
+  "heights": {
+   "file": "austria/heights.json",
+   "version": "2026110206-25344"
+  },
+  "thickness": {
+   "file": "austria/thickness.json",
+   "version": "2026110112"
+  }
  }
 }
