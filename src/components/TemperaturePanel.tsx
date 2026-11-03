@@ -9,6 +9,8 @@ const LEGEND_SWATCH_WIDTH = 22
 const MIN_DAY_LABEL_WIDTH = 26
 const DAY_MS = 86_400_000
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
+/** Share of the half plot height the largest centred area may fill. */
+const CENTRED_FILL = 0.9
 
 interface TemperaturePanelProps {
   placed: PlacedPanel
@@ -32,6 +34,12 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
   const values = panel.lines.flatMap((line) => line.values.flatMap((p) => (p === null ? [] : [p.value])))
   const axis = new ValueAxis(values, plotTop, plotBottom, panel.steps)
   const clipId = `temperature-${panel.key}`
+  // Centred areas: zero in the middle of the axis, shrunk below maxScale only if the largest would leave the plot.
+  const centre = (axis.min + axis.max) / 2
+  const centred = panel.centred
+  const centredScale = centred === undefined || centred.extent <= 0
+    ? 0
+    : Math.min(centred.maxScale, (CENTRED_FILL * (axis.max - centre)) / centred.extent)
 
   const path = (points: (ValuePoint | null)[]) => {
     let penDown = false
@@ -60,7 +68,7 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
           <g key={entry.text}>
             {'line' in entry
               ? <line className={`${styles.line} ${entry.line}`} x1={left} x2={left + LEGEND_SWATCH_WIDTH - 4} y1={y} y2={y} />
-              : <BandSwatch x={left} y={y} />}
+              : 'bands' in entry ? <BandSwatch x={left} y={y} /> : <SignSwatch x={left} y={y} />}
             <text x={left + LEGEND_SWATCH_WIDTH} y={y + 4}>{entry.text}</text>
           </g>
         )
@@ -96,8 +104,27 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
           <polygon key={i} className={band.side === WARM ? styles.warm : styles.cold}
             points={band.vertices.map(([vx, value]) => `${vx.toFixed(1)},${axis.y(value).toFixed(1)}`).join(' ')} />
         ))}
+        {centred?.polygons.map((band, i) => (
+          <polygon key={`centred-${i}`} className={`${band.side === WARM ? styles.warm : styles.cold} ${styles.signed}`}
+            points={band.vertices.map(([vx, value]) => `${vx.toFixed(1)},${axis.y(centre + value * centredScale).toFixed(1)}`).join(' ')} />
+        ))}
+        {centred !== undefined && (
+          <line className={`${styles.line} ${styles.parcel}`} x1={left} x2={right} y1={axis.y(centre)} y2={axis.y(centre)} />
+        )}
         {panel.lines.map((line) => <path key={line.className} className={`${styles.line} ${line.className}`} d={path(line.values)} />)}
       </g>
+    </g>
+  )
+}
+
+/** Legend swatch of the centred areas: warm above, cold below, the zero line between. */
+function SignSwatch({ x, y }: { x: number; y: number }) {
+  const width = LEGEND_SWATCH_WIDTH - 4
+  return (
+    <g>
+      <rect className={`${styles.warm} ${styles.signed}`} x={x} y={y - 6} width={width} height={6} />
+      <rect className={`${styles.cold} ${styles.signed}`} x={x} y={y} width={width} height={6} />
+      <line className={`${styles.line} ${styles.parcel}`} x1={x} x2={x + width} y1={y} y2={y} />
     </g>
   )
 }

@@ -21,15 +21,11 @@ const TICK_HOURS = 6
 const HOUR_MS = 3_600_000
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 /**
- * Vertical totals share the thickness axis: TOTALS_MEAN K lies at THICKNESS_MEAN dam, 1 K spans
- * THICKNESS_PER_KELVIN dam. Only their position against the parcel reference counts, so they need no axis of
- * their own. The means are those of Austria: ERA5 1991–2020 monthly T850 over its 163 grid points averages
- * 5.0 °C, i.e. 552 dam with the coupling 544 dam + 1.6 dam/K × T850 of the synop skill, and the totals of a
- * saturated parcel at the monthly means average 27.2 K. With the skill's 1.6 dam/K, 1 K of vertical totals is as tall as
- * 1 K of T850, and their swings stay as large as those of the thickness.
+ * The vertical totals against the parcel (−Showalter) share the thickness panel without an axis of their own,
+ * around its middle: only the side counts. 1 K spans at most THICKNESS_PER_KELVIN dam, the T850 scale of the
+ * synop skill's coupling 544 dam + 1.6 dam/K × T850, so their swings stay about as large as those of the
+ * thickness; less only when the largest would leave the plot.
  */
-const THICKNESS_MEAN = 552
-const TOTALS_MEAN = 27
 const THICKNESS_PER_KELVIN = 1.6
 
 interface TemperatureDiagramProps {
@@ -52,9 +48,9 @@ function timeLabel(time: Date): string {
 
 /**
  * Meteogram of T2m (ECMWF and ICON-D2), T850 (ECMWF) with its anomaly against the ERA5 climate, the
- * ECMWF 1000–500 hPa thickness with the vertical totals T850 − T500 on its axis, against those of a parcel
- * lifted from 850 hPa with its dew point from RH850 (above them the Showalter index is negative), in panels one
- * below the other like the ENS meteograms. Fills its parent.
+ * ECMWF 1000–500 hPa thickness with the vertical totals T850 − T500 minus those of a parcel lifted from 850 hPa
+ * with its dew point from RH850 (−Showalter) as areas around the middle of its axis, red above (unstable), blue
+ * below, in panels one below the other like the ENS meteograms. Fills its parent.
  */
 export default function TemperatureDiagram({ temperatures }: TemperatureDiagramProps) {
   const box = useRef<HTMLDivElement>(null)
@@ -94,11 +90,11 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     const parcel = parcels[i]
     return upper === undefined || parcel === null ? null : { valid: p.valid, totals: p.value - upper, parcel }
   })
-  const totals = pairs.map((q) => q && { valid: q.valid, value: q.totals })
-  const parcelTotals = pairs.map((q) => q && { valid: q.valid, value: q.parcel.totals })
-  const onThicknessAxis = (point: ValuePoint | null) => point === null
-    ? null
-    : { valid: point.valid, value: THICKNESS_MEAN + THICKNESS_PER_KELVIN * (point.value - TOTALS_MEAN) }
+  // VT minus the parcel's totals = −Showalter: above zero the parcel is warmer than T500 (unstable, red).
+  const instability = anomalyPolygons(pairs.map((q) => q && {
+    x: x(q.valid), value: q.totals - q.parcel.totals, mean: 0, std: 0,
+  }), [0])
+  const extent = Math.max(0, ...pairs.map((q) => (q === null ? 0 : Math.abs(q.totals - q.parcel.totals))))
 
   const bands = anomalyPolygons(t850.values.map((p, i) => {
     const climate = climate850[i]
@@ -137,21 +133,15 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     },
     ...(thickness === null ? [] : [{
       key: 'thickness',
-      title: !hasTotals ? 'Schichtdicke 1000–500 hPa (dam)' : 'Schichtdicke 1000–500 hPa (dam), Vertical Totals',
+      title: !hasTotals ? 'Schichtdicke 1000–500 hPa (dam)' : 'Schichtdicke 1000–500 hPa (dam), Showalter-Index',
       legend: [
         { line: styles.thickness, text: `ECMWF ${pointLabel(thickness.point, thickness.height)}` },
         ...(!hasTotals ? [] : [
-          { line: styles.totals, text: `T850 − T500, 1 K ≙ ${decimals(THICKNESS_PER_KELVIN, 1)} dam` },
-          { line: styles.moistAdiabat, text: 'T850 − T500 Paket aus 850 hPa mit Taupunkt, darüber labil (Showalter < 0)' },
+          { signs: true as const, text: 'Paket aus 850 hPa mit Taupunkt: rot labil (Showalter < 0), blau stabil' },
         ]),
       ],
-      lines: [
-        ...(!hasTotals ? [] : [
-          { values: parcelTotals.map(onThicknessAxis), className: styles.moistAdiabat },
-          { values: totals.map(onThicknessAxis), className: styles.totals },
-        ]),
-        { values: thickness.values, className: styles.thickness },
-      ],
+      lines: [{ values: thickness.values, className: styles.thickness }],
+      ...(!hasTotals ? {} : { centred: { polygons: instability, extent, maxScale: THICKNESS_PER_KELVIN } }),
       steps: THICKNESS_STEPS,
       weight: 1,
     }]),
@@ -201,7 +191,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     <div ref={box} className={styles.diagram}>
       {size.width > 0 && size.height > 0 && (
         <svg className={styles.svg} viewBox={`0 0 ${size.width} ${size.height}`} role="img"
-          aria-label="T2m von ECMWF und ICON-D2, T850 von ECMWF mit Abweichung vom Klimamittel, Schichtdicke 1000–500 hPa, Vertical Totals gegen ein Paket aus 850 hPa mit Taupunkt">
+          aria-label="T2m von ECMWF und ICON-D2, T850 von ECMWF mit Abweichung vom Klimamittel, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt">
           {placed.map((p) => <TemperaturePanel key={p.panel.key} placed={p} time={time} left={PLOT_LEFT} right={plotRight} />)}
           {t850.values.map((point, i) => {
             // Each hover column reaches halfway to its neighbours, so the 3 h and 6 h steps cover the plots without gaps.
