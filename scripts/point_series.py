@@ -1,6 +1,6 @@
 """Write the temperature series of Austria that the start page of the viewer draws for its location.
 
-Five JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
+Six JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
 
     t850.json      ECMWF T850 of every step on the 0.1 deg grid of the box, with the ERA5
                    climatology of T850 (mean, stdev) for the days of the run
@@ -9,9 +9,10 @@ Five JSON files in maps/austria/ (published like the videos, listed in the manif
     heights.json   the ICON-D2 cells of Austria: centre and model orography (hsurf)
     thickness.json ECMWF 1000-500 hPa thickness in dam (no climatology)
     t500.json      ECMWF T500 (no climatology), for the vertical totals T850 - T500
+    rh850.json     ECMWF relative humidity at 850 hPa in % (no climatology), for the parcel lifted from 850 hPa
 
 Every series is stored as whole tenths of a degree (of a dam for the
-thickness), as deltas along time and
+thickness; rh850 as whole percent), as deltas along time and
 time-major (all points of the first time, then all of the second ...): the
 first time holds absolute values, every further one the change since the
 previous time. Neighbouring points change alike, which gzip packs to about a
@@ -59,6 +60,8 @@ BOX = {"north": 49.1, "south": 46.3, "west": 9.5, "east": 17.2}
 BORDER_MARGIN = 0.15
 # Values are stored as multiples of SCALE (0.1 K), coordinates of COORD_SCALE degrees.
 SCALE, COORD_SCALE = 0.1, 1e-4
+# Relative humidity in whole percent: 1 % is about 0.15 K of dew point at 80 %, and the file packs better.
+RH_SCALE = 1.0
 
 
 def time_major_deltas(fields: np.ndarray, scale: float = SCALE) -> list[int]:
@@ -84,8 +87,8 @@ def run_of(grib: ForecastGrib) -> str:
 
 
 def ecmwf_block(grib: ForecastGrib, name: str, level: int | None, key: str, offset: float = -KELVIN,
-                factor: float = 1.0) -> dict:
-    """One ECMWF field over every step it has, as (value + offset) * factor under ``key``.
+                factor: float = 1.0, scale: float = SCALE) -> dict:
+    """One ECMWF field over every step it has, as (value + offset) * factor under ``key`` in multiples of ``scale``.
 
     The defaults turn K into deg C. A step lost on the server is left out.
     """
@@ -99,7 +102,7 @@ def ecmwf_block(grib: ForecastGrib, name: str, level: int | None, key: str, offs
         steps.append(step)
     # Model orography (m) of the grid points, for the height the series belongs to.
     orog = np.rint(grib.field("orog", 0)[rows, cols]).astype(np.int64).ravel().tolist()
-    return {"run": run_of(grib), "steps": steps, "grid": window, "orog": orog, key: time_major_deltas(fields)}
+    return {"run": run_of(grib), "steps": steps, "grid": window, "orog": orog, key: time_major_deltas(fields, scale)}
 
 
 def austria_cells(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
@@ -179,7 +182,8 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     ecmwf_run = ecmwf_grib.stem.split("_")[-1]
     icon_run = icon_grib.stem.split("_")[-1] if icon_grib else "none"
     targets = {name: maps / file for name, file in SERIES_FILES.items()}
-    versions = {"t850": ecmwf_run, "t2m": f"{ecmwf_run}-{icon_run}", "thickness": ecmwf_run, "t500": ecmwf_run}
+    versions = {"t850": ecmwf_run, "t2m": f"{ecmwf_run}-{icon_run}", "thickness": ecmwf_run, "t500": ecmwf_run,
+                "rh850": ecmwf_run}
     stale = [name for name, version in versions.items() if force or read_version(targets[name]) != version]
     heights_missing = icon_grib is not None and (force or read_version(targets["heights"]) is None)
     if not stale and not heights_missing:
@@ -201,6 +205,12 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     if "t500" in stale:
         write_document(targets["t500"], {"version": versions["t500"], **common,
                                          "ecmwf": ecmwf_block(ecmwf, "t", 500, "t500")})
+    if "rh850" in stale:
+        # Relative humidity in %, as the IFS gives it (mixed phase between −23 °C and 0 °C); whole percent suffice.
+        # Stored raw, without clipping (the IFS has values slightly above 100 %); the app clamps. Not **common:
+        # the document's scale must be the encoding scale.
+        write_document(targets["rh850"], {"version": versions["rh850"], "box": BOX, "scale": RH_SCALE,
+                                          "ecmwf": ecmwf_block(ecmwf, "r", 850, "rh850", 0.0, scale=RH_SCALE)})
     icon = cells = None
     if icon_grib is not None and ("t2m" in stale or heights_missing):
         icon = ForecastGrib(icon_grib, ICON_NAMES)

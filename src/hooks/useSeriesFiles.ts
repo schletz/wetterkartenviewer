@@ -12,7 +12,7 @@ export type SeriesFilesState =
 /** Without these the diagram cannot be drawn. */
 const REQUIRED = ['t850', 't2m', 'heights'] as const
 /** Drawn when the manifest lists it. */
-const OPTIONAL = ['thickness', 't500'] as const
+const OPTIONAL = ['thickness', 't500', 'rh850'] as const
 
 /** Loads the temperature series files the manifest lists, once per page; their version keeps the browser cache apart. */
 export function useSeriesFiles(): SeriesFilesState {

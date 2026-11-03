@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { useElementSize } from '../hooks/useElementSize'
 import { anomalyPolygons } from '../model/anomalyBands'
-import { moistAdiabaticTotals } from '../model/moistAdiabat'
+import { parcelLift } from '../model/moistAdiabat'
 import type { GeoLocation } from '../model/GeoLocation'
 import { placePanels, type PanelSpec, type TimeAxis } from '../model/panelLayout'
 import type { LocationTemperatures, ValuePoint } from '../model/TemperatureSeries'
@@ -22,10 +22,10 @@ const HOUR_MS = 3_600_000
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 /**
  * Vertical totals share the thickness axis: TOTALS_MEAN K lies at THICKNESS_MEAN dam, 1 K spans
- * THICKNESS_PER_KELVIN dam. Only their position against the moist adiabat counts, so they need no axis of
+ * THICKNESS_PER_KELVIN dam. Only their position against the parcel reference counts, so they need no axis of
  * their own. The means are those of Austria: ERA5 1991–2020 monthly T850 over its 163 grid points averages
- * 5.0 °C, i.e. 552 dam with the coupling 544 dam + 1.6 dam/K × T850 of the synop skill, and the moist-adiabatic
- * totals of the monthly means average 27.2 K. With the skill's 1.6 dam/K, 1 K of vertical totals is as tall as
+ * 5.0 °C, i.e. 552 dam with the coupling 544 dam + 1.6 dam/K × T850 of the synop skill, and the totals of a
+ * saturated parcel at the monthly means average 27.2 K. With the skill's 1.6 dam/K, 1 K of vertical totals is as tall as
  * 1 K of T850, and their swings stay as large as those of the thickness.
  */
 const THICKNESS_MEAN = 552
@@ -52,13 +52,14 @@ function timeLabel(time: Date): string {
 
 /**
  * Meteogram of T2m (ECMWF and ICON-D2), T850 (ECMWF) with its anomaly against the ERA5 climate, the
- * ECMWF 1000–500 hPa thickness with the vertical totals T850 − T500 against the moist adiabat on its axis,
- * in panels one below the other like the ENS meteograms. Fills its parent.
+ * ECMWF 1000–500 hPa thickness with the vertical totals T850 − T500 on its axis, against those of a parcel
+ * lifted from 850 hPa with its dew point from RH850 (above them the Showalter index is negative), in panels one
+ * below the other like the ENS meteograms. Fills its parent.
  */
 export default function TemperatureDiagram({ temperatures }: TemperatureDiagramProps) {
   const box = useRef<HTMLDivElement>(null)
   const size = useElementSize(box)
-  const { t850, climate850, t2mEcmwf, t2mIcon, thickness, t500 } = temperatures
+  const { t850, climate850, t2mEcmwf, t2mIcon, thickness, t500, rh850 } = temperatures
 
   const plotRight = size.width - MARGIN_RIGHT
   const start = t850.values[0].valid.getTime()
@@ -79,13 +80,22 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     const climate = climate850[i]
     return climate === null ? null : { valid: p.valid, value: climate.mean }
   })
-  // Vertical totals at the valid times of T850 that T500 has too; the reference follows T850.
+  // Vertical totals and the parcel reference only at valid times with T500 and RH850: either is worthless without
+  // the other.
+  const hasTotals = t500 !== null && rh850 !== null
   const t500ByTime = new Map(t500?.values.map((p) => [+p.valid, p.value]) ?? [])
-  const totals = t850.values.map((p) => {
-    const upper = t500ByTime.get(+p.valid)
-    return upper === undefined ? null : { valid: p.valid, value: p.value - upper }
+  const rh850ByTime = new Map(rh850?.values.map((p) => [+p.valid, p.value]) ?? [])
+  const parcels = t850.values.map((p) => {
+    const rh = rh850ByTime.get(+p.valid)
+    return rh === undefined ? null : parcelLift(p.value, rh)
   })
-  const moistTotals = t850.values.map((p) => ({ valid: p.valid, value: moistAdiabaticTotals(p.value) }))
+  const pairs = t850.values.map((p, i) => {
+    const upper = t500ByTime.get(+p.valid)
+    const parcel = parcels[i]
+    return upper === undefined || parcel === null ? null : { valid: p.valid, totals: p.value - upper, parcel }
+  })
+  const totals = pairs.map((q) => q && { valid: q.valid, value: q.totals })
+  const parcelTotals = pairs.map((q) => q && { valid: q.valid, value: q.parcel.totals })
   const onThicknessAxis = (point: ValuePoint | null) => point === null
     ? null
     : { valid: point.valid, value: THICKNESS_MEAN + THICKNESS_PER_KELVIN * (point.value - TOTALS_MEAN) }
@@ -127,17 +137,17 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     },
     ...(thickness === null ? [] : [{
       key: 'thickness',
-      title: t500 === null ? 'Schichtdicke 1000–500 hPa (dam)' : 'Schichtdicke 1000–500 hPa (dam), Vertical Totals',
+      title: !hasTotals ? 'Schichtdicke 1000–500 hPa (dam)' : 'Schichtdicke 1000–500 hPa (dam), Vertical Totals',
       legend: [
         { line: styles.thickness, text: `ECMWF ${pointLabel(thickness.point, thickness.height)}` },
-        ...(t500 === null ? [] : [
+        ...(!hasTotals ? [] : [
           { line: styles.totals, text: `T850 − T500, 1 K ≙ ${decimals(THICKNESS_PER_KELVIN, 1)} dam` },
-          { line: styles.moistAdiabat, text: 'T850 − T500 feuchtadiabatisch ab 850 hPa, darüber bedingt labil' },
+          { line: styles.moistAdiabat, text: 'T850 − T500 Paket aus 850 hPa mit Taupunkt, darüber labil (Showalter < 0)' },
         ]),
       ],
       lines: [
-        ...(t500 === null ? [] : [
-          { values: moistTotals.map(onThicknessAxis), className: styles.moistAdiabat },
+        ...(!hasTotals ? [] : [
+          { values: parcelTotals.map(onThicknessAxis), className: styles.moistAdiabat },
           { values: totals.map(onThicknessAxis), className: styles.totals },
         ]),
         { values: thickness.values, className: styles.thickness },
@@ -171,9 +181,18 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     const thicknessValue = thicknessByTime.get(+point.valid)
     if (thicknessValue !== undefined) parts.push(`Z1000–500 ${decimals(thicknessValue, 1)} dam`)
     const upper = t500ByTime.get(+point.valid)
-    if (upper !== undefined) {
-      parts.push(`T500 ${decimals(upper, 1)} °C`)
-      parts.push(`VT ${decimals(point.value - upper, 1)} K (feuchtadiabatisch ${decimals(moistTotals[i].value, 1)} K)`)
+    if (upper !== undefined) parts.push(`T500 ${decimals(upper, 1)} °C`)
+    const pair = pairs[i]
+    if (pair !== null) parts.push(`VT ${decimals(pair.totals, 1)} K (Paket ${decimals(pair.parcel.totals, 1)} K)`)
+    const parcel = parcels[i]
+    const rh = rh850ByTime.get(+point.valid)
+    if (parcel !== null && rh !== undefined) {
+      parts.push(`Td850 ${decimals(parcel.dewPoint, 1)} °C (RH ${decimals(rh, 0)} %)`)
+      parts.push(`LCL ${decimals(parcel.lclPressure, 0)} hPa`)
+    }
+    if (pair !== null) {
+      const showalter = pair.parcel.totals - pair.totals
+      parts.push(`Showalter ${showalter >= 0 ? '+' : ''}${decimals(showalter, 1)} K`)
     }
     return parts.join(' · ')
   }
@@ -182,7 +201,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     <div ref={box} className={styles.diagram}>
       {size.width > 0 && size.height > 0 && (
         <svg className={styles.svg} viewBox={`0 0 ${size.width} ${size.height}`} role="img"
-          aria-label="T2m von ECMWF und ICON-D2, T850 von ECMWF mit Abweichung vom Klimamittel, Schichtdicke 1000–500 hPa, Vertical Totals">
+          aria-label="T2m von ECMWF und ICON-D2, T850 von ECMWF mit Abweichung vom Klimamittel, Schichtdicke 1000–500 hPa, Vertical Totals gegen ein Paket aus 850 hPa mit Taupunkt">
           {placed.map((p) => <TemperaturePanel key={p.panel.key} placed={p} time={time} left={PLOT_LEFT} right={plotRight} />)}
           {t850.values.map((point, i) => {
             // Each hover column reaches halfway to its neighbours, so the 3 h and 6 h steps cover the plots without gaps.
