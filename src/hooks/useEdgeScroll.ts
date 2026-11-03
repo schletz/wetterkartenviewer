@@ -25,12 +25,15 @@ export function useEdgeScroll(ref: RefObject<HTMLElement | null>): void {
     let position = 0
 
     const tick = (time: number) => {
-      const dt = Math.min(time - lastTime, 50) / 1000
+      // The first frame's timestamp may lie before the performance.now() of setSpeed.
+      const dt = Math.max(0, Math.min(time - lastTime, 50)) / 1000
       lastTime = time
       // Resynchronise when something else (scrollbar, wheel, keyboard) moved the element.
       if (Math.abs(element.scrollLeft - position) > 1) position = element.scrollLeft
       const max = element.scrollWidth - element.clientWidth
-      position = Math.max(0, Math.min(max, position + speed * dt))
+      // Only ever move in the scroll direction, so a mouse wiggling at an end never shakes the row.
+      const next = position + speed * dt
+      position = Math.max(0, Math.min(max, speed < 0 ? Math.min(position, next) : Math.max(position, next)))
       element.scrollLeft = position
       const atEnd = (speed < 0 && position <= 0) || (speed > 0 && position >= max)
       frame = speed === 0 || atEnd ? 0 : requestAnimationFrame(tick)
