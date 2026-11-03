@@ -26,9 +26,8 @@
 }
 
 /*
- * Temperature chart and meteograms in equal columns, each at least 400 px and at most 650 px
- * (natural width of a meteogram): four side by side from 4 × 400 px + gaps + page padding,
- * two from 2 × 400 px, one below. Never three, so four items always fill whole rows.
+ * Narrow screens: temperature chart and meteograms one below the other, at most 650 px wide
+ * (natural width of a meteogram).
  */
 .meteograms {
   display: grid;
@@ -37,14 +36,39 @@
   align-items: start;
 }
 
+/*
+ * From 844 px: the page fills the window height and the cells share one row of that height
+ * (at most 800 px), each in its own aspect ratio (650 / 800, set by the cells). The row scrolls horizontally
+ * (useEdgeScroll: mouse at the edges, vertical wheel), the page itself does not scroll.
+ */
 @media (min-width: 844px) {
-  .meteograms {
-    grid-template-columns: repeat(2, minmax(0, 650px));
+  .page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
   }
-}
 
-@media (min-width: 1668px) {
+  .header {
+    flex: none;
+  }
+
   .meteograms {
-    grid-template-columns: repeat(4, minmax(0, 650px));
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+
+  /*
+   * At most the natural meteogram size, so images never scale up: the aspect ratio covers the 1 px
+   * cell border, so 650 px of image width need a cell of 652 px and a height of 652 · 800 / 650.
+   */
+  .meteograms > * {
+    flex: none;
+    height: 100%;
+    max-height: calc((650px + 2px) * 800 / 650);
   }
 }

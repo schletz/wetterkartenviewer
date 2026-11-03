@@ -11,7 +11,7 @@ The API sections follow Javadoc: intro, fields, methods per module.
 ## Purpose
 
 - Static single-page app (React 19, Vite, TypeScript) on GitHub Pages: https://schletz.github.io/wetterkartenviewer/
-- Start page: for a location in Austria a temperature diagram (T850 of ECMWF with its anomaly against ERA5, T2m of ECMWF and ICON-D2, 1000–500 hPa thickness of ECMWF with the Showalter index of a parcel lifted from 850 hPa with its dew point from RH850 as layered blue/red areas) from the pipeline's series files, beside it ECMWF ENS meteograms for the location, queried live by the browser; all in equal columns, each opens in a new tab.
+- Start page: for a location in Austria a temperature diagram (T850 of ECMWF with its anomaly against ERA5, T2m of ECMWF and ICON-D2, 1000–500 hPa thickness of ECMWF with the Showalter index of a parcel lifted from 850 hPa with its dew point from RH850 as layered blue/red areas) from the pipeline's series files, beside it ECMWF ENS meteograms for the location, queried live by the browser; on wide screens all in one row of the window height that scrolls with the mouse at its edges; each opens in a new tab.
 - Map page (`#/maps`): a grid of tiles with the charts of one ECMWF IFS run (to +240 h) and one ICON-D2 run (Austria, to +48 h), and a step slider 0–240 h.
   Every chart path is an AV1 video with one frame per step; the app seeks the frame with `currentTime`.
   A tile layer can be a fallback chain of paths (ICON-D2 within its 48 h, ECMWF otherwise).
@@ -38,7 +38,7 @@ package "components" {
  shows StartPage or MapViewer.
  }
  class StartPage <<component>> {
- Header with location form; grid of
+ Header with location form; row of
  temperature chart and Meteograms.
  }
  class TemperatureChart << (D,#fdebd1) temperature >>
@@ -80,6 +80,10 @@ package "hooks" {
  class useStoredLocation <<hook>>
  class useChartIndex <<hook>> {
  Fetches maps/manifest.json.
+ }
+ class useEdgeScroll <<hook>> {
+ Scrolls the row with the mouse
+ at its edges and the wheel.
  }
  class useLoadedVideo <<hook>> {
  Keeps the previous video shown
@@ -128,6 +132,7 @@ App --> StartPage
 App --> MapViewer
 StartPage --> LocationForm
 StartPage --> Meteogram
+StartPage --> useEdgeScroll
 StartPage --> TemperatureChart
 StartPage ..> viewerConfig : meteograms
 LocationForm ..> placeSearch : searchPlace()
@@ -348,6 +353,7 @@ Totals ≥ saturated for every RH. Below 0 °C RH 100 % in the IFS partly means 
 | `useChartIndex()` (src/hooks/useChartIndex.ts) | `fetchManifest`; error state shown as text by MapViewer, no retry |
 | `useSeriesFiles()` (src/hooks/useSeriesFiles.ts) | manifest, then the files of `REQUIRED` (t850, t2m, heights) and those of `OPTIONAL` (thickness, t500, rh850) the manifest lists, in parallel with default caching (`?v=` changes per run), once per page; `loading`, `missing` (a required one absent), `error`, `ready` |
 | `useElementSize(ref)` (src/hooks/useElementSize.ts) | content box in whole pixels via `ResizeObserver`, 0 × 0 before the first measurement; same size keeps the same object (no render) |
+| `useEdgeScroll(ref)` (src/hooks/useEdgeScroll.ts) | while the mouse is within `EDGE_ZONE` 140 px (at most `EDGE_ZONE_SHARE` 15 % of the width) of the element's left or right edge it scrolls, speed `MAX_SPEED` 1600 px/s × depth²; the zones reach to the window border (pointer events on `document`, only within the element's height), so a mouse at the screen edge keeps scrolling; leaving the window or blur stops; a vertical wheel scrolls horizontally (`preventDefault`, not with Ctrl); only `pointerType` mouse, nothing while the element does not overflow; the position is kept as float because `scrollLeft` may round |
 | `useLoadedVideo(url)` (src/hooks/useLoadedVideo.ts) | `{shown: {url, objectUrl}, failed}`: the previous video stays until the new one loaded |
 
 ### Components
@@ -365,7 +371,7 @@ Totals ≥ saturated for every RH. Below 0 °C RH 100 % in the IFS partly means 
 | `LargeView` (src/components/LargeView.tsx) | draggable, chart 1200 px wide; same URL, so the same cached video |
 
 While a new layer loads, the previous video stays on its last frame and the slider does not move it; the same happens when a fallback chain switches path (e.g. ICON → ECMWF after `end`). Only displayed layers load, no prefetch.
-CSS that must match the image size: `aspect-ratio: 1200 / 690` in ChartImage.module.css, `.chart { width: 1200px }` in LargeView.module.css. Tiles three per row (min 480, max 1200 px). Start page grid (`.meteograms` in StartPage.module.css): columns of at most 650 px (natural meteogram width), four from 1668 px viewport width (4 × 400 px + gaps + page padding), two from 844 px, else one; never three, so the four cells fill whole rows (1920 px: four cells of 463 × 570 px, no scrolling). Meteogram and TemperatureChart cells both have `aspect-ratio: 650 / 800`, so a row is even before the images load.
+CSS that must match the image size: `aspect-ratio: 1200 / 690` in ChartImage.module.css, `.chart { width: 1200px }` in LargeView.module.css. Tiles three per row (min 480, max 1200 px). Start page (`.meteograms` in StartPage.module.css): below 844 px viewport width one column of at most 650 px (natural meteogram width), the page scrolls; from 844 px the page is 100dvh high (flex column, it never scrolls), the cells (`.meteograms > *`: `height: 100%`, `flex: none`, `max-height` = 652 · 800 / 650 px so the 1 px border leaves the image at 650 × 800 and never scales it up) fill the rest in one row, top-aligned with `overflow-x: auto`, driven by `useEdgeScroll` (1900 × 930 viewport: four cells of 689 × 848 px, 924 px to scroll). Meteogram and TemperatureChart cells both have `aspect-ratio: 650 / 800`, which sets their width from the height, also before the images load; a fifth cell needs no CSS change.
 
 ## Pitfalls
 
@@ -386,6 +392,6 @@ CSS that must match the image size: `aspect-ratio: 1200 / 690` in ChartImage.mod
 - **Slider range**: `MAX_STEP` in StepSlider.tsx; `currentStep` in ChartGrid clamps with the same value.
 - **Keyboard shortcut**: `onKey` in ChartGrid.tsx; arrow keys in `<input>` are ignored on purpose.
 - **Location fields** (e.g. name, altitude): `GeoLocation` and `isValidLocation`; stored old objects pass `isValidLocation` in `load`.
-- **Meteogram**: a name in `meteograms`; with a fifth cell the grid needs another column count (StartPage.module.css).
+- **Meteogram**: a name in `meteograms`; the row takes any number of cells.
 - **New chart window**: its values in `PROJECTIONS` of ChartProjection.ts, besides the pipeline changes.
 - **Another line in the temperature diagram**: field in point_series.py (REFERENCE.scripts.md), type in seriesFiles.ts, a new file also in `OPTIONAL` of useSeriesFiles.ts (or `REQUIRED`), series in `LocationTemperatures`/`TemperatureSeries.at`, a `PanelLine` (and legend entry) in an existing `PanelSpec` or a new panel in `panels` of TemperatureDiagram.tsx, tooltip there, colour in TemperatureDiagram.module.css.
