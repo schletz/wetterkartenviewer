@@ -1,6 +1,6 @@
 import { WARM } from '../model/anomalyBands'
 import { holidayName } from '../model/holidays'
-import { LEGEND_LINE_HEIGHT, TITLE_HEIGHT, type PlacedPanel, type TimeAxis } from '../model/panelLayout'
+import { LEGEND_LINE_HEIGHT, TITLE_HEIGHT, type BandSwatchClasses, type PlacedPanel, type TimeAxis } from '../model/panelLayout'
 import type { ValuePoint } from '../model/TemperatureSeries'
 import { ValueAxis } from '../model/ValueAxis'
 import styles from './TemperatureDiagram.module.css'
@@ -68,7 +68,7 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
           <g key={entry.text}>
             {'line' in entry
               ? <line className={`${styles.line} ${entry.line}`} x1={left} x2={left + LEGEND_SWATCH_WIDTH - 4} y1={y} y2={y} />
-              : 'bands' in entry ? <BandSwatch x={left} y={y} /> : <SignSwatch x={left} y={y} />}
+              : <BandSwatch x={left} y={y} classes={entry.bands} />}
             <text x={left + LEGEND_SWATCH_WIDTH} y={y + 4}>{entry.text}</text>
           </g>
         )
@@ -105,11 +105,11 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
             points={band.vertices.map(([vx, value]) => `${vx.toFixed(1)},${axis.y(value).toFixed(1)}`).join(' ')} />
         ))}
         {centred?.polygons.map((band, i) => (
-          <polygon key={`centred-${i}`} className={`${band.side === WARM ? styles.warm : styles.cold} ${styles.signed}`}
+          <polygon key={`centred-${i}`} className={band.side === WARM ? centred.classes.above : centred.classes.below}
             points={band.vertices.map(([vx, value]) => `${vx.toFixed(1)},${axis.y(centre + value * centredScale).toFixed(1)}`).join(' ')} />
         ))}
         {centred !== undefined && (
-          <line className={`${styles.line} ${styles.parcel}`} x1={left} x2={right} y1={axis.y(centre)} y2={axis.y(centre)} />
+          <line className={`${styles.line} ${centred.classes.line}`} x1={left} x2={right} y1={axis.y(centre)} y2={axis.y(centre)} />
         )}
         {panel.lines.map((line) => <path key={line.className} className={`${styles.line} ${line.className}`} d={path(line.values)} />)}
       </g>
@@ -117,31 +117,19 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
   )
 }
 
-/** Legend swatch of the centred areas: warm above, cold below, the zero line between. */
-function SignSwatch({ x, y }: { x: number; y: number }) {
-  const width = LEGEND_SWATCH_WIDTH - 4
-  return (
-    <g>
-      <rect className={`${styles.warm} ${styles.signed}`} x={x} y={y - 6} width={width} height={6} />
-      <rect className={`${styles.cold} ${styles.signed}`} x={x} y={y} width={width} height={6} />
-      <line className={`${styles.line} ${styles.parcel}`} x1={x} x2={x + width} y1={y} y2={y} />
-    </g>
-  )
-}
-
-/** Legend swatch of the anomaly areas: warm above, cold below, every σ layer darker to the right, the climate mean between. */
-function BandSwatch({ x, y }: { x: number; y: number }) {
+/** Legend swatch of layered areas: one class above, one below, every layer darker to the right, the line between. */
+function BandSwatch({ x, y, classes }: { x: number; y: number; classes: BandSwatchClasses }) {
   const width = (LEGEND_SWATCH_WIDTH - 4) / 3
   return (
     <g>
       {[0, 1, 2].map((k) => (
         // Layer k covers column k and all to the right of it, so the shade adds up to the right.
         <g key={k}>
-          <rect className={styles.warm} x={x + k * width} y={y - 6} width={(3 - k) * width} height={6} />
-          <rect className={styles.cold} x={x + k * width} y={y} width={(3 - k) * width} height={6} />
+          <rect className={classes.above} x={x + k * width} y={y - 6} width={(3 - k) * width} height={6} />
+          <rect className={classes.below} x={x + k * width} y={y} width={(3 - k) * width} height={6} />
         </g>
       ))}
-      <line className={`${styles.line} ${styles.climate}`} x1={x} x2={x + LEGEND_SWATCH_WIDTH - 4} y1={y} y2={y} />
+      <line className={`${styles.line} ${classes.line}`} x1={x} x2={x + LEGEND_SWATCH_WIDTH - 4} y1={y} y2={y} />
     </g>
   )
 }

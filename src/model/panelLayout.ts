@@ -19,20 +19,29 @@ export interface PanelLine {
   className: string
 }
 
-/** A legend line: a line swatch, the anomaly shading, or the signed areas of `CentredBands`. */
-export type LegendEntry = { text: string } & ({ line: string } | { bands: true } | { signs: true })
+/** Classes of a layered area swatch: area above and below the line between them. */
+export interface BandSwatchClasses {
+  above: string
+  below: string
+  line: string
+}
+
+/** A legend line: a line swatch or a swatch of layered areas. */
+export type LegendEntry = { text: string } & ({ line: string } | { bands: BandSwatchClasses })
 
 /**
  * A signed series without an axis of its own, drawn around the middle of the panel's value axis: a zero line
- * there, areas above it (WARM) and below it (COLD). Only the side counts, not the size.
+ * there, layered areas above it (WARM) and below it (COLD). Only the class of the values counts, not the size.
  */
 export interface CentredBands {
-  /** Areas beyond zero, vertices as [x in px, value]. */
+  /** Areas beyond thresholds, vertices as [x in px, value]. */
   polygons: BandPolygon[]
   /** Largest absolute value; sets how far the areas reach. */
   extent: number
   /** Axis units per unit of the values at most; less when the areas would leave the plot. */
   maxScale: number
+  /** Area classes above (WARM) and below (COLD) zero, and the class of the zero line. */
+  classes: BandSwatchClasses
 }
 
 /** Content of one panel; the lines are drawn in order, so the last lies on top. */

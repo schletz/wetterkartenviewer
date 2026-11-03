@@ -1,5 +1,6 @@
 /**
- * Areas between a T850 series and its climate mean, layered in steps of the standard deviation.
+ * Areas between a T850 series and its climate mean, layered in steps of the standard deviation;
+ * also areas beyond fixed thresholds (`thresholdPolygons`, the Showalter classes).
  *
  * Port of AnomalyBands of the synop skill (skills/synop/scripts/lib/anomaly_bands.py).
  * Knows nothing about SVG: vertices come as (x, value) and the caller maps them onto its drawing.
@@ -33,20 +34,31 @@ type Sample = [number, number, number]
  * darker with every σ. A null point breaks the areas.
  */
 export function anomalyPolygons(points: (BandPoint | null)[], sigmaSteps: readonly number[]): BandPolygon[] {
-  const polygons: BandPolygon[] = []
-  for (const step of sigmaSteps) {
-    for (const side of [WARM, COLD] as const) {
-      const series = points.map((p): Sample | null => (p === null ? null : [p.x, p.value, p.mean + side * step * p.std]))
-      for (const run of runsBeyond(series, side)) {
-        const vertices: [number, number][] = [
-          ...run.map(([x, value]): [number, number] => [x, value]),
-          ...[...run].reverse().map(([x, , threshold]): [number, number] => [x, threshold]),
-        ]
-        polygons.push({ side, vertices })
-      }
-    }
-  }
-  return polygons
+  return sigmaSteps.flatMap((step) => ([WARM, COLD] as const).flatMap((side) =>
+    polygonsBeyond(points.map((p): Sample | null => (p === null ? null : [p.x, p.value, p.mean + side * step * p.std])), side)))
+}
+
+/**
+ * Polygons of the parts of a series above each threshold of `above` (WARM) and below each of `below` (COLD).
+ *
+ * Drawn like the anomaly layers, every further threshold shades darker. A null point breaks the areas.
+ */
+export function thresholdPolygons(points: ({ x: number; value: number } | null)[], above: readonly number[],
+  below: readonly number[]): BandPolygon[] {
+  const layers = [...above.map((threshold) => [WARM, threshold] as const), ...below.map((threshold) => [COLD, threshold] as const)]
+  return layers.flatMap(([side, threshold]) =>
+    polygonsBeyond(points.map((p): Sample | null => (p === null ? null : [p.x, p.value, threshold])), side))
+}
+
+/** Polygons along the series and back along its threshold, where it lies beyond the threshold on `side`. */
+function polygonsBeyond(series: (Sample | null)[], side: Side): BandPolygon[] {
+  return runsBeyond(series, side).map((run) => ({
+    side,
+    vertices: [
+      ...run.map(([x, value]): [number, number] => [x, value]),
+      ...[...run].reverse().map(([x, , threshold]): [number, number] => [x, threshold]),
+    ],
+  }))
 }
 
 function sign(value: number): number {

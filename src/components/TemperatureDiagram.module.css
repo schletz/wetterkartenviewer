@@ -95,16 +95,10 @@
   stroke-width: 1.25;
 }
 
-/* Every anomaly layer adds the same translucent shade on top. */
+/* Every anomaly or Showalter layer adds the same translucent shade on top. */
 .warm,
 .cold {
   fill-opacity: 0.2;
-}
-
-/* The centred areas are a single layer, so they get the shade of about two anomaly layers. */
-.warm.signed,
-.cold.signed {
-  fill-opacity: 0.4;
 }
 
 .warm {

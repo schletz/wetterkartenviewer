@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useElementSize } from '../hooks/useElementSize'
-import { anomalyPolygons } from '../model/anomalyBands'
+import { anomalyPolygons, thresholdPolygons } from '../model/anomalyBands'
 import { parcelLift } from '../model/moistAdiabat'
 import type { GeoLocation } from '../model/GeoLocation'
 import { placePanels, type PanelSpec, type TimeAxis } from '../model/panelLayout'
@@ -21,12 +21,19 @@ const TICK_HOURS = 6
 const HOUR_MS = 3_600_000
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 /**
- * The vertical totals against the parcel (−Showalter) share the thickness panel without an axis of their own,
- * around its middle: only the side counts. 1 K spans at most THICKNESS_PER_KELVIN dam, the T850 scale of the
- * synop skill's coupling 544 dam + 1.6 dam/K × T850, so their swings stay about as large as those of the
- * thickness; less only when the largest would leave the plot.
+ * The Showalter index shares the thickness panel without an axis of their own, around its middle: only its class
+ * counts. 1 K spans at most THICKNESS_PER_KELVIN dam, the T850 scale of the synop skill's coupling
+ * 544 dam + 1.6 dam/K × T850, so its swings stay about as large as those of the thickness; less only when the
+ * largest would leave the plot.
  */
 const THICKNESS_PER_KELVIN = 1.6
+/**
+ * Showalter classes, K, each layer shading darker like the σ layers of T850: above 0 stable (+1…+3 showers
+ * possible, above +3 no convection from 850 hPa), below 0 thunderstorms possible (−3…−6 strong ones, below −6
+ * severe weather potential). Values between −2 and −3 count to the first class.
+ */
+const SHOWALTER_STABLE = [0, 1, 3] as const
+const SHOWALTER_UNSTABLE = [0, -3, -6] as const
 
 interface TemperatureDiagramProps {
   temperatures: LocationTemperatures
@@ -34,6 +41,9 @@ interface TemperatureDiagramProps {
 
 const decimals = (value: number, digits: number) =>
   value.toLocaleString('de-AT', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+
+/** "+3", "0", "−3": a whole number with its sign. */
+const signed = (value: number) => (value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0')
 
 /** "48,20° N, 16,40° O, 180 m ü. A." */
 function pointLabel(point: GeoLocation, height?: number): string {
@@ -48,9 +58,9 @@ function timeLabel(time: Date): string {
 
 /**
  * Meteogram of T2m (ECMWF and ICON-D2), T850 (ECMWF) with its anomaly against the ERA5 climate, the
- * ECMWF 1000–500 hPa thickness with the vertical totals T850 − T500 minus those of a parcel lifted from 850 hPa
- * with its dew point from RH850 (−Showalter) as areas around the middle of its axis, red above (unstable), blue
- * below, in panels one below the other like the ENS meteograms. Fills its parent.
+ * ECMWF 1000–500 hPa thickness with the Showalter index of a parcel lifted from 850 hPa with its dew point from
+ * RH850 as layered areas around the middle of its axis, blue above (stable), red below (unstable), in panels one
+ * below the other like the ENS meteograms. Fills its parent.
  */
 export default function TemperatureDiagram({ temperatures }: TemperatureDiagramProps) {
   const box = useRef<HTMLDivElement>(null)
@@ -90,11 +100,12 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     const parcel = parcels[i]
     return upper === undefined || parcel === null ? null : { valid: p.valid, totals: p.value - upper, parcel }
   })
-  // VT minus the parcel's totals = −Showalter: above zero the parcel is warmer than T500 (unstable, red).
-  const instability = anomalyPolygons(pairs.map((q) => q && {
-    x: x(q.valid), value: q.totals - q.parcel.totals, mean: 0, std: 0,
-  }), [0])
-  const extent = Math.max(0, ...pairs.map((q) => (q === null ? 0 : Math.abs(q.totals - q.parcel.totals))))
+  // Showalter index = parcel totals − VT: below zero the parcel is warmer than T500 at 500 hPa (unstable).
+  const showalter = pairs.map((q) => q && { x: x(q.valid), value: q.parcel.totals - q.totals })
+  const showalterBands = thresholdPolygons(showalter, SHOWALTER_STABLE, SHOWALTER_UNSTABLE)
+  const extent = Math.max(0, ...showalter.map((q) => (q === null ? 0 : Math.abs(q.value))))
+  // Stable (above zero) blue, unstable red: the reverse of the T850 anomaly colours.
+  const showalterClasses = { above: styles.cold, below: styles.warm, line: styles.parcel }
 
   const bands = anomalyPolygons(t850.values.map((p, i) => {
     const climate = climate850[i]
@@ -121,7 +132,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
       title: 'Temperatur in 850 hPa (°C)',
       legend: [
         { line: styles.t850, text: `ECMWF ${pointLabel(t850.point, t850.height)}` },
-        { bands: true, text: `Ø ${temperatures.period} ERA5 ${pointLabel(temperatures.climatePoint)}, ±${SIGMA_STEPS.slice(1).join('/')} σ` },
+        { bands: { above: styles.warm, below: styles.cold, line: styles.climate }, text: `Ø ${temperatures.period} ERA5 ${pointLabel(temperatures.climatePoint)}, ±${SIGMA_STEPS.slice(1).join('/')} σ` },
       ],
       lines: [
         { values: climateLine, className: styles.climate },
@@ -137,11 +148,16 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
       legend: [
         { line: styles.thickness, text: `ECMWF ${pointLabel(thickness.point, thickness.height)}` },
         ...(!hasTotals ? [] : [
-          { signs: true as const, text: 'Paket aus 850 hPa mit Taupunkt: rot labil (Showalter < 0), blau stabil' },
+          {
+            bands: showalterClasses,
+            text: `Paket aus 850 hPa mit Taupunkt, blau > ${SHOWALTER_STABLE.map(signed).join('/')} K, rot < ${SHOWALTER_UNSTABLE.map(signed).join('/')} K`,
+          },
         ]),
       ],
       lines: [{ values: thickness.values, className: styles.thickness }],
-      ...(!hasTotals ? {} : { centred: { polygons: instability, extent, maxScale: THICKNESS_PER_KELVIN } }),
+      ...(!hasTotals ? {} : {
+        centred: { polygons: showalterBands, extent, maxScale: THICKNESS_PER_KELVIN, classes: showalterClasses },
+      }),
       steps: THICKNESS_STEPS,
       weight: 1,
     }]),
@@ -181,8 +197,8 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
       parts.push(`LCL ${decimals(parcel.lclPressure, 0)} hPa`)
     }
     if (pair !== null) {
-      const showalter = pair.parcel.totals - pair.totals
-      parts.push(`Showalter ${showalter >= 0 ? '+' : ''}${decimals(showalter, 1)} K`)
+      const index = pair.parcel.totals - pair.totals
+      parts.push(`Showalter ${index >= 0 ? '+' : ''}${decimals(index, 1)} K`)
     }
     return parts.join(' · ')
   }
