@@ -1,8 +1,8 @@
 {
   "meteograms": [
     "classical_15d_with_climate",
-    "classical_10d",
-    "classical_plume"
+    "classical_plume",
+    "classical_10d"
   ],
   "tiles": [
     {
