@@ -965,6 +965,10 @@
   "t500": {
    "file": "austria/t500.json",
    "version": "2026110300"
+  },
+  "rh850": {
+   "file": "austria/rh850.json",
+   "version": "2026110300"
   }
  }
 }
