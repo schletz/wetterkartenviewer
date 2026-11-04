@@ -9,7 +9,7 @@ liest. Lies nur die Abschnitte, die du gerade brauchst.
 
 - [Dateien](#dateien) und [GRIB-Datei](#grib-datei): was im Ordner liegt, welche Felder es gibt
 - [Allgemeines](#allgemeines): Fenster, Legende, Zahlen, Masken, Kontaktabzüge
-- Großwetterlage (Europa): [z500_t850](#z500_t850), [z700_t700](#z700_t700), [z850_rh700](#z850_rh700),
+- Großwetterlage (Europa): [z500_t850](#z500_t850), [z500_t500](#z500_t500), [z700_t700](#z700_t700), [z850_rh700](#z850_rh700),
   [thickness_mslp](#thickness_mslp), [dt850_24h](#dt850_24h)
 - Mitteleuropa: [t850_mslp](#t850_mslp), [t850_anomaly](#t850_anomaly), [rh700_wind700](#rh700_wind700),
   [vt_rh700](#vt_rh700), [inversion](#inversion), [t2m_wind10m](#t2m_wind10m), [wind10m](#wind10m),
@@ -96,7 +96,7 @@ bei den IFS-Fenstern ist `cone` 1 und `lon0` 0.
 | Fenster | Bereich | km pro Pixel | Standardprodukte |
 |---|---|---|---|
 | `opencharts_europe` | Atlantik bis Westrussland, Nordafrika bis Nordkap | 7,6 (35° N) bis 9,4 (70° N) | alle Produkte |
-| `opencharts_central_europe` | 35,7–57,4° N, 23° W–37° E (Irland bis Rumänien, Dänemark bis Sizilien) | etwa 3,2 | alle außer `z500_t850`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h` |
+| `opencharts_central_europe` | 35,7–57,4° N, 23° W–37° E (Irland bis Rumänien, Dänemark bis Sizilien) | etwa 3,2 | alle außer `z500_t850`, `z500_t500`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h` |
 | `icon-d2` | 45,3–49,6° N, 5,7–18,2° E (Burgund bis Bratislava, Mailand bis Würzburg) | 0,75 | `t2m_wind10m`, `wind10m`, `mountain_2000`, `weather_summary`, `tmax`, `tmin`, `orography` (ICON-D2) |
 
 Europa zeigt, was stromauf liegt und in den nächsten Tagen ankommt. Mitteleuropa zeigt Fronten
@@ -153,10 +153,22 @@ Europa. Schwarze Isohypsen 500 hPa alle 4 dam, fett 528/552/576. Farben: T850 in
 - **Advektion:** Wo die Isohypsen die Isothermen schneiden, findet Advektion statt.
 - Dafür ist der Kontaktabzug die erste Karte jeder Analyse.
 
+## z500_t500
+
+Europa. Schwarze Isohypsen 500 hPa alle 4 dam, fett 528/552/576, L/H mit Kernwert. Farben: T500 in
+4-K-Stufen (etwa 5500 m), braune Isothermen alle 4 K. Die Farben sind die von T850, um 28 K
+verschoben (Unterschied T850 − T500 der Normatmosphäre, gerundet): Gleiche Farbe heißt gleiche Luftmasse wie in
+[z500_t850](#z500_t850).
+
+- **Höhenkaltluft:** Kaltlufttropfen und Tröge zeigen sich als kalter Kern unter dem L.
+- **Labilität:** Ist die Farbe in 500 hPa kälter als in 850 hPa, liegt T850 − T500 über 28 K:
+  Schauer und Gewitter möglich, siehe [vt_rh700](#vt_rh700).
+
 ## z700_t700
 
-Europa, nach ECMWF medium-t-z auf 700 hPa. Schwarze Isohypsen 700 hPa alle 5 dam, fett
-270/290/310, L/H mit Kernwert. Farben: T700 in 4-K-Stufen (etwa 3000 m), braune Isothermen alle 4 K.
+Europa. Schwarze Isohypsen 700 hPa alle 5 dam, fett 270/290/310, L/H mit Kernwert. Farben: T700 in
+4-K-Stufen (etwa 3000 m), braune Isothermen alle 4 K. Die Farben sind die von T850, um 12 K
+verschoben (Unterschied T850 − T700 der Normatmosphäre, gerundet).
 
 - **Lenkung:** 700 hPa ist die Lenkungsebene für Fronten und Niederschlagsgebiete. Sie ziehen etwa
   parallel zu den Isohypsen.

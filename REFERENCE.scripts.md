@@ -1072,13 +1072,13 @@ Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L w
 
 | Field | Meaning |
 | --- | --- |
-| `STEP` | `z500_t850`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `dt850_24h`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `weather_summary` |
+| `STEP` | `z500_t850`, `z500_t500`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `dt850_24h`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `weather_summary` |
 | `DAY = {'tmax': 'max', 'tmin': 'min'}`, `STATIC = ('orography',)`, `ALL` | |
 | `CLIMATE = ('t850_anomaly',)` | products that need `climate` |
 | `MODEL = 'ECMWF IFS'` | legend and `geometry.json` |
 | `PRECIP_HOURS = 6` | interval of `weather_summary` (3 h at T+3) |
 | `SHEET_HOURS = (12,)` | valid hours on contact sheets |
-| `DEFAULTS` | europe: `z500_t850`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h`; central_europe: `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `tmax`, `tmin`, `orography`, `weather_summary`; no `icon-d2` entry |
+| `DEFAULTS` | europe: `z500_t850`, `z500_t500`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h`; central_europe: `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `tmax`, `tmin`, `orography`, `weather_summary`; no `icon-d2` entry |
 | `CHANGE_HOURS = 24`, `TCC_PERCENT = 100.0` | `dt850_24h`; tcc 0–1 → % |
 | `detail` (instance) | `km_per_px(50)` smaller than Europe (central_europe, icon-d2): denser isobars, printed values |
 | `height`, `land` (instance) | model height and land ≥ 0.5 on the pixels |
@@ -1191,12 +1191,13 @@ Fields: `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 600`, `EARTH_RADIUS_KM = 6371`, `W
 
 ### chart_styles.py, ColourScale, ContourStyle, SymbolStyle
 
-Frozen dataclasses: `ColourScale(title, bands, legend_range=None, transparent_below=None)` with `bounds`; `ContourStyle(interval, bold_every, bold_base, label_every, smooth_km, colour='black', width=1.0)`; `SymbolStyle(label, marker, size, colour, fill=None, width=1.0, halo=None)`, marker may be vertices or a matplotlib `Path`.
+Frozen dataclasses: `ColourScale(title, bands, legend_range=None, transparent_below=None)` with `bounds` and `shifted(offset, title)` (same colours, every bound moved); `ContourStyle(interval, bold_every, bold_base, label_every, smooth_km, colour='black', width=1.0)`; `SymbolStyle(label, marker, size, colour, fill=None, width=1.0, halo=None)`, marker may be vertices or a matplotlib `Path`.
 chart_styles.py holds every scale and threshold:
 
 | Constant | Meaning |
 | --- | --- |
-| `T850`, `T700`, `THICKNESS`, `RH700` | copied from ECMWF opencharts legends |
+| `T850`, `THICKNESS`, `RH700` | copied from ECMWF opencharts legends |
+| `T850_T700_K = 12`, `T850_T500_K = 28`; `T700`, `T500` | T850 bands shifted down by the drop from 850 hPa, so one colour marks one air mass on every level; ICAO standard atmosphere (10.1 and 26.7 K) for all seasons (per user; a November run gave 7.3 and 23.2 K over Europe), rounded to whole 4 K bands so the bounds stay on the 4 K isotherms (`ISOTHERM_850`, also used at 700/500 hPa) and 0 °C stays a bound |
 | `T2M`, `MOUNTAIN_T` | bands of T850: one colour = one temperature on every chart |
 | `T850_ANOMALY` | σ bands; ≥ 1 notable, ≥ 2 unusual |
 | `ROUGH_TERRAIN_SDOR = 200` | real valley/summit heights differ by several 100 m |

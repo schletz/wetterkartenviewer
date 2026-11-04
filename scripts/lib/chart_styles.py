@@ -1,8 +1,8 @@
 """Fixed colour scales and contour settings of the charts drawn by render_charts.py.
 
-The T850, T700 and thickness scales are copied from the ECMWF open charts
-legends (medium-z500-t850, medium-t-z, medium-thickness-mslp, medium-uv-rh), so the
-self-rendered charts read like the originals. Every scale is a list of
+The T850 and thickness scales are copied from the ECMWF open charts
+legends (medium-z500-t850, medium-thickness-mslp, medium-uv-rh), so the
+self-rendered charts read like the originals; T700 and T500 are T850 shifted. Every scale is a list of
 bands (lower bound, upper bound, RGB); values outside the outermost
 bands get the colour of the nearest band.
 """
@@ -27,20 +27,18 @@ T850 = ColourScale("850 hPa temperature (°C)", (
     (44, 48, (255, 191, 255)), (48, 52, (229, 204, 229)), (52, 56, (229, 229, 229)),
 ), legend_range=(-36, 36))
 
-# medium-t-z legend at level 700, 700 hPa temperature in deg C.
-T700 = ColourScale("700 hPa temperature (°C)", (
-    (-72, -68, (0, 0, 25)), (-68, -64, (25, 0, 51)), (-64, -60, (51, 0, 102)),
-    (-60, -56, (89, 0, 127)), (-56, -52, (107, 0, 153)), (-52, -48, (122, 17, 178)),
-    (-48, -44, (127, 0, 216)), (-44, -40, (127, 0, 255)), (-40, -36, (107, 20, 255)),
-    (-36, -32, (91, 40, 255)), (-32, -28, (63, 63, 255)), (-28, -24, (25, 102, 255)),
-    (-24, -20, (0, 127, 255)), (-20, -16, (0, 153, 255)), (-16, -12, (0, 178, 255)),
-    (-12, -8, (0, 204, 255)), (-8, -4, (0, 229, 255)), (-4, 0, (0, 255, 255)),
-    (0, 4, (0, 255, 127)), (4, 8, (127, 255, 0)), (8, 12, (217, 255, 0)),
-    (12, 16, (255, 255, 0)), (16, 20, (255, 245, 0)), (20, 24, (255, 217, 0)),
-    (24, 28, (255, 176, 0)), (28, 32, (255, 127, 0)), (32, 36, (255, 78, 0)),
-    (36, 40, (255, 37, 0)), (40, 44, (255, 9, 0)), (44, 48, (255, 0, 0)),
-    (48, 52, (255, 0, 255)),
-), legend_range=(-44, 28))
+# Upper levels take the T850 colours shifted by the typical temperature drop
+# from 850 hPa, so one colour marks the same air mass on every level: a cold
+# pool keeps its colour from 850 to 500 hPa. The drop is that of the ICAO
+# standard atmosphere (6.5 K/km; 850/700/500 hPa at 1457/3012/5574 m):
+# 10.1 and 26.7 K, valid all year round, while a single run reflects its
+# season (a November run gave 7.3 and 23.2 K over Europe). Rounded to whole
+# bands of 4 K, so the band bounds stay on the 4 K isotherms and 0 deg C
+# stays a bound; 28 K is also the vertical totals threshold of VERTICAL_TOTALS.
+T850_T700_K = 12
+T850_T500_K = 28
+T700 = T850.shifted(-T850_T700_K, f"700 hPa temperature (°C), colours of T850 − {T850_T700_K} K")
+T500 = T850.shifted(-T850_T500_K, f"500 hPa temperature (°C), colours of T850 − {T850_T500_K} K")
 
 # T850 anomaly in standard deviations of the climatology of the same calendar
 # day and time of day: from |z| = 1 a value stands out, from 2 it is unusual.
@@ -201,7 +199,7 @@ MSLP = ContourStyle(interval=5, bold_every=4, bold_base=1000, label_every=2, smo
 MSLP_DETAIL = ContourStyle(interval=2, bold_every=5, bold_base=1000, label_every=2, smooth_km=40)
 # weather_summary: 4 hPa as on common surface charts; under clouds and precipitation 2 hPa would clutter.
 MSLP_SUMMARY = ContourStyle(interval=4, bold_every=5, bold_base=1000, label_every=1, smooth_km=40)
-# Isotherms at the band boundaries of the T850 and T700 shading, so values can be read from the labels.
+# Isotherms at the band boundaries of the T850, T700 and T500 shading, so values can be read from the labels.
 ISOTHERM_850 = ContourStyle(interval=4, bold_every=0, bold_base=0, label_every=1, smooth_km=30,
                             colour="#5a3c28", width=0.5)
 # 2 m temperatures follow the model orography, so isotherms fray over every

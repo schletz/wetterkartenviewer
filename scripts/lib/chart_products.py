@@ -39,7 +39,7 @@ class ChartProducts:
     climatology.
     """
 
-    STEP = ("z500_t850", "z700_t700", "z850_rh700", "thickness_mslp", "t850_mslp", "t850_anomaly", "rh700_wind700", "vt_rh700",
+    STEP = ("z500_t850", "z500_t500", "z700_t700", "z850_rh700", "thickness_mslp", "t850_mslp", "t850_anomaly", "rh700_wind700", "vt_rh700",
             "dt850_24h", "t2m_wind10m", "wind10m", "inversion", "mountain_2000", "freezing_level", "snow_line", "weather_summary")
     DAY = {"tmax": "max", "tmin": "min"}
     STATIC = ("orography",)
@@ -51,7 +51,7 @@ class ChartProducts:
     PRECIP_HOURS = 6
     SHEET_HOURS = (12,)
     DEFAULTS = {
-        "opencharts_europe": ("z500_t850", "z700_t700", "z850_rh700", "thickness_mslp", "dt850_24h"),
+        "opencharts_europe": ("z500_t850", "z500_t500", "z700_t700", "z850_rh700", "thickness_mslp", "dt850_24h"),
         # T850 instead of the thickness under the isobars: the thickness is smooth at
         # this scale, while T850 shows the warm tongue of foehn in the lee of the Alps.
         "opencharts_central_europe": ("t850_mslp", "t850_anomaly", "rh700_wind700", "vt_rh700", "t2m_wind10m",
@@ -182,6 +182,18 @@ class ChartProducts:
         canvas.outlines()
         canvas.contours(self.field("t", step, 850, smooth_km=styles.ISOTHERM_850.smooth_km, offset=-KELVIN),
                         styles.ISOTHERM_850, "brown lines: isotherms 850 hPa every 4 K", boxed=False)
+        self.z500_lines(canvas, step)
+        canvas.extrema(self.field("gh", step, 500, smooth_km=60, factor=0.1), low_window_px=121,
+                       high_window_px=181, min_depth=2)
+        return canvas
+
+    def z500_t500(self, step: int) -> ChartCanvas:
+        """T500 under the Z500 contours: cold pools of troughs and cut-offs, in the colours of the air mass at 850 hPa."""
+        canvas = ChartCanvas(self.base_map, "Z500 (dam, black lines) + T500 (°C, colours)", self.step_label(step))
+        canvas.shade(self.field("t", step, 500, offset=-KELVIN), styles.T500)
+        canvas.outlines()
+        canvas.contours(self.field("t", step, 500, smooth_km=styles.ISOTHERM_850.smooth_km, offset=-KELVIN),
+                        styles.ISOTHERM_850, "brown lines: isotherms 500 hPa every 4 K", boxed=False)
         self.z500_lines(canvas, step)
         canvas.extrema(self.field("gh", step, 500, smooth_km=60, factor=0.1), low_window_px=121,
                        high_window_px=181, min_depth=2)
