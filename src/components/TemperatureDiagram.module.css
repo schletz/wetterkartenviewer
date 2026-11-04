@@ -1,11 +1,11 @@
-/* Series colours: T850 in the text colour, so it never mixes up with the red and blue anomaly areas. */
+/* Series colours: the axis series in the text colour, so they never mix up with the red and blue areas. */
 .diagram {
   --t850: var(--text);
-  --t2m-ecmwf: #1f8a4c;
-  --t2m-icon: #8a3fd1;
-  --thickness: #e0661f;
-  /* Darker than the blue Showalter areas, so the line stays visible on them. */
-  --rh700: #1d4fa8;
+  --t2m-ecmwf: var(--text);
+  --t2m-icon: var(--text);
+  --thickness: var(--text);
+  /* Darker than the grey zero line of the Showalter areas, which it crosses. */
+  --rh700: #6f6e69;
   --climate: #8a8984;
   --warm: #e0453a;
   --cold: #3a7be0;
@@ -76,7 +76,7 @@
   stroke: var(--t2m-ecmwf);
 }
 
-/* Dashed as well, so the two T2m lines never differ by colour alone. */
+/* Same colour as ECMWF: only the dashes tell the two T2m lines apart. */
 .t2mIcon {
   stroke: var(--t2m-icon);
   stroke-dasharray: 6 3;
