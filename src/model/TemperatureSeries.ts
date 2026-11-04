@@ -48,6 +48,8 @@ export interface LocationTemperatures {
   t500: PointSeries | null
   /** ECMWF RH850 in %; null without RH850 file. */
   rh850: PointSeries | null
+  /** ECMWF RH700 in %; null without RH700 file. */
+  rh700: PointSeries | null
 }
 
 /** Picks the series of one location out of the files of the Austria box. */
@@ -65,7 +67,7 @@ export class TemperatureSeries {
 
   /** The series of the location; null outside Austria and its margin (no ICON cell near). */
   at(location: GeoLocation): LocationTemperatures | null {
-    const { t850, t2m, heights, thickness, t500, rh850 } = this.files
+    const { t850, t2m, heights, thickness, t500, rh850, rh700 } = this.files
     if (!inBox(t850.box, location)) return null
     const cell = this.nearestCell(location)
     if (cell === null) return null
@@ -100,6 +102,7 @@ export class TemperatureSeries {
         : ecmwfSeries(thickness.ecmwf, thickness.ecmwf.thickness, thickness.scale, location),
       t500: t500 === undefined ? null : ecmwfSeries(t500.ecmwf, t500.ecmwf.t500, t500.scale, location),
       rh850: rh850 === undefined ? null : ecmwfSeries(rh850.ecmwf, rh850.ecmwf.rh850, rh850.scale, location),
+      rh700: rh700 === undefined ? null : ecmwfSeries(rh700.ecmwf, rh700.ecmwf.rh700, rh700.scale, location),
     }
   }
 

@@ -12,7 +12,7 @@ The API sections follow Javadoc: intro, fields, methods per module or class.
 
 - Download one ECMWF IFS HRES run (0.1°, cropped to Europe, derived fields appended) and one DWD ICON-D2 run (icosahedral grid ≈ 2.2 km, unchanged) into `data/`.
 - Render WebP charts for three windows into `data/`, encode each tile layer of the viewer as `maps/<window>/<product>.mp4` (one frame per step), write `maps/manifest.json`.
-- Cut T850, T500, RH850 and the 1000–500 hPa thickness (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to an Austria box as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
+- Cut T850, T500, RH850, RH700 and the 1000–500 hPa thickness (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to an Austria box as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
 - Upload the videos and series files to a GitHub release, push a manifest commit; GitHub Actions builds and deploys the app with them.
 - IFS updates every 12 h, ICON-D2 every 3 h; `download_loop.sh` runs the whole chain every 10 min on an always-on machine.
 - `data/` is also the data directory of the skill synop (source in `skills/synop`, installed to `~/.claude/skills/synop`), see *Contract with the skill synop*; `blob_mirror.py` mirrors it into a public Azure blob container so the skill works without this repository.
@@ -98,7 +98,7 @@ folder "data/<window>/" as window_dir {
 }
 folder "maps/" {
  artifact "<window>/<product>.mp4" as videos
- artifact "austria/t850, t2m, heights,\nthickness, t500, rh850.json" as series
+ artifact "austria/t850, t2m, heights,\nthickness, t500, rh850,\nrh700.json" as series
  artifact "manifest.json" as manifest
 }
 artifact "src/config/viewer.config.json" as config
@@ -130,7 +130,7 @@ render_charts --> charts
 render_charts --> geometry
 charts --> tile_videos
 tile_videos --> videos
-ecmwf_grib --> point_series : t850, t500, r850,\n2t, thick, orog
+ecmwf_grib --> point_series : t850, t500, r850, r700,\n2t, thick, orog
 icon_grib --> point_series : 2t, hsurf
 era5 --> point_series
 point_series --> series
@@ -520,7 +520,8 @@ Written by `build_manifest` (scripts/maps_manifest.py), typed as `Manifest` (src
  "heights": { "file": "austria/heights.json", "version": "2026110206-25344" },
  "thickness": { "file": "austria/thickness.json", "version": "2026110112" },
  "t500": { "file": "austria/t500.json", "version": "2026110112" },
- "rh850": { "file": "austria/rh850.json", "version": "2026110112" } } }
+ "rh850": { "file": "austria/rh850.json", "version": "2026110112" },
+ "rh700": { "file": "austria/rh700.json", "version": "2026110112" } } }
 ```
 
 - `run` (top): the ECMWF run. The slider and all `steps`, ICON ones included, count from it.
@@ -537,16 +538,17 @@ Written by `build_manifest` (scripts/maps_manifest.py), typed as `Manifest` (src
 
 Written by `write_series` (scripts/point_series.py), typed in src/model/seriesFiles.ts, read by `TemperatureSeries` (REFERENCE.webapp.md). Compact JSON; GitHub Pages serves it gzip'd.
 
-Encoding of every series: whole multiples of `scale` (0.1 K, 0.1 dam for the thickness, 1 % for rh850), **time-major** (all points of time 0, then all of time 1 …), **deltas along time** (time 0 absolute). Measured: about a fifth of the raw size after gzip; time-major packs ≈ 20 % better than one series per point, binary Int16 is no smaller after gzip, 0.2 K would save another quarter of ICON.
+Encoding of every series: whole multiples of `scale` (0.1 K, 0.1 dam for the thickness, 1 % for rh850 and rh700), **time-major** (all points of time 0, then all of time 1 …), **deltas along time** (time 0 absolute). Measured: about a fifth of the raw size after gzip; time-major packs ≈ 20 % better than one series per point, binary Int16 is no smaller after gzip, 0.2 K would save another quarter of ICON. One file with all series gzips no smaller than the separate files (1 294 259 vs 1 293 013 B, run 2026110400), and separate files keep the browser cache of those whose version did not change (t2m changes with every ICON run).
 Regular grids (`grid`: `lat0` northernmost row, `lon0`, `dlat` step southwards, `dlon`, `nj`, `ni`; index = row × ni + col) cover `BOX` (46.3–49.1° N, 9.5–17.2° E); the ERA5 window is wider by half a grid step so the nearest point of every box location is in it.
 
 | File, version | Content | Size (run 2026110112) |
 | --- | --- | --- |
-| `t850.json`, ECMWF run | `ecmwf`: `run`, `steps`, `grid` (0.1°, 29×78), `orog` (m, per point), `t850`; `climate`: ERA5 T850 | 566 KB, gzip 104 KB |
+| `t850.json`, ECMWF run | `ecmwf`: `run`, `steps`, `grid` (0.1°, 29×78), `orog` (m, per point; every `ecmwf` block repeats it, ≈ 10 KB raw), `t850`; `climate`: ERA5 T850 | 566 KB, gzip 104 KB |
 | `t2m.json`, `<ecmwf run>-<icon run or none>` | `ecmwf` with `t2m`; `climate`: ERA5 T2m; `icon` (only with an ICON file): `run`, `steps`, `cells`, `t2m` on the cells of heights.json | 3.8 MB, gzip 700 KB |
 | `thickness.json`, ECMWF run | `ecmwf` with `thickness` in dam (`thick` gpm × 0.1); no climate | 388 KB, gzip 77 KB |
 | `t500.json`, ECMWF run | `ecmwf` with `t500` (°C); no climate; the app forms T850 − T500 | 396 KB, gzip 68 KB (run 2026103112) |
 | `rh850.json`, ECMWF run | `ecmwf` with `rh850` (`r` at 850 hPa, %); `scale` 1 (whole percent: 1 % ≈ 0.15 K of dew point at 80 %); raw, unclipped (the IFS gives up to ≈ 107 %, the app clamps); IFS RH refers to water above 0 °C, ice below −23 °C, mixed in between; no climate; the app lifts a parcel from 850 hPa with it | 411 KB, gzip 95 KB (run 2026110300) |
+| `rh700.json`, ECMWF run | `ecmwf` with `rh700` (`r` at 700 hPa, %), encoded like rh850; the app draws it as a line over the thickness axis (0–100 %) | 422 KB, gzip 98 KB (run 2026110400) |
 | `heights.json`, `<icon run>-<cells>` | ICON cells within `BORDER_MARGIN` of Austria in file order (25 344): `lat`, `lon` as deltas of `coord_scale` 1e-4°, `hsurf` (m) | 316 KB, gzip 78 KB |
 
 `climate` (both levels): `period`, `grid` (0.25°, 12×32), `first_day` (00 UTC of the ECMWF run), `days` (to the last step, 11), `hours` (00…21), `months` (touched by the days); `term` (per day and hour, day-major), `daily`, `monthly`, each `{mean (°C), std (K)}`.
@@ -685,8 +687,8 @@ Without a new run a call takes ≈ 3.5 s.
 
 ### point_series.py
 
-Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 850 and 500, `r` 850, `2t`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours`).
-A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness, t500 and rh850 per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
+Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 850 and 500, `r` 850 and 700, `2t`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours`).
+A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness, t500, rh850 and rh700 per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
 A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. ICON cells with NaN `hsurf` (boundary zone) are dropped. Without any ICON file t2m.json has no `icon` and heights.json is not written; the app then shows nothing (it needs heights).
 
 | Field | Meaning |
@@ -694,7 +696,7 @@ A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. IC
 | `BOX` | 46.3–49.1° N, 9.5–17.2° E: Austria plus ≈ 10 km |
 | `BORDER_MARGIN = 0.15` | ICON cells farther from Austria (degrees of latitude, longitudes × cos 47.7°) are left out; outline from `AUSTRIA_BORDERS` (`ISO` AT, `LEVEL` country, outer rings, `matplotlib.path`), distance by `cKDTree` |
 | `SCALE = 0.1`, `COORD_SCALE = 1e-4` | value (K or dam) and coordinate units |
-| `RH_SCALE = 1.0` | unit of rh850.json (%); its `scale` is set apart from `common`, since the document's `scale` must equal the encoding scale |
+| `RH_SCALE = 1.0` | unit of rh850.json and rh700.json (%); its `scale` is set apart from `common`, since the document's `scale` must equal the encoding scale |
 
 | Function | Summary |
 | --- | --- |

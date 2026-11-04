@@ -41,14 +41,17 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
     ? 0
     : Math.min(centred.maxScale, (CENTRED_FILL * (axis.max - centre)) / centred.extent)
 
-  const path = (points: (ValuePoint | null)[]) => {
+  // Percent lines span the axis range: 0 % at its bottom, 100 % at its top.
+  const percentY = (value: number) => plotBottom - (Math.min(100, Math.max(0, value)) / 100) * (plotBottom - plotTop)
+
+  const path = (points: (ValuePoint | null)[], y: (value: number) => number = (value) => axis.y(value)) => {
     let penDown = false
     return points.map((point) => {
       if (point === null) {
         penDown = false
         return ''
       }
-      const command = `${penDown ? 'L' : 'M'}${x(point.valid).toFixed(1)},${axis.y(point.value).toFixed(1)}`
+      const command = `${penDown ? 'L' : 'M'}${x(point.valid).toFixed(1)},${y(point.value).toFixed(1)}`
       penDown = true
       return command
     }).join(' ')
@@ -111,6 +114,9 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
         {centred !== undefined && (
           <line className={`${styles.line} ${centred.classes.line}`} x1={left} x2={right} y1={axis.y(centre)} y2={axis.y(centre)} />
         )}
+        {panel.percentLines?.map((line) => (
+          <path key={line.className} className={`${styles.line} ${line.className}`} d={path(line.values, percentY)} />
+        ))}
         {panel.lines.map((line) => <path key={line.className} className={`${styles.line} ${line.className}`} d={path(line.values)} />)}
       </g>
     </g>

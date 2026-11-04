@@ -127,6 +127,14 @@ export interface Rh850File {
   ecmwf: EcmwfBlock & { rh850: number[] }
 }
 
+/** ECMWF relative humidity at 700 hPa in % (IFS definition, mixed phase below 0 °C); no climatology. */
+export interface Rh700File {
+  version: string
+  box: Box
+  scale: number
+  ecmwf: EcmwfBlock & { rh700: number[] }
+}
+
 export interface SeriesFiles {
   t850: T850File
   t2m: T2mFile
@@ -137,6 +145,8 @@ export interface SeriesFiles {
   t500?: T500File
   /** Missing in manifests of older pipelines. */
   rh850?: Rh850File
+  /** Missing in manifests of older pipelines. */
+  rh700?: Rh700File
 }
 
 /** Values of one point over time, in units of the file (°C or K). */

@@ -1,6 +1,6 @@
 """Write the temperature series of Austria that the start page of the viewer draws for its location.
 
-Six JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
+Seven JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
 
     t850.json      ECMWF T850 of every step on the 0.1 deg grid of the box, with the ERA5
                    climatology of T850 (mean, stdev) for the days of the run
@@ -10,9 +10,10 @@ Six JSON files in maps/austria/ (published like the videos, listed in the manife
     thickness.json ECMWF 1000-500 hPa thickness in dam (no climatology)
     t500.json      ECMWF T500 (no climatology), for the vertical totals T850 - T500
     rh850.json     ECMWF relative humidity at 850 hPa in % (no climatology), for the parcel lifted from 850 hPa
+    rh700.json     ECMWF relative humidity at 700 hPa in % (no climatology), drawn as a line
 
 Every series is stored as whole tenths of a degree (of a dam for the
-thickness; rh850 as whole percent), as deltas along time and
+thickness; rh850 and rh700 as whole percent), as deltas along time and
 time-major (all points of the first time, then all of the second ...): the
 first time holds absolute values, every further one the change since the
 previous time. Neighbouring points change alike, which gzip packs to about a
@@ -183,7 +184,7 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     icon_run = icon_grib.stem.split("_")[-1] if icon_grib else "none"
     targets = {name: maps / file for name, file in SERIES_FILES.items()}
     versions = {"t850": ecmwf_run, "t2m": f"{ecmwf_run}-{icon_run}", "thickness": ecmwf_run, "t500": ecmwf_run,
-                "rh850": ecmwf_run}
+                "rh850": ecmwf_run, "rh700": ecmwf_run}
     stale = [name for name, version in versions.items() if force or read_version(targets[name]) != version]
     heights_missing = icon_grib is not None and (force or read_version(targets["heights"]) is None)
     if not stale and not heights_missing:
@@ -205,12 +206,13 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     if "t500" in stale:
         write_document(targets["t500"], {"version": versions["t500"], **common,
                                          "ecmwf": ecmwf_block(ecmwf, "t", 500, "t500")})
-    if "rh850" in stale:
-        # Relative humidity in %, as the IFS gives it (mixed phase between −23 °C and 0 °C); whole percent suffice.
-        # Stored raw, without clipping (the IFS has values slightly above 100 %); the app clamps. Not **common:
-        # the document's scale must be the encoding scale.
-        write_document(targets["rh850"], {"version": versions["rh850"], "box": BOX, "scale": RH_SCALE,
-                                          "ecmwf": ecmwf_block(ecmwf, "r", 850, "rh850", 0.0, scale=RH_SCALE)})
+    # Relative humidity in %, as the IFS gives it (mixed phase between −23 °C and 0 °C); whole percent suffice.
+    # Stored raw, without clipping (the IFS has values slightly above 100 %); the app clamps. Not **common:
+    # the document's scale must be the encoding scale.
+    for name, level in (("rh850", 850), ("rh700", 700)):
+        if name in stale:
+            write_document(targets[name], {"version": versions[name], "box": BOX, "scale": RH_SCALE,
+                                           "ecmwf": ecmwf_block(ecmwf, "r", level, name, 0.0, scale=RH_SCALE)})
     icon = cells = None
     if icon_grib is not None and ("t2m" in stale or heights_missing):
         icon = ForecastGrib(icon_grib, ICON_NAMES)

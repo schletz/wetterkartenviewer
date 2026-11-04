@@ -50,6 +50,11 @@ export interface PanelSpec {
   title: string
   legend: LegendEntry[]
   lines: PanelLine[]
+  /**
+   * Series in % without an axis of their own, drawn below `lines`: 0 % at the lowest, 100 % at the highest value
+   * of the axis, clamped to that range. They do not widen the axis.
+   */
+  percentLines?: PanelLine[]
   /** Anomaly areas below the lines, vertices as [x in px, value]. */
   bands?: BandPolygon[]
   /** Signed areas around the middle of the axis, below the lines. */
