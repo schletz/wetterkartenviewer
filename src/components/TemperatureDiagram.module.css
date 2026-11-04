@@ -6,6 +6,7 @@
   --thickness: var(--text);
   /* Darker than the grey zero line of the Showalter areas, which it crosses. */
   --rh700: #6f6e69;
+  --t925: #6f6e69;
   --climate: #8a8984;
   --warm: #e0453a;
   --cold: #3a7be0;
@@ -74,6 +75,12 @@
 
 .t2mEcmwf {
   stroke: var(--t2m-ecmwf);
+}
+
+/* Thin like RH700: a reference beside the T2m lines, not a series of its own panel. */
+.t925 {
+  stroke: var(--t925);
+  stroke-width: 1;
 }
 
 /* Same colour as ECMWF: only the dashes tell the two T2m lines apart. */

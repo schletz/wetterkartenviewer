@@ -42,6 +42,8 @@ export interface LocationTemperatures {
   t2mEcmwf: PointSeries
   /** Null if the files hold no ICON-D2 run. */
   t2mIcon: PointSeries | null
+  /** ECMWF T925 in °C; null without T925 file. */
+  t925: PointSeries | null
   /** ECMWF 1000–500 hPa thickness in dam; null without thickness file. */
   thickness: PointSeries | null
   /** ECMWF T500 in °C; null without T500 file. */
@@ -67,7 +69,7 @@ export class TemperatureSeries {
 
   /** The series of the location; null outside Austria and its margin (no ICON cell near). */
   at(location: GeoLocation): LocationTemperatures | null {
-    const { t850, t2m, heights, thickness, t500, rh850, rh700 } = this.files
+    const { t850, t2m, heights, thickness, t500, rh850, rh700, t925 } = this.files
     if (!inBox(t850.box, location)) return null
     const cell = this.nearestCell(location)
     if (cell === null) return null
@@ -97,6 +99,7 @@ export class TemperatureSeries {
       period: t850.climate.period,
       t2mEcmwf: t2mSeries,
       t2mIcon,
+      t925: t925 === undefined ? null : ecmwfSeries(t925.ecmwf, t925.ecmwf.t925, t925.scale, location),
       thickness: thickness === undefined
         ? null
         : ecmwfSeries(thickness.ecmwf, thickness.ecmwf.thickness, thickness.scale, location),
