@@ -156,19 +156,19 @@ Europa. Schwarze Isohypsen 500 hPa alle 4 dam, fett 528/552/576. Farben: T850 in
 ## z500_t500
 
 Europa. Schwarze Isohypsen 500 hPa alle 4 dam, fett 528/552/576, L/H mit Kernwert. Farben: T500 in
-4-K-Stufen (etwa 5500 m), braune Isothermen alle 4 K. Die Farben sind die von T850, um 28 K
-verschoben (Unterschied T850 − T500 der Normatmosphäre, gerundet): Gleiche Farbe heißt gleiche Luftmasse wie in
-[z500_t850](#z500_t850).
+4-K-Stufen (etwa 5500 m), braune Isothermen alle 4 K. Farbskala wie [z700_t700](#z700_t700), also
+gleiche Farbe = gleiche Temperatur auf beiden Karten.
 
 - **Höhenkaltluft:** Kaltlufttropfen und Tröge zeigen sich als kalter Kern unter dem L.
-- **Labilität:** Ist die Farbe in 500 hPa kälter als in 850 hPa, liegt T850 − T500 über 28 K:
-  Schauer und Gewitter möglich, siehe [vt_rh700](#vt_rh700).
+- **Labilität:** Kalte Höhenluft über warmer Luft in 850 hPa heißt Schauer und Gewitter möglich,
+  die Differenz zeigt [vt_rh700](#vt_rh700).
 
 ## z700_t700
 
-Europa. Schwarze Isohypsen 700 hPa alle 5 dam, fett 270/290/310, L/H mit Kernwert. Farben: T700 in
-4-K-Stufen (etwa 3000 m), braune Isothermen alle 4 K. Die Farben sind die von T850, um 12 K
-verschoben (Unterschied T850 − T700 der Normatmosphäre, gerundet).
+Europa, nach ECMWF medium-t-z auf 700 hPa. Schwarze Isohypsen 700 hPa alle 5 dam, fett
+270/290/310, L/H mit Kernwert. Farben: T700 in 4-K-Stufen (etwa 3000 m), braune Isothermen alle 4 K.
+Bei 0 °C springt die Farbe von Grün nach Blau: Im blauen Bereich liegt die Nullgradgrenze unter
+etwa 3000 m.
 
 - **Lenkung:** 700 hPa ist die Lenkungsebene für Fronten und Niederschlagsgebiete. Sie ziehen etwa
   parallel zu den Isohypsen.

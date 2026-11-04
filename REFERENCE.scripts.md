@@ -1191,13 +1191,13 @@ Fields: `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 600`, `EARTH_RADIUS_KM = 6371`, `W
 
 ### chart_styles.py, ColourScale, ContourStyle, SymbolStyle
 
-Frozen dataclasses: `ColourScale(title, bands, legend_range=None, transparent_below=None)` with `bounds` and `shifted(offset, title)` (same colours, every bound moved); `ContourStyle(interval, bold_every, bold_base, label_every, smooth_km, colour='black', width=1.0)`; `SymbolStyle(label, marker, size, colour, fill=None, width=1.0, halo=None)`, marker may be vertices or a matplotlib `Path`.
+Frozen dataclasses: `ColourScale(title, bands, legend_range=None, transparent_below=None)` with `bounds`; `ContourStyle(interval, bold_every, bold_base, label_every, smooth_km, colour='black', width=1.0)`; `SymbolStyle(label, marker, size, colour, fill=None, width=1.0, halo=None)`, marker may be vertices or a matplotlib `Path`.
 chart_styles.py holds every scale and threshold:
 
 | Constant | Meaning |
 | --- | --- |
-| `T850`, `THICKNESS`, `RH700` | copied from ECMWF opencharts legends |
-| `T850_T700_K = 12`, `T850_T500_K = 28`; `T700`, `T500` | T850 bands shifted down by the drop from 850 hPa, so one colour marks one air mass on every level; ICAO standard atmosphere (10.1 and 26.7 K) for all seasons (per user; a November run gave 7.3 and 23.2 K over Europe), rounded to whole 4 K bands so the bounds stay on the 4 K isotherms (`ISOTHERM_850`, also used at 700/500 hPa) and 0 °C stays a bound |
+| `T850`, `T700`, `THICKNESS`, `RH700` | copied from ECMWF opencharts legends; T700 jumps from green to blue at 0 °C (freezing level below ≈ 3000 m) |
+| `T500` | the bands of T700, legend range −60…12 °C: both upper-level charts read alike (per user) |
 | `T2M`, `MOUNTAIN_T` | bands of T850: one colour = one temperature on every chart |
 | `T850_ANOMALY` | σ bands; ≥ 1 notable, ≥ 2 unusual |
 | `ROUGH_TERRAIN_SDOR = 200` | real valley/summit heights differ by several 100 m |

@@ -6,8 +6,8 @@ below with valid time, title, run and colour bar. The products are
 defined in lib/chart_products.py; one chart per step unless noted:
 
     z500_t850        T850 shading, isotherms every 4 K, Z500 contours, L/H centres
-    z500_t500        T500 shading (T850 colours - 28 K), isotherms every 4 K, Z500 contours, L/H centres
-    z700_t700        T700 shading (T850 colours - 12 K), isotherms every 4 K, Z700 contours every 5 dam, L/H centres
+    z500_t500        T500 shading (T700 colours), isotherms every 4 K, Z500 contours, L/H centres
+    z700_t700        T700 shading (ECMWF medium-t-z), isotherms every 4 K, Z700 contours every 5 dam, L/H centres
     z850_rh700       700 hPa relative humidity shading (> 65 %), Z850 contours every 4 dam, L/H centres
     thickness_mslp   1000-500 hPa thickness shading, isobars every 5 hPa, L/H centres
     t850_mslp        T850 shading under the isobars, values printed on zoomed windows
