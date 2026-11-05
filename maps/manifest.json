@@ -819,7 +819,6 @@
   "icon-d2/wind10m": {
    "file": "icon-d2/wind10m.mp4",
    "steps": [
-    9,
     10,
     11,
     12,
@@ -875,7 +874,6 @@
   "opencharts_central_europe/wind10m": {
    "file": "opencharts_central_europe/wind10m.mp4",
    "steps": [
-    0,
     3,
     6,
     9,
@@ -1028,7 +1026,7 @@
   },
   "heights": {
    "file": "austria/heights.json",
-   "version": "2026110421-25344"
+   "version": "2026110509-25344"
   },
   "thickness": {
    "file": "austria/thickness.json",
@@ -1048,6 +1046,10 @@
   },
   "t925": {
    "file": "austria/t925.json",
+   "version": "2026110500"
+  },
+  "gust10m": {
+   "file": "austria/gust10m.json",
    "version": "2026110500"
   }
  }
