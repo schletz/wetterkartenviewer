@@ -1,9 +1,10 @@
 #!/bin/sh
-# Unattended publishing (e.g. on an always-on Mac): every INTERVAL seconds run download_data.sh, which
-# first brings the checkout to origin/main (git fetch + reset --hard, so code changes and manifests
-# pushed from other machines arrive). publish_maps.py commits the manifest only when a new run was
-# rendered and pushes it; without a new run nothing is committed. data/ and maps/ are ignored by git,
-# so the reset keeps the downloaded runs and the encoded videos.
+# Unattended publishing (e.g. on an always-on Mac): every INTERVAL seconds run
+# download_data_with_reset.sh, which first brings the checkout to origin/main (git fetch + reset
+# --hard, so code changes and manifests pushed from other machines arrive). publish_maps.py commits
+# the manifest only when a new run was rendered and pushes it; without a new run nothing is
+# committed. data/ and maps/ are ignored by git, so the reset keeps the downloaded runs and the
+# encoded videos.
 #
 # Usage: ./download_loop.sh [--yes]     (--yes skips the confirmation, e.g. after a restart)
 
@@ -31,12 +32,11 @@ confirm() {
     esac
 }
 
-# One pass: download_data.sh syncs with origin (a failed fetch ends it before the pipeline, so a
-# network outage never runs on stale code), then downloads, renders and publishes. The reset was
-# confirmed once at the start, so download_data.sh does not ask again.
+# One pass: download_data_with_reset.sh syncs with origin (a failed fetch ends it before the
+# pipeline, so a network outage never runs on stale code), then downloads, renders and publishes.
 update() {
     script=$(git hash-object "$SELF")
-    if WETTER_RESET_CONFIRMED=1 ./download_data.sh; then
+    if ./download_data_with_reset.sh; then
         log "pass finished"
     else
         log "pass failed (exit $?), retrying in the next pass"

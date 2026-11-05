@@ -15,17 +15,17 @@ npx skills@latest add schletz/wetterkartenviewer --skill synop -g -y --copy
 ## Karten aktualisieren
 
 ```
-download_data.cmd      (Windows)
-./download_data.sh     (macOS, Linux)
+download_data.cmd                 (Windows)
+./download_data_with_reset.sh     (macOS, Linux)
 ```
 
-`download_data.sh` setzt den Checkout zuerst per `git fetch` und `git reset --hard origin/main`
-auf den Stand von GitHub, damit auch `./download_data.sh --force` den gepushten Quelltext verwendet.
-Würden dabei geänderte Dateien oder ungepushte Commits verloren gehen (außer Manifest-Commits eines
-fehlgeschlagenen Pushs), fragt es vorher nach. `download_data.cmd` setzt nichts zurück.
+`download_data_with_reset.sh` setzt den Checkout zuerst per `git fetch` und
+`git reset --hard origin/main` auf den Stand von GitHub, damit auch
+`./download_data_with_reset.sh --force` den gepushten Quelltext verwendet. Geänderte Dateien und
+ungepushte Commits gehen dabei ohne Nachfrage verloren. `download_data.cmd` setzt nichts zurück.
 
 Für den Dauerbetrieb (z. B. ein immer laufender Mac) ruft `./download_loop.sh` alle 10 Minuten
-`download_data.sh` auf. Danach spiegelt es `data/` per `rsync --delete` nach
+`download_data_with_reset.sh` auf. Danach spiegelt es `data/` per `rsync --delete` nach
 `$WETTER_MIRROR_DIR` (Standard `~/Downloads/wetterviewer_data`), sofern der Ordner existiert.
 Nach dem Start fragt es einmal nach, `--yes` überspringt die Frage.
 

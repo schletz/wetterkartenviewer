@@ -6,39 +6,13 @@
 # Both scripts get all options: with --force update_maps.py renders everything again and publish_maps.py
 # deploys even if the manifest stays the same.
 #
-# The reset discards changes to tracked files and local commits. If anything besides unpushed manifest
-# commits (left by a failed push) would get lost, the script asks first; WETTER_RESET_CONFIRMED=1 skips
-# the question (download_loop.sh asks once at its start). data/ and maps/ are ignored by git and stay.
+# The reset discards changes to tracked files and local commits without asking, as the name says.
+# data/ and maps/ are ignored by git and stay.
 
 BRANCH=main
 
 log() {
     echo "[$(date '+%H:%M:%S')] $*"
-}
-
-# What the reset would discard: changed tracked files and unpushed commits that touch more than the
-# manifest. Prints nothing if nothing of value is lost.
-at_risk() {
-    git status --short --untracked-files=no
-    if git diff --name-only "origin/$BRANCH...HEAD" | grep -qv '^maps/manifest\.json$'; then
-        git log --oneline "origin/$BRANCH..HEAD"
-    fi
-}
-
-confirm_reset() {
-    lost=$(at_risk)
-    if [ -z "$lost" ] || [ "$WETTER_RESET_CONFIRMED" = 1 ]; then
-        return 0
-    fi
-    echo "git reset --hard origin/$BRANCH would discard:"
-    echo "$lost"
-    printf 'Continue? [y/N] '
-    # Without a terminal (cron, ssh without tty) the read fails and the reset is refused.
-    { read -r answer < /dev/tty; } 2>/dev/null || { echo; return 1; }
-    case "$answer" in
-        y|Y|yes|j|J|ja) return 0 ;;
-        *) return 1 ;;
-    esac
 }
 
 # Fetch and reset; a failure stops the script, so the pipeline never runs on stale code.
@@ -48,7 +22,6 @@ sync_checkout() {
         return 1
     fi
     git fetch -q origin "$BRANCH" || { echo "git fetch failed" >&2; return 1; }
-    confirm_reset || { echo "aborted, nothing changed" >&2; return 1; }
     git reset -q --hard "origin/$BRANCH" || { echo "git reset failed" >&2; return 1; }
     log "at $(git log -1 --format='%h %s')"
 }
@@ -61,7 +34,7 @@ main() {
         # so the pipeline runs from a fresh start of the current version, without a second sync.
         WETTER_SYNCED=1
         export WETTER_SYNCED
-        exec ./download_data.sh "$@"
+        exec ./download_data_with_reset.sh "$@"
     fi
     python3 scripts/update_maps.py data maps "$@" && python3 scripts/publish_maps.py maps "$@"
 }
