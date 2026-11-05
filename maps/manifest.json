@@ -74,8 +74,8 @@
    "run": "2026110412",
    "end": 240
   },
-  "opencharts_europe/z500_t850": {
-   "file": "opencharts_europe/z500_t850.mp4",
+  "opencharts_europe/t500": {
+   "file": "opencharts_europe/t500.mp4",
    "steps": [
     0,
     3,
@@ -146,8 +146,8 @@
    "run": "2026110412",
    "end": 240
   },
-  "opencharts_europe/z500_t500": {
-   "file": "opencharts_europe/z500_t500.mp4",
+  "opencharts_europe/z500_t850": {
+   "file": "opencharts_europe/z500_t850.mp4",
    "steps": [
     0,
     3,
