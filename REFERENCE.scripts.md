@@ -1072,13 +1072,13 @@ Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L w
 
 | Field | Meaning |
 | --- | --- |
-| `STEP` | `z500_t850`, `z500_t500`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `dt850_24h`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `weather_summary` |
+| `STEP` | `z500_t850`, `t500`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `dt850_24h`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `weather_summary` |
 | `DAY = {'tmax': 'max', 'tmin': 'min'}`, `STATIC = ('orography',)`, `ALL` | |
 | `CLIMATE = ('t850_anomaly',)` | products that need `climate` |
 | `MODEL = 'ECMWF IFS'` | legend and `geometry.json` |
 | `PRECIP_HOURS = 6` | interval of `weather_summary` (3 h at T+3) |
 | `SHEET_HOURS = (12,)` | valid hours on contact sheets |
-| `DEFAULTS` | europe: `z500_t850`, `z500_t500`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h`; central_europe: `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `tmax`, `tmin`, `orography`, `weather_summary`; no `icon-d2` entry |
+| `DEFAULTS` | europe: `z500_t850`, `t500`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h`; central_europe: `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `tmax`, `tmin`, `orography`, `weather_summary`; no `icon-d2` entry |
 | `CHANGE_HOURS = 24`, `TCC_PERCENT = 100.0` | `dt850_24h`; tcc 0–1 → % |
 | `detail` (instance) | `km_per_px(50)` smaller than Europe (central_europe, icon-d2): denser isobars, printed values |
 | `height`, `land` (instance) | model height and land ≥ 0.5 on the pixels |
@@ -1191,7 +1191,7 @@ Fields: `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 600`, `EARTH_RADIUS_KM = 6371`, `W
 
 ### chart_styles.py, ColourScale, ContourStyle, SymbolStyle
 
-Frozen dataclasses: `ColourScale(title, bands, legend_range=None, transparent_below=None)` with `bounds`; `ContourStyle(interval, bold_every, bold_base, label_every, smooth_km, colour='black', width=1.0)`; `SymbolStyle(label, marker, size, colour, fill=None, width=1.0, halo=None)`, marker may be vertices or a matplotlib `Path`.
+Frozen dataclasses: `ColourScale(title, bands, legend_range=None, transparent_below=None)` with `bounds`; `ContourStyle(interval, bold_every, bold_base, label_every, smooth_km, colour='black', width=1.0, dashed_negative=True)` (negative contours dashed); `SymbolStyle(label, marker, size, colour, fill=None, width=1.0, halo=None)`, marker may be vertices or a matplotlib `Path`.
 chart_styles.py holds every scale and threshold:
 
 | Constant | Meaning |
@@ -1211,7 +1211,7 @@ chart_styles.py holds every scale and threshold:
 | `WIND10M` | km/h, bands = Beaufort limits |
 | `STREAMLINE_SMOOTH_KM = 15`, `STREAMLINE_DENSITY = 3` | streamlines only; chosen by eye |
 | `Z500`, `Z700`, `Z850`, `MSLP`, `MSLP_DETAIL`, `MSLP_SUMMARY` | 4 dam (bold 528/552/576); 5 dam; 4 dam; 5 hPa; 2 hPa (weak gradients decide inversion/foehn); 4 hPa |
-| `ISOTHERM_850` | 4 K isotherms at band borders |
+| `ISOTHERM_850`, `ISOTHERM_500` | 4 K isotherms at band borders; brown and thin under Z lines, black, solid, bold every 20 K on `t500` (no other lines there) |
 | `MOIST_LAYER_RH = 90`, `WIND925_CALM = 5` | fog/stratus layer; below 5 m/s an inversion hardly clears |
 | `ASCENT_LINES`, `SUBSIDENCE_LINES` | ω700 −0.6/−0.2 and +0.2 Pa/s |
 | `PRECIP_RH = 90`, `SNOW_LINE_BELOW_FREEZING_M = 350` | also Diagnostics (`psig`, `snowl`) |

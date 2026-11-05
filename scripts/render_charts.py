@@ -6,7 +6,7 @@ below with valid time, title, run and colour bar. The products are
 defined in lib/chart_products.py; one chart per step unless noted:
 
     z500_t850        T850 shading, isotherms every 4 K, Z500 contours, L/H centres
-    z500_t500        T500 shading (T700 colours), isotherms every 4 K, Z500 contours, L/H centres
+    t500             T500 shading (T700 colours), black isotherms every 4 K
     z700_t700        T700 shading (ECMWF medium-t-z), isotherms every 4 K, Z700 contours every 5 dam, L/H centres
     z850_rh700       700 hPa relative humidity shading (> 65 %), Z850 contours every 4 dam, L/H centres
     thickness_mslp   1000-500 hPa thickness shading, isobars every 5 hPa, L/H centres
@@ -40,7 +40,7 @@ with the borders of the Austrian states):
 --projection chooses the chart window (default: opencharts_europe, icon-d2 for
 ICON files). Without --products each window gets its default selection
 (ChartProducts.DEFAULTS, IconProducts.DEFAULTS): opencharts_europe
-the large scale flow (z500_t850, z500_t500, z700_t700, z850_rh700, thickness_mslp, dt850_24h),
+the large scale flow (z500_t850, t500, z700_t700, z850_rh700, thickness_mslp, dt850_24h),
 opencharts_central_europe (2.6 times enlarged, Ireland to Romania)
 everything else, with isobars every 2 hPa and printed values.
 update_maps.py renders every product (--products all) on opencharts_europe,

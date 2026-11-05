@@ -209,6 +209,10 @@ MSLP_SUMMARY = ContourStyle(interval=4, bold_every=5, bold_base=1000, label_ever
 # Isotherms at the band boundaries of the T850, T700 and T500 shading, so values can be read from the labels.
 ISOTHERM_850 = ContourStyle(interval=4, bold_every=0, bold_base=0, label_every=1, smooth_km=30,
                             colour="#5a3c28", width=0.5)
+# t500 has no other lines and nearly only blue bands, so its isotherms are the main
+# lines: black, labelled, bold at 0/-20/-40 deg C, solid although negative.
+ISOTHERM_500 = ContourStyle(interval=4, bold_every=5, bold_base=0, label_every=1, smooth_km=30,
+                            dashed_negative=False)
 # 2 m temperatures follow the model orography, so isotherms fray over every
 # mountain range; only the 0 deg C line (frost, snow) is drawn.
 FROST_LINE = 0.0

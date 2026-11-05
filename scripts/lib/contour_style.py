@@ -16,6 +16,8 @@ class ContourStyle:
             carry small scale noise (mountains) that would fray the lines.
         colour: line colour.
         width: line width of the thin contours in px.
+        dashed_negative: draw contours below 0 dashed (matplotlib's convention
+            for one-colour contours); off where every value is negative.
     """
 
     interval: float
@@ -25,3 +27,4 @@ class ContourStyle:
     smooth_km: float
     colour: str = "black"
     width: float = 1.0
+    dashed_negative: bool = True

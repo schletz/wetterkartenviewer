@@ -7,13 +7,13 @@
   "tiles": [
     {
       "layers": [
-        "opencharts_europe/thickness_mslp"
+        "opencharts_europe/thickness_mslp",
+        "opencharts_europe/t500"
       ]
     },
     {
       "layers": [
         "opencharts_europe/z500_t850",
-        "opencharts_europe/z500_t500",
         "opencharts_europe/t850_anomaly"
       ]
     },

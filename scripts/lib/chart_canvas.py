@@ -163,7 +163,8 @@ class ChartCanvas:
         bold = (steps % style.bold_every == 0) if style.bold_every else np.zeros(len(levels), bool)
         widths = np.where(bold, 2.2 * style.width, style.width)
         cs = self.ax.contour(np.arange(IMAGE_WIDTH) + 0.5, np.arange(IMAGE_HEIGHT) + 0.5, values, levels=levels,
-                             colors=style.colour, linewidths=widths, zorder=Z_CONTOUR)
+                             colors=style.colour, linewidths=widths, zorder=Z_CONTOUR,
+                             negative_linestyles="dashed" if style.dashed_negative else "solid")
         labelled = levels[steps % style.label_every == 0]
         texts = self.ax.clabel(cs, levels=labelled, inline=True, inline_spacing=3,
                                fontsize=9 if boxed else 7, fmt=lambda v: fmt.format(v))
