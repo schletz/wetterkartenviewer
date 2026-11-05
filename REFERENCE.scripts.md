@@ -102,6 +102,7 @@ folder "maps/" {
  artifact "manifest.json" as manifest
 }
 artifact "src/config/viewer.config.json" as config
+artifact "scripts/lib/era5_orography.grib" as era5_orog
 node "GitHub" {
  artifact "release tile-videos" as release
  artifact "branch main" as repo
@@ -133,6 +134,7 @@ tile_videos --> videos
 ecmwf_grib --> point_series : t925, t850, t500,\nr850, r700, 2t, 10fg, 10fg3,\nthick, orog
 icon_grib --> point_series : 2t, hsurf
 era5 --> point_series
+era5_orog --> point_series : z
 point_series --> series
 config --> maps_manifest : tile paths
 charts --> maps_manifest : steps
@@ -546,7 +548,7 @@ Regular grids (`grid`: `lat0` northernmost row, `lon0`, `dlat` step southwards, 
 | File, version | Content | Size (run 2026110112) |
 | --- | --- | --- |
 | `t850.json`, ECMWF run | `ecmwf`: `run`, `steps`, `grid` (0.1°, 29×78), `orog` (m, per point; every `ecmwf` block repeats it, ≈ 10 KB raw), `t850`; `climate`: ERA5 T850 | 566 KB, gzip 104 KB |
-| `t2m.json`, `<ecmwf run>-<icon run or none>` | `ecmwf` with `t2m`; `climate`: ERA5 T2m; `icon` (only with an ICON file): `run`, `steps`, `cells`, `t2m` on the cells of heights.json | 3.8 MB, gzip 700 KB |
+| `t2m.json`, `<ecmwf run>-<icon run or none>` | `ecmwf` with `t2m`; `climate`: ERA5 T2m (the app shades the ECMWF T2m anomaly with it where the ERA5 `orog` lies within 100 m of the ECMWF one); `icon` (only with an ICON file): `run`, `steps`, `cells`, `t2m` on the cells of heights.json | 3.8 MB, gzip 700 KB |
 | `thickness.json`, ECMWF run | `ecmwf` with `thickness` in dam (`thick` gpm × 0.1); no climate | 388 KB, gzip 77 KB |
 | `t500.json`, ECMWF run | `ecmwf` with `t500` (°C); no climate; the app forms T850 − T500 | 396 KB, gzip 68 KB (run 2026103112) |
 | `t925.json`, ECMWF run | `ecmwf` with `t925` (°C), encoded like t500; no climate; the app draws it on the T2m axis; where the ground lies above 925 hPa (Alps) the IFS value is extrapolated below ground | 422 KB, gzip 98 KB (run 2026110400) |
@@ -555,7 +557,7 @@ Regular grids (`grid`: `lat0` northernmost row, `lon0`, `dlat` step southwards, 
 | `gust10m.json`, ECMWF run | `ecmwf` with `gust10m` (km/h, `10fg`/`10fg3` × `KMH_PER_MS`, steps 3…240, none at T+0) and `hours` (per step the interval it covers: 1, 3 or 6), `scale` 1 (`WIND_SCALE`; the band limits are whole km/h); `colours`: the bands of `chart_styles.GUST10M` as `[lower, upper, "#rrggbb"]` (last upper 300), so the app colours its bar like the wind10m chart without a copy of the scale; no climate | ≈ 0.4 MB, gzip ≈ 80 KB |
 | `heights.json`, `<icon run>-<cells>` | ICON cells within `BORDER_MARGIN` of Austria in file order (25 344): `lat`, `lon` as deltas of `coord_scale` 1e-4°, `hsurf` (m) | 316 KB, gzip 78 KB |
 
-`climate` (both levels): `period`, `grid` (0.25°, 12×32), `first_day` (00 UTC of the ECMWF run), `days` (to the last step, 11), `hours` (00…21), `months` (touched by the days); `term` (per day and hour, day-major), `daily`, `monthly`, each `{mean (°C), std (K)}`.
+`climate` (both levels): `period`, `grid` (0.25°, 12×32), `first_day` (00 UTC of the ECMWF run), `days` (to the last step, 11), `hours` (00…21), `months` (touched by the days), `orog` (ERA5 orography per point, whole m, from `era5_orography`; ≈ 1.5 KB raw); `term` (per day and hour, day-major), `daily`, `monthly`, each `{mean (°C), std (K)}`.
 Values in °C (T) and K (std); `box` and `scale` at the top of t850/t2m.
 
 ### data/ layout
@@ -694,7 +696,7 @@ Without a new run a call takes ≈ 3.5 s.
 
 ### point_series.py
 
-Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 925, 850 and 500, `r` 850 and 700, `2t`, `10fg`, `10fg3`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours`).
+Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 925, 850 and 500, `r` 850 and 700, `2t`, `10fg`, `10fg3`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours`) with its orography through `era5_orography`.
 A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness, t500, t925, rh850, rh700 and gust10m per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
 A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. ICON cells with NaN `hsurf` (boundary zone) are dropped. Without any ICON file t2m.json has no `icon` and heights.json is not written; the app then shows nothing (it needs heights).
 
@@ -1073,6 +1075,10 @@ Keys `(kind, statistic, level, month, day)`: kind `HHz` (term hours present), `d
 | `ClimateArchive.field(kind, statistic, level, month, day) -> ndarray` | flat float32 in K, rows north → south |
 | `ClimateArchive.grid`, `nearest(lat, lng)` | grid as `ForecastGrib.grid` plus `lat`/`lon` arrays |
 | `T850Climate.at_point(valid_times, lat, lng)`, `field(valid)` | (mean °C, std K) |
+
+### era5_orography (era5_orography.py)
+
+`era5_orography(grid, path=FILE) -> ndarray` (nj, ni) in m: the single message of `scripts/lib/era5_orography.grib` (committed, 440 KB, GRIB1) / `GRAVITY`. The file is the invariant ERA5 surface geopotential `z` from the CDS (`reanalysis-era5-single-levels`, variable `geopotential`, one date, area of era5_means.grb2 75.25° N −70.25° E to 11.75° N 76.75° E, 589×255); a copy lies with the ERA5 sources in D:\ERA5\geopotential.grib (per user). Another grid than `grid` (sizes, scan direction, first point, increments within `TOLERANCE` 1e-6) → `ValueError`, so a new era5_means.grb2 on another grid needs a new file. ERA5 smooths the Alps: at the box points its height differs from the ECMWF `orog` by > 100 m at about half the points above 500 m (Innsbruck 1626 vs 1313 m). Only point_series.py reads it, not the skill or render_charts.py.
 
 ## API: scripts/lib/ — rendering
 

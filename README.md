@@ -177,6 +177,19 @@ client.retrieve("reanalysis-era5-single-levels",
 Aus diesen Rohdaten (rund 75 MB pro Monat und Variable) entstehen Mittel und Streuung pro
 Kalendertag, Termin und Monat in `era5_means.grb2`. Das Skript dafür ist nicht in diesem Repo.
 
+Die Geländehöhe von ERA5 (`scripts/lib/era5_orography.grib`, im Repo) ist das zeitlich konstante
+Geopotential im selben Gebiet, ein einziges Feld:
+
+```python
+client.retrieve("reanalysis-era5-single-levels",
+                {"product_type": ["reanalysis"], "variable": ["geopotential"], "year": ["2020"],
+                 "month": ["01"], "day": ["01"], "time": ["00:00"], "area": [75.25, -70.25, 11.75, 76.75],
+                 "data_format": "grib", "download_format": "unarchived"}, "era5_orography.grib")
+```
+
+Die Startseite zeigt die T2m-Abweichung vom ERA5-Mittel nur, wenn diese Höhe höchstens 100 m von
+der des ECMWF-Gitterpunkts abweicht.
+
 ### Ländergrenzen (GeoJSON)
 
 - Portal: https://hub.arcgis.com/datasets/esri::world-countries-generalized

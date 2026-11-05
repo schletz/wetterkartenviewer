@@ -80,9 +80,8 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
         if ('colours' in entry) return <ScaleSwatch key={entry.text} x={left} y={y} colours={entry.colours} text={entry.text} />
         return (
           <g key={entry.text}>
-            {'line' in entry
-              ? <line className={`${styles.line} ${entry.line}`} x1={left} x2={left + LEGEND_SWATCH_WIDTH - 4} y1={y} y2={y} />
-              : <BandSwatch x={left} y={y} classes={entry.bands} />}
+            {'line' in entry && <line className={`${styles.line} ${entry.line}`} x1={left} x2={left + LEGEND_SWATCH_WIDTH - 4} y1={y} y2={y} />}
+            {'bands' in entry && <BandSwatch x={left} y={y} classes={entry.bands} />}
             <text x={left + LEGEND_SWATCH_WIDTH} y={y + 4}>{entry.text}</text>
           </g>
         )

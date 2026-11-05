@@ -5,7 +5,8 @@ Nine JSON files in maps/austria/ (published like the videos, listed in the manif
     t850.json      ECMWF T850 of every step on the 0.1 deg grid of the box, with the ERA5
                    climatology of T850 (mean, stdev) for the days of the run
     t2m.json       ECMWF and ICON-D2 T2m, with the ERA5 climatology of T2m
-                   (both ECMWF blocks also hold the model orography ``orog`` in m)
+                   (both ECMWF blocks and both climate blocks also hold the model
+                   orography ``orog`` in m, ERA5 from lib/era5_orography.grib)
     heights.json   the ICON-D2 cells of Austria: centre and model orography (hsurf)
     thickness.json ECMWF 1000-500 hPa thickness in dam (no climatology)
     t500.json      ECMWF T500 (no climatology), for the vertical totals T850 - T500
@@ -55,6 +56,7 @@ from scipy.spatial import cKDTree
 from lib import chart_styles
 from lib.climate_archive import DIRECTORY as CLIMATE_DIRECTORY, ClimateArchive
 from lib.constants import ICON_NAMES, IFS_GUST_NAMES, KELVIN, KMH_PER_MS
+from lib.era5_orography import era5_orography
 from lib.forecast_grib import ForecastGrib
 from lib.missing_field_error import MissingFieldError
 from lib.projection import AUSTRIA_BORDERS
@@ -178,7 +180,10 @@ def heights_document(grib: ForecastGrib, cells: np.ndarray) -> dict:
 
 
 def climate_block(archive: ClimateArchive, level: int, run: datetime, last_step: int) -> dict:
-    """ERA5 mean (deg C) and stdev (K) of one level for every day of the run: per analysis hour, daily, monthly."""
+    """ERA5 mean (deg C) and stdev (K) of one level for every day of the run: per analysis hour, daily, monthly.
+
+    ``orog`` is the ERA5 orography of every point in whole m, the ground the T2m climate refers to.
+    """
     first_day = run.replace(hour=0)
     days = [first_day + timedelta(days=i) for i in range((run + timedelta(hours=last_step) - first_day).days + 1)]
     months = sorted({day.month for day in days})
@@ -194,8 +199,9 @@ def climate_block(archive: ClimateArchive, level: int, run: datetime, last_step:
     term = [(archive.term_kind(hour), day.month, day.day) for day in days for hour in hours]
     daily = [("daily", day.month, day.day) for day in days]
     monthly = [("monthly", month, None) for month in months]
+    orography = era5_orography(archive.grid)[rows, cols]
     return {"period": archive.period, "grid": window, "first_day": f"{first_day:%Y-%m-%d}", "days": len(days),
-            "hours": list(hours), "months": months,
+            "hours": list(hours), "months": months, "orog": np.rint(orography).astype(np.int64).ravel().tolist(),
             **{kind: {statistic: fields(dates, statistic) for statistic in ("mean", "std")}
                for kind, dates in (("term", term), ("daily", daily), ("monthly", monthly))}}
 

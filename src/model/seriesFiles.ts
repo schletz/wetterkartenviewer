@@ -45,6 +45,8 @@ export interface ClimateBlock {
   hours: number[]
   /** Calendar months of `monthly`. */
   months: number[]
+  /** ERA5 orography of every grid point, whole m; missing in files of older pipeline versions. */
+  orog?: number[]
   /** Per day and analysis hour, day-major. */
   term: ClimateStatistics
   /** Daily means per day. */

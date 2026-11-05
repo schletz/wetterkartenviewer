@@ -40,6 +40,12 @@ export interface LocationTemperatures {
   /** Reference period of the climatology, e.g. "1991–2020". */
   period: string
   t2mEcmwf: PointSeries
+  /** ERA5 T2m climate at every valid time of `t2mEcmwf`, null where the climatology has no value. */
+  climate2m: (ClimatePoint | null)[]
+  /** ERA5 grid point of the T2m climate values. */
+  climate2mPoint: GeoLocation
+  /** ERA5 orography of that point, m; undefined if the file has none. */
+  climate2mHeight?: number
   /** Null if the files hold no ICON-D2 run. */
   t2mIcon: PointSeries | null
   /** ECMWF T925 in °C; null without T925 file. */
@@ -82,7 +88,8 @@ export class TemperatureSeries {
     const t850Series = ecmwfSeries(t850.ecmwf, t850.ecmwf.t850, t850.scale, location)
     const t2mSeries = ecmwfSeries(t2m.ecmwf, t2m.ecmwf.t2m, t2m.scale, location)
     const climate = climateAt(t850.climate, t850.scale, location, t850Series.values.map((p) => p.valid))
-    if (climate === null) return null
+    const climate2m = climateAt(t2m.climate, t2m.scale, location, t2mSeries.values.map((p) => p.valid))
+    if (climate === null || climate2m === null) return null
 
     let t2mIcon: PointSeries | null = null
     const icon = t2m.icon
@@ -103,6 +110,9 @@ export class TemperatureSeries {
       climatePoint: climate.point,
       period: t850.climate.period,
       t2mEcmwf: t2mSeries,
+      climate2m: climate2m.values,
+      climate2mPoint: climate2m.point,
+      climate2mHeight: climate2m.height,
       t2mIcon,
       t925: t925 === undefined ? null : ecmwfSeries(t925.ecmwf, t925.ecmwf.t925, t925.scale, location),
       thickness: thickness === undefined
@@ -155,7 +165,7 @@ function ecmwfSeries(block: EcmwfBlock, deltas: number[], scale: number, locatio
   }
 }
 
-/** Mean and standard deviation per analysis hour at the nearest ERA5 point, for each valid time. */
+/** Mean and standard deviation per analysis hour at the nearest ERA5 point, for each valid time, and its height. */
 function climateAt(block: ClimateBlock, scale: number, location: GeoLocation, valid: Date[]) {
   const index = gridIndex(block.grid, location)
   if (index === null) return null
@@ -170,5 +180,5 @@ function climateAt(block: ClimateBlock, scale: number, location: GeoLocation, va
     const i = day * block.hours.length + hour
     return { mean: mean[i], std: std[i] }
   })
-  return { point: gridPoint(block.grid, index), values }
+  return { point: gridPoint(block.grid, index), height: block.orog?.[index], values }
 }

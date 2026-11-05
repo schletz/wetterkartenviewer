@@ -30,10 +30,11 @@ export interface BandSwatchClasses {
 }
 
 /**
- * A legend entry: a line swatch, a swatch of layered areas, or a colour scale (its boxes with the text beside them,
- * the band limits in a second row below).
+ * A legend entry: a line swatch, a swatch of layered areas, a colour scale (its boxes with the text beside them,
+ * the band limits in a second row below), or a note without swatch (something the panel leaves out).
  */
-export type LegendEntry = { text: string } & ({ line: string } | { bands: BandSwatchClasses } | { colours: ColourBand[] })
+export type LegendEntry = { text: string }
+  & ({ line: string } | { bands: BandSwatchClasses } | { colours: ColourBand[] } | { note: true })
 
 /**
  * A series shown as a strip of colours at the bottom of the plot, below the value axis: every value colours the
