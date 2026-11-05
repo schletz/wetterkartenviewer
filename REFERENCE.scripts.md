@@ -548,7 +548,7 @@ Regular grids (`grid`: `lat0` northernmost row, `lon0`, `dlat` step southwards, 
 | File, version | Content | Size (run 2026110112) |
 | --- | --- | --- |
 | `t850.json`, ECMWF run | `ecmwf`: `run`, `steps`, `grid` (0.1°, 29×78), `orog` (m, per point; every `ecmwf` block repeats it, ≈ 10 KB raw), `t850`; `climate`: ERA5 T850 | 566 KB, gzip 104 KB |
-| `t2m.json`, `<ecmwf run>-<icon run or none>` | `ecmwf` with `t2m`; `climate`: ERA5 T2m (the app shades the ECMWF T2m anomaly with it where the ERA5 `orog` lies within 100 m of the ECMWF one); `icon` (only with an ICON file): `run`, `steps`, `cells`, `t2m` on the cells of heights.json | 3.8 MB, gzip 700 KB |
+| `t2m.json`, `<ecmwf run>-<icon run or none>` | `ecmwf` with `t2m`; `climate`: ERA5 daily mean T2m (the app draws bars of the anomaly of the ECMWF daily mean against it where the ERA5 `orog` lies within 100 m of the ECMWF one); `icon` (only with an ICON file): `run`, `steps`, `cells`, `t2m` on the cells of heights.json | 3.9 MB, gzip 880 KB (runs 2026110500-2026110515) |
 | `thickness.json`, ECMWF run | `ecmwf` with `thickness` in dam (`thick` gpm × 0.1); no climate | 388 KB, gzip 77 KB |
 | `t500.json`, ECMWF run | `ecmwf` with `t500` (°C); no climate; the app forms T850 − T500 | 396 KB, gzip 68 KB (run 2026103112) |
 | `t925.json`, ECMWF run | `ecmwf` with `t925` (°C), encoded like t500; no climate; the app draws it on the T2m axis; where the ground lies above 925 hPa (Alps) the IFS value is extrapolated below ground | 422 KB, gzip 98 KB (run 2026110400) |
@@ -557,7 +557,7 @@ Regular grids (`grid`: `lat0` northernmost row, `lon0`, `dlat` step southwards, 
 | `gust10m.json`, ECMWF run | `ecmwf` with `gust10m` (km/h, `10fg`/`10fg3` × `KMH_PER_MS`, steps 3…240, none at T+0) and `hours` (per step the interval it covers: 1, 3 or 6), `scale` 1 (`WIND_SCALE`; the band limits are whole km/h); `colours`: the bands of `chart_styles.GUST10M` as `[lower, upper, "#rrggbb"]` (last upper 300), so the app colours its bar like the wind10m chart without a copy of the scale; no climate | ≈ 0.4 MB, gzip ≈ 80 KB |
 | `heights.json`, `<icon run>-<cells>` | ICON cells within `BORDER_MARGIN` of Austria in file order (25 344): `lat`, `lon` as deltas of `coord_scale` 1e-4°, `hsurf` (m) | 316 KB, gzip 78 KB |
 
-`climate` (both levels): `period`, `grid` (0.25°, 12×32), `first_day` (00 UTC of the ECMWF run), `days` (to the last step, 11), `hours` (00…21), `months` (touched by the days), `orog` (ERA5 orography per point, whole m, from `era5_orography`; ≈ 1.5 KB raw); `term` (per day and hour, day-major), `daily`, `monthly`, each `{mean (°C), std (K)}`.
+`climate` (both levels): `period`, `grid` (0.25°, 12×32), `first_day` (00 UTC of the ECMWF run), `days` (to the last step, 11), `orog` (ERA5 orography per point, whole m, from `era5_orography`; ≈ 1.5 KB raw), then only the kind the app draws (`climate_block(…, kind)`): t850.json `hours` (00…21) and `term` (per day and hour, day-major), t2m.json `daily` (per day; its `std` is that of the daily means, ≈ 0.3 K below the mean term std, so it is the right σ for a daily mean anomaly); each `{mean (°C), std (K)}`. The ERA5 daily mean differs from the mean of the eight term means by < 0.09 K. The `monthly` kind is not written.
 Values in °C (T) and K (std); `box` and `scale` at the top of t850/t2m.
 
 ### data/ layout
@@ -696,7 +696,7 @@ Without a new run a call takes ≈ 3.5 s.
 
 ### point_series.py
 
-Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 925, 850 and 500, `r` 850 and 700, `2t`, `10fg`, `10fg3`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours`) with its orography through `era5_orography`.
+Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 925, 850 and 500, `r` 850 and 700, `2t`, `10fg`, `10fg3`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours` for T850, `daily` for T2m) with its orography through `era5_orography`.
 A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness, t500, t925, rh850, rh700 and gust10m per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
 A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. ICON cells with NaN `hsurf` (boundary zone) are dropped. Without any ICON file t2m.json has no `icon` and heights.json is not written; the app then shows nothing (it needs heights).
 
@@ -716,7 +716,7 @@ A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. IC
 | `derived_block(grib, steps, key, field_of, scale=SCALE)` | `field_of(step)` at each of `steps`, cut to the box; a `MissingFieldError` inside drops the step |
 | `gust_block(grib)` | gusts of both names in km/h plus `hours` per kept step |
 | `colour_bands(scale) -> list` | `ColourScale.bands` as `[lower, upper, "#rrggbb"]` |
-| `ecmwf_block(grib, name, level, key, offset=-KELVIN, factor=1, scale=SCALE)` (via `derived_block`), `icon_block(grib, cells)`, `climate_block(archive, level, run, last_step)`, `heights_document(grib, cells)` | the parts of the files |
+| `ecmwf_block(grib, name, level, key, offset=-KELVIN, factor=1, scale=SCALE)` (via `derived_block`), `icon_block(grib, cells)`, `climate_block(archive, level, run, last_step, kind)` (`kind` "term" or "daily"), `heights_document(grib, cells)` | the parts of the files |
 | `austria_cells(lat, lon)`, `icon_cells(grib)` | cell indices in file order |
 | `newest(data, prefix) -> Path \| None` | newest finished `<prefix>*.grb2` (also used by update_maps.py when the ICON download failed) |
 
@@ -1066,7 +1066,7 @@ ICON's `max_2t`/`min_2t` restart every `RESTART_HOURS = 6` h from the run start 
 
 `ClimateArchive(directory, period=PERIOD)` indexes **every** `<dir>/*.grb2` on first access without ecCodes, from the bytes of each header (`_headers`, `_key`): section 1 month/day/hour (year ignored), template 4.8 first surface (type 100 Pa → hPa, 103 m), number of time ranges (1 = term, 2 = `daily`, 3 = `monthly`) and statistic of the **outermost** range (0 mean, 6 std). ecCodes needs ≈ 4.8 s for the 13 224 headers, the bytes ≈ 0.09 s, and every render worker builds its own archive. Do not use shortName: ecCodes calls the std `avg_t` too. Another template or a header beyond `HEADER_BYTES = 512` → `ValueError`. No archive → `FileNotFoundError`.
 Keys `(kind, statistic, level, month, day)`: kind `HHz` (term hours present), `daily`, `monthly`; statistic `mean`/`std`; level 850 (T850) or 2 (T2m); day None for monthly; values in K. Fields are decoded on demand, cache unbounded. `PERIOD = '1991–2020'` (label only), `DIRECTORY = 'era5_means'`.
-`T850Climate(archive)`: needs an `HHz` kind for **every** hour of the valid times, else `ValueError` from `term_kind`. Only `t850_anomaly` uses it (`period` in its title). point_series.py reads `ClimateArchive` directly (all kinds, both levels).
+`T850Climate(archive)`: needs an `HHz` kind for **every** hour of the valid times, else `ValueError` from `term_kind`. Only `t850_anomaly` uses it (`period` in its title). point_series.py reads `ClimateArchive` directly (term kinds of 850, `daily` of 2 m).
 
 | Method | Summary |
 | --- | --- |

@@ -33,7 +33,7 @@ export interface ClimateStatistics {
   std: number[]
 }
 
-/** ERA5 climatology for every day of the ECMWF run. */
+/** ERA5 climatology for every day of the ECMWF run; each file holds only the kind the app draws. */
 export interface ClimateBlock {
   /** Reference period, e.g. "1991–2020". */
   period: string
@@ -41,18 +41,21 @@ export interface ClimateBlock {
   /** First day, YYYY-MM-DD (UTC). */
   first_day: string
   days: number
-  /** Analysis hours (UTC) of `term`. */
-  hours: number[]
-  /** Calendar months of `monthly`. */
-  months: number[]
   /** ERA5 orography of every grid point, whole m; missing in files of older pipeline versions. */
   orog?: number[]
+}
+
+/** Climatology per analysis hour (t850.json). */
+export interface TermClimateBlock extends ClimateBlock {
+  /** Analysis hours (UTC) of `term`. */
+  hours: number[]
   /** Per day and analysis hour, day-major. */
   term: ClimateStatistics
-  /** Daily means per day. */
+}
+
+/** Climatology of the daily mean (t2m.json): mean and standard deviation of the daily means per day. */
+export interface DailyClimateBlock extends ClimateBlock {
   daily: ClimateStatistics
-  /** Per month of `months`. */
-  monthly: ClimateStatistics
 }
 
 /** One ECMWF field on the 0.1° grid of the box. */
@@ -80,7 +83,7 @@ export interface T850File {
   box: Box
   scale: number
   ecmwf: EcmwfBlock & { t850: number[] }
-  climate: ClimateBlock
+  climate: TermClimateBlock
 }
 
 export interface T2mFile {
@@ -88,7 +91,7 @@ export interface T2mFile {
   box: Box
   scale: number
   ecmwf: EcmwfBlock & { t2m: number[] }
-  climate: ClimateBlock
+  climate: DailyClimateBlock
   /** Missing if the pipeline had no ICON-D2 run. */
   icon?: IconBlock
 }

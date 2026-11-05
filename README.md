@@ -187,7 +187,7 @@ client.retrieve("reanalysis-era5-single-levels",
                  "data_format": "grib", "download_format": "unarchived"}, "era5_orography.grib")
 ```
 
-Die Startseite zeigt die T2m-Abweichung vom ERA5-Mittel nur, wenn diese Höhe höchstens 100 m von
+Die Startseite zeigt die Abweichung des T2m-Tagesmittels vom ERA5-Tagesmittel nur, wenn diese Höhe höchstens 100 m von
 der des ECMWF-Gitterpunkts abweicht.
 
 ### Ländergrenzen (GeoJSON)

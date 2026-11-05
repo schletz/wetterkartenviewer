@@ -1,10 +1,11 @@
 import { useRef } from 'react'
 import { useElementSize } from '../hooks/useElementSize'
 import { anomalyPolygons, thresholdPolygons } from '../model/anomalyBands'
+import { dailyMeans } from '../model/dailyMeans'
 import { parcelLift } from '../model/moistAdiabat'
 import type { GeoLocation } from '../model/GeoLocation'
 import { placePanels, type LegendEntry, type PanelSpec, type TimeAxis } from '../model/panelLayout'
-import type { ClimatePoint, LocationTemperatures, ValuePoint } from '../model/TemperatureSeries'
+import type { ClimatePoint, DailyClimate, LocationTemperatures, ValuePoint } from '../model/TemperatureSeries'
 import { TEMPERATURE_STEPS, THICKNESS_STEPS } from '../model/ValueAxis'
 import styles from './TemperatureDiagram.module.css'
 import TemperaturePanel from './TemperaturePanel'
@@ -24,6 +25,7 @@ const SIGMA_STEPS = [0, 1, 2, 3] as const
 const MAX_CLIMATE_HEIGHT_DIFFERENCE = 100
 const TICK_HOURS = 6
 const HOUR_MS = 3_600_000
+const DAY_MS = 24 * HOUR_MS
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 /**
  * The Showalter index shares the thickness panel without an axis of their own, around its middle: only its class
@@ -73,7 +75,8 @@ function timeLabel(time: Date): string {
 }
 
 /**
- * Meteogram of T2m (ECMWF and ICON-D2) with the anomaly of the ECMWF T2m against the ERA5 climate, the ECMWF T925
+ * Meteogram of T2m (ECMWF and ICON-D2) with the anomaly of the ECMWF daily mean against the ERA5 climate of the
+ * daily mean as bars per day, the ECMWF T925
  * and the ECMWF 10 m gusts as a colour bar, T850 (ECMWF) with its anomaly against the ERA5 climate, the
  * ECMWF 1000–500 hPa thickness with the Showalter index of a parcel lifted from 850 hPa with its dew point from
  * RH850 as layered areas around the middle of its axis, blue above (stable), red below (unstable), and RH700 as a
@@ -110,23 +113,44 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
       return c === null ? null : { x: x(p.valid), value: p.value, mean: c.mean, std: c.std }
     }), SIGMA_STEPS),
   })
-  const climateLabel = (point: GeoLocation, height?: number) => `Ø ${temperatures.period} ERA5 ${pointLabel(point, height)}`
-  const climateLegend = (point: GeoLocation, height?: number): LegendEntry => ({
+  /**
+   * Climate of the daily mean as a step line over every day and bars from it to the daily mean of the series, layered
+   * by σ like the anomaly areas; days without a complete daily mean get no bar.
+   */
+  const dailyAnomaly = (values: ValuePoint[], climate: DailyClimate[]) => {
+    const means = new Map(dailyMeans(values).map((p) => [+p.valid, p.value]))
+    // End of one day and start of the next share their x, so the line steps vertically at 00 UTC.
+    const line = climate.flatMap((c) => [{ valid: c.day, value: c.mean }, { valid: new Date(+c.day + DAY_MS), value: c.mean }])
+    const bands = anomalyPolygons(climate.flatMap((c) => {
+      const value = means.get(+c.day)
+      if (value === undefined) return []
+      const point = { value, mean: c.mean, std: c.std }
+      // Two points per day give a rectangle; null keeps neighbouring days apart.
+      return [{ x: x(c.day), ...point }, { x: x(+c.day + DAY_MS), ...point }, null]
+    }), SIGMA_STEPS)
+    return { line, bands, means }
+  }
+  const climateLabel = (point: GeoLocation, height?: number, prefix = '') =>
+    `${prefix}Ø ${temperatures.period} ERA5 ${pointLabel(point, height)}`
+  const climateLegend = (point: GeoLocation, height?: number, prefix = ''): LegendEntry => ({
     bands: { above: styles.warm, below: styles.cold, line: styles.climate },
-    text: `${climateLabel(point, height)}, ±${SIGMA_STEPS.slice(1).join('/')} σ`,
+    text: `${climateLabel(point, height, prefix)}, ±${SIGMA_STEPS.slice(1).join('/')} σ`,
   })
   const anomaly850 = anomaly(t850.values, climate850)
   const { climate2mPoint, climate2mHeight } = temperatures
   const show2m = climate2mHeight !== undefined
     && Math.abs(climate2mHeight - t2mEcmwf.height) <= MAX_CLIMATE_HEIGHT_DIFFERENCE
-  // Without a comparable ERA5 point the T2m panel shows no climate at all: line, areas and tooltip would mislead alike.
-  const shownClimate2m = show2m ? climate2m : climate2m.map(() => null)
-  const anomaly2m = anomaly(t2mEcmwf.values, shownClimate2m)
+  // Without a comparable ERA5 point the T2m panel shows no climate at all: line, bars and tooltip would mislead alike.
+  // Daily means, not terms: against a climate per term the daily cycle would dominate the anomaly.
+  const shownClimate2m = show2m ? climate2m : []
+  const anomaly2m = dailyAnomaly(t2mEcmwf.values, shownClimate2m)
+  const climate2mByDay = new Map(shownClimate2m.map((c) => [+c.day, c]))
+  const dailyPrefix = 'Tagesmittel, '
   const legend2m: LegendEntry = show2m
-    ? climateLegend(climate2mPoint, climate2mHeight)
+    ? climateLegend(climate2mPoint, climate2mHeight, dailyPrefix)
     : {
         note: true,
-        text: `${climateLabel(climate2mPoint, climate2mHeight)}: ${climate2mHeight === undefined ? 'Höhe unbekannt' : `> ${MAX_CLIMATE_HEIGHT_DIFFERENCE} m Höhenunterschied`}, nicht gezeigt`,
+        text: `${climateLabel(climate2mPoint, climate2mHeight, dailyPrefix)}: ${climate2mHeight === undefined ? 'Höhe unbekannt' : `> ${MAX_CLIMATE_HEIGHT_DIFFERENCE} m Höhenunterschied`}, nicht gezeigt`,
       }
   // Vertical totals and the parcel reference only at valid times with T500 and RH850: either is worthless without
   // the other.
@@ -157,13 +181,13 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
       legend: [
         { line: styles.t2mEcmwf, text: `ECMWF ${pointLabel(t2mEcmwf.point, t2mEcmwf.height)}` },
         ...(t2mIcon === null ? [] : [{ line: styles.t2mIcon, text: `ICON-D2 ${pointLabel(t2mIcon.point, t2mIcon.height)}` }]),
-        // The anomaly is that of the ECMWF T2m, like T850 below.
+        // The bars are the anomaly of the ECMWF daily mean.
         legend2m,
         ...(t925 === null ? [] : [{ line: styles.t925, text: 'ECMWF 925 hPa' }]),
         // The bands of the wind10m chart, so a colour means the same speed in the diagram and on the map.
         ...(gust10m === null ? [] : [{ colours: gust10m.colours, text: 'ECMWF Böen, Stufen = Beaufort 0–1 … 12' }]),
       ],
-      // Climate mean and T925 first, so the T2m lines lie on top of them.
+      // Climate mean and T925 first, so the T2m lines lie on top of them; the bars lie below all lines.
       lines: [
         { values: anomaly2m.line, className: styles.climate },
         ...(t925 === null ? [] : [{ values: t925.values, className: styles.t925 }]),
@@ -216,7 +240,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
   const placed = placePanels(panels, MARGIN_TOP, size.height, PANEL_GAP)
 
   const iconByTime = new Map(icon.map((p) => [+p.valid, p.value]))
-  const ecmwfByTime = new Map(t2mEcmwf.values.map((p, i) => [+p.valid, { value: p.value, climate: shownClimate2m[i] }]))
+  const ecmwfByTime = new Map(t2mEcmwf.values.map((p) => [+p.valid, p.value]))
   const t925ByTime = new Map(t925?.values.map((p) => [+p.valid, p.value]) ?? [])
   // Gust and the hours before the valid time it covers.
   const gustByTime = new Map(gust10m?.series.values.map((p, i) => [+p.valid, { value: p.value, hours: gust10m.hours[i] }]) ?? [])
@@ -226,7 +250,13 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
   const tooltip = (point: ValuePoint, i: number) => {
     const parts = [timeLabel(point.valid)]
     const ecmwf = ecmwfByTime.get(+point.valid)
-    if (ecmwf !== undefined) parts.push(`T2m ECMWF ${decimals(ecmwf.value, 1)} °C`, ...climateParts(ecmwf.value, ecmwf.climate))
+    if (ecmwf !== undefined) parts.push(`T2m ECMWF ${decimals(ecmwf, 1)} °C`)
+    // Daily mean of the UTC day of the step and its anomaly, the values of the bar below the column.
+    const day = Math.floor(+point.valid / DAY_MS) * DAY_MS
+    const dailyMean = anomaly2m.means.get(day)
+    if (dailyMean !== undefined) {
+      parts.push(`Tagesmittel ECMWF ${decimals(dailyMean, 1)} °C`, ...climateParts(dailyMean, climate2mByDay.get(day) ?? null))
+    }
     const iconValue = iconByTime.get(+point.valid)
     if (iconValue !== undefined) parts.push(`T2m ICON-D2 ${decimals(iconValue, 1)} °C`)
     const t925Value = t925ByTime.get(+point.valid)
@@ -259,7 +289,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     <div ref={box} className={styles.diagram}>
       {size.width > 0 && size.height > 0 && (
         <svg className={styles.svg} viewBox={`0 0 ${size.width} ${size.height}`} role="img"
-          aria-label="T2m von ECMWF und ICON-D2 mit Abweichung vom Klimamittel, T925 und Böen in 10 m von ECMWF, T850 von ECMWF mit Abweichung vom Klimamittel, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt, relative Feuchte in 700 hPa">
+          aria-label="T2m von ECMWF und ICON-D2 mit Abweichung des Tagesmittels vom Klimamittel, T925 und Böen in 10 m von ECMWF, T850 von ECMWF mit Abweichung vom Klimamittel, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt, relative Feuchte in 700 hPa">
           {placed.map((p) => <TemperaturePanel key={p.panel.key} placed={p} time={time} left={PLOT_LEFT} right={plotRight} />)}
           {t850.values.map((point, i) => {
             // Each hover column reaches halfway to its neighbours, so the 3 h and 6 h steps cover the plots without gaps.

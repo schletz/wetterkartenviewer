@@ -4,7 +4,7 @@ Nine JSON files in maps/austria/ (published like the videos, listed in the manif
 
     t850.json      ECMWF T850 of every step on the 0.1 deg grid of the box, with the ERA5
                    climatology of T850 (mean, stdev) for the days of the run
-    t2m.json       ECMWF and ICON-D2 T2m, with the ERA5 climatology of T2m
+    t2m.json       ECMWF and ICON-D2 T2m, with the ERA5 climatology of the daily mean T2m
                    (both ECMWF blocks and both climate blocks also hold the model
                    orography ``orog`` in m, ERA5 from lib/era5_orography.grib)
     heights.json   the ICON-D2 cells of Austria: centre and model orography (hsurf)
@@ -33,8 +33,10 @@ cell coordinates are in heights.json (deltas of 1e-4 deg along the cell
 list), t2m.json only repeats their number.
 
 The climatology covers every day from 00 UTC of the ECMWF run to its last
-step: ``term`` holds each analysis hour of each day (day-major, then hour),
-``daily`` the daily means, ``monthly`` the months touched.
+step, each file only with what the app draws: t850.json ``term``, each analysis
+hour of each day (day-major, then hour); t2m.json ``daily``, the daily means and
+the standard deviation of the daily means (the daily cycle of T2m makes the
+term values a poor reference).
 
 A file is written only if its ``version`` changed (the runs it comes from),
 so publish_maps.py uploads it once per run. heights.json depends only on the
@@ -46,6 +48,7 @@ Usage: python scripts/point_series.py data maps [--force]
 import argparse
 import json
 from collections.abc import Callable
+from typing import Literal
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -179,31 +182,36 @@ def heights_document(grib: ForecastGrib, cells: np.ndarray) -> dict:
             "hsurf": np.rint(grib.field("hsurf", 0)[cells]).astype(np.int64).tolist()}
 
 
-def climate_block(archive: ClimateArchive, level: int, run: datetime, last_step: int) -> dict:
-    """ERA5 mean (deg C) and stdev (K) of one level for every day of the run: per analysis hour, daily, monthly.
+def climate_block(archive: ClimateArchive, level: int, run: datetime, last_step: int,
+                  kind: Literal["term", "daily"]) -> dict:
+    """ERA5 mean (deg C) and stdev (K) of one level for every day of the run, of one kind.
 
-    ``orog`` is the ERA5 orography of every point in whole m, the ground the T2m climate refers to.
+    ``kind`` "term" holds every analysis hour of every day (day-major) with their ``hours``, "daily" the daily
+    means. ``orog`` is the ERA5 orography of every point in whole m, the ground the T2m climate refers to.
     """
     first_day = run.replace(hour=0)
     days = [first_day + timedelta(days=i) for i in range((run + timedelta(hours=last_step) - first_day).days + 1)]
-    months = sorted({day.month for day in days})
     rows, cols, window = box_window(archive.grid, max(archive.grid["dlat"], archive.grid["dlon"]) / 2)
     shape = archive.grid["nj"], archive.grid["ni"]
 
-    def fields(kind_dates: list[tuple[str, int, int | None]], statistic: str) -> list[int]:
-        values = [archive.field(kind, statistic, level, month, day).reshape(shape)[rows, cols]
-                  for kind, month, day in kind_dates]
+    def fields(kind_dates: list[tuple[str, int, int]], statistic: str) -> list[int]:
+        values = [archive.field(field_kind, statistic, level, month, day).reshape(shape)[rows, cols]
+                  for field_kind, month, day in kind_dates]
         return time_major_deltas(np.array(values) - (KELVIN if statistic == "mean" else 0))
 
-    hours = archive.term_hours
-    term = [(archive.term_kind(hour), day.month, day.day) for day in days for hour in hours]
-    daily = [("daily", day.month, day.day) for day in days]
-    monthly = [("monthly", month, None) for month in months]
+    if kind == "term":
+        hours = archive.term_hours
+        dates = [(archive.term_kind(hour), day.month, day.day) for day in days for hour in hours]
+        extra = {"hours": list(hours)}
+    elif kind == "daily":
+        dates = [("daily", day.month, day.day) for day in days]
+        extra = {}
+    else:
+        raise ValueError(f"unknown climate kind {kind}")
     orography = era5_orography(archive.grid)[rows, cols]
     return {"period": archive.period, "grid": window, "first_day": f"{first_day:%Y-%m-%d}", "days": len(days),
-            "hours": list(hours), "months": months, "orog": np.rint(orography).astype(np.int64).ravel().tolist(),
-            **{kind: {statistic: fields(dates, statistic) for statistic in ("mean", "std")}
-               for kind, dates in (("term", term), ("daily", daily), ("monthly", monthly))}}
+            **extra, "orog": np.rint(orography).astype(np.int64).ravel().tolist(),
+            kind: {statistic: fields(dates, statistic) for statistic in ("mean", "std")}}
 
 
 def write_document(path: Path, document: dict) -> None:
@@ -235,7 +243,7 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     if "t850" in stale:
         write_document(targets["t850"], {"version": versions["t850"], **common,
                                          "ecmwf": ecmwf_block(ecmwf, "t", 850, "t850"),
-                                         "climate": climate_block(archive, 850, ecmwf.base_time, last_step)})
+                                         "climate": climate_block(archive, 850, ecmwf.base_time, last_step, "term")})
     if "thickness" in stale:
         # gpm to dam
         write_document(targets["thickness"], {"version": versions["thickness"], **common,
@@ -265,7 +273,7 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
             write_document(targets["heights"], heights_document(icon, cells))
     if "t2m" in stale:
         document = {"version": versions["t2m"], **common, "ecmwf": ecmwf_block(ecmwf, "2t", None, "t2m"),
-                    "climate": climate_block(archive, 2, ecmwf.base_time, last_step)}
+                    "climate": climate_block(archive, 2, ecmwf.base_time, last_step, "daily")}
         if icon is not None:
             document["icon"] = icon_block(icon, cells)
         write_document(targets["t2m"], document)
