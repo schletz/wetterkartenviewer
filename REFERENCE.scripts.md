@@ -1210,7 +1210,7 @@ chart_styles.py holds every scale and threshold:
 | `STORM_GUST_KMH = 75`, `GUST_SPACING_PX = 60` | Bft 9, DWD "Sturmböen" |
 | `WIND10M` | km/h, bands = Beaufort limits |
 | `STREAMLINE_SMOOTH_KM = 15`, `STREAMLINE_DENSITY = 3` | streamlines only; chosen by eye |
-| `Z500`, `Z700`, `Z850`, `MSLP`, `MSLP_DETAIL`, `MSLP_SUMMARY` | 4 dam (bold 528/552/576); 5 dam; 4 dam; 5 hPa; 2 hPa (weak gradients decide inversion/foehn); 4 hPa |
+| `Z500`, `Z700`, `Z850`, `MSLP`, `MSLP_DETAIL`, `MSLP_SUMMARY` | 4 dam (bold 528/552/576); 4 dam (bold 288/300/312); 4 dam (bold 140/152/164); 5 hPa; 2 hPa (weak gradients decide inversion/foehn); 4 hPa |
 | `ISOTHERM_850`, `ISOTHERM_500` | 4 K isotherms at band borders; brown and thin under Z lines, black, solid, bold every 20 K on `t500` (no other lines there) |
 | `MOIST_LAYER_RH = 90`, `WIND925_CALM = 5` | fog/stratus layer; below 5 m/s an inversion hardly clears |
 | `ASCENT_LINES`, `SUBSIDENCE_LINES` | ω700 −0.6/−0.2 and +0.2 Pa/s |

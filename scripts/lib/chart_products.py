@@ -208,7 +208,7 @@ class ChartProducts:
         canvas.contours(self.field("t", step, 700, smooth_km=styles.ISOTHERM_850.smooth_km, offset=-KELVIN),
                         styles.ISOTHERM_850, "brown lines: isotherms 700 hPa every 4 K", boxed=False)
         canvas.contours(self.field("gh", step, 700, smooth_km=styles.Z700.smooth_km, factor=0.1), styles.Z700,
-                        "black lines: Z700 every 5 dam, bold 270/290/310")
+                        "black lines: Z700 every 4 dam, bold every 12 dam (288/300/312)")
         canvas.extrema(self.field("gh", step, 700, smooth_km=60, factor=0.1), low_window_px=121,
                        high_window_px=181, min_depth=2)
         return canvas

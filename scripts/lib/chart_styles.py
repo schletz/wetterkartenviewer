@@ -197,8 +197,8 @@ STREAMLINE_DENSITY = 3.0
 
 # Line contours.
 Z500 = ContourStyle(interval=4, bold_every=6, bold_base=552, label_every=2, smooth_km=25)
-# medium-t-z: Z700 every 5 dam, bold 270/290/310.
-Z700 = ContourStyle(interval=5, bold_every=4, bold_base=310, label_every=2, smooth_km=25)
+# Z700 every 4 dam like Z500 and Z850, bold every 12 dam (288/300/312).
+Z700 = ContourStyle(interval=4, bold_every=3, bold_base=300, label_every=2, smooth_km=25)
 # Z850 every 4 dam (about 5 hPa at the ground, as the isobars of the Europe window), bold 140/152/164.
 Z850 = ContourStyle(interval=4, bold_every=3, bold_base=152, label_every=2, smooth_km=25)
 MSLP = ContourStyle(interval=5, bold_every=4, bold_base=1000, label_every=2, smooth_km=40)
