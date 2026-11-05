@@ -254,3 +254,5 @@ MOUNTAIN_T = ColourScale(f"Temperature at {MOUNTAIN_HEIGHT_M:g} m (°C)", T850.b
 # the first row and column VALUE_START_PX from the top left corner.
 VALUE_SPACING_PX = 40
 VALUE_START_PX = 30
+# Wind arrows below printed values, as grey as the streamlines of wind10m.
+ARROW_GREY = "#5a5a5a"

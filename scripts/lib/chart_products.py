@@ -337,7 +337,9 @@ class ChartProducts:
         self.frost_line(canvas, temperature)
         self.print_values(canvas, pixels, "{:.0f}", "numbers: T2m in °C at the model height")
         dx, dy = self.pixels.wind_vectors(self.field("10u", step), self.field("10v", step))
-        canvas.arrows(dx, dy, spacing=30, px_per_ms=2.5, reference_ms=10, label="10 m wind")
+        # Grey: the dense black numbers of T2m stay apart from the arrows below them.
+        canvas.arrows(dx, dy, spacing=30, px_per_ms=2.5, reference_ms=10, label="10 m wind",
+                      colour=styles.ARROW_GREY)
         return canvas
 
     def wind10m(self, step: int) -> ChartCanvas:

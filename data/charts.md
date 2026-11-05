@@ -294,7 +294,7 @@ Schraffiert: RH auf 925 oder 1000 hPa ≥ 90 %, also eine feuchte Grenzschicht. 
 
 ## t2m_wind10m
 
-Mitteleuropa. Farben und Zahlen: T2m (Modellwert für die Modellhöhe), blaue Linie 0 °C. Pfeile: Wind
+Mitteleuropa. Farben und Zahlen: T2m (Modellwert für die Modellhöhe), blaue Linie 0 °C. Graue Pfeile: Wind
 in 10 m über dem Modellboden, überall, auch im Gebirge.
 
 - T2m ist ein bodennaher Parameter mit allen Schwächen des groben Modells. Wie du ihn prüfst,

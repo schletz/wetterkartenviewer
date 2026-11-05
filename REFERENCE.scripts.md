@@ -1081,7 +1081,7 @@ Keys `(kind, statistic, level, month, day)`: kind `HHz` (term hours present), `d
 Product registry: a product is a method with its name, `(self, step)` for STEP products, `(self)` for STATIC; DAY maps a name to `"max"`/`"min"` and draws `daily_extreme`.
 `draw` turns a `MissingFieldError` into a "No data available" chart (title = product, time line from `key_label`, note = the field from the error).
 Hooks for subclasses (data sources only): `profile`, `summit_cloud`, `extreme_days`, `daily_extreme_field`, `cloud_cover`, `precipitation`, `precipitation_type`.
-Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L window 121 px, H 181 px, `min_depth` 2 dam, 60 km pre-smoothing; MSLP centres (`isobars`) 81/161 px, 2 hPa, 60 km; arrows `rh700_wind700` 30 px, 1.2 px per m/s, reference 20 m/s; `t2m_wind10m` 30 px, 2.5, 10 m/s; `mountain_2000` 30 px, 1.5, 20 m/s.
+Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L window 121 px, H 181 px, `min_depth` 2 dam, 60 km pre-smoothing; MSLP centres (`isobars`) 81/161 px, 2 hPa, 60 km; arrows `rh700_wind700` 30 px, 1.2 px per m/s, reference 20 m/s; `t2m_wind10m` 30 px, 2.5, 10 m/s, grey; `mountain_2000` 30 px, 1.5, 20 m/s.
 
 | Field | Meaning |
 | --- | --- |
@@ -1158,7 +1158,7 @@ One matplotlib figure: map 1200×600 plus a legend strip of 90 px → 1200×690.
 | `no_data(note)` | "No data available" chart |
 | `outlines()` | coasts and borders (0.6 px black), states dashed `#303030` 0.4 px below them, graticule labels |
 | `contours(values, style, …)`, `isolines`, `extrema`, `hatch` | |
-| `arrows`, `streamlines`, `values`, `symbols` | `values(…, start=None, halo=True)`: lattice from `start` (default half the spacing), white outline optional |
+| `arrows`, `streamlines`, `values`, `symbols` | `arrows(…, colour='black')` below `values` (`Z_ARROW` < `Z_MARKER`); `values(…, start=None, halo=True)`: lattice from `start` (default half the spacing), white outline optional |
 | `save(path)` | |
 
 ### ContactSheet (contact_sheet.py)
@@ -1234,6 +1234,7 @@ chart_styles.py holds every scale and threshold:
 | `MOUNTAIN_HEIGHT_M = 2000`, `SUMMIT_CLOUD_RH = 95` | chart height (defined apart from `MOUNTAIN_HEIGHTS`), IFS in cloud |
 | `ICON_SUMMIT_CLOUD_RH = 90`, `SUMMIT_CLOUD_AREA = 50` | ICON cell in cloud, hatched share |
 | `VALUE_SPACING_PX = 40`, `VALUE_START_PX = 30` | lattice of the printed values (first row/column at 30 px), detail windows only: ≈ 130 km on central Europe, ≈ 30 km on icon-d2 |
+| `ARROW_GREY = '#5a5a5a'` | arrows of `t2m_wind10m` (per user: the numbers above them stay distinguishable), the grey of the streamlines |
 
 ## API: scripts/lib/ — shared
 

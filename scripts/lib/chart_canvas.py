@@ -226,11 +226,14 @@ class ChartCanvas:
         self._notes.append(label)
 
     def arrows(self, dx: np.ndarray, dy: np.ndarray, spacing: int, px_per_ms: float, reference_ms: float,
-               label: str) -> None:
-        """Wind arrows on a regular pixel lattice; length proportional to speed."""
+               label: str, colour: str = "black") -> None:
+        """Wind arrows on a regular pixel lattice; length proportional to speed.
+
+        They lie below printed values (``values``); a grey ``colour`` keeps the numbers apart from them.
+        """
         ys, xs = np.mgrid[spacing // 2:IMAGE_HEIGHT:spacing, spacing // 2:IMAGE_WIDTH:spacing]
         style = dict(angles="xy", scale_units="xy", scale=1 / px_per_ms, width=0.0013, headwidth=4,
-                     headlength=4.5, headaxislength=4, color="black")
+                     headlength=4.5, headaxislength=4, color=colour)
         self.ax.quiver(xs, ys, dx[ys, xs], dy[ys, xs], zorder=Z_ARROW, **style)
         # Reference arrow in the legend; legend y also points down.
         x0, y0 = IMAGE_WIDTH - 20 - reference_ms * px_per_ms, LEGEND_HEIGHT - 12
