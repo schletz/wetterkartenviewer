@@ -178,7 +178,9 @@ Werte stehen fertig im GRIB.
   gleiche Tageszeiten (12z mit 12z) oder nimm einen Gitterpunkt im Vorland.
 - **Freie Atmosphäre und Grenzschicht:** T850 und seine Änderung in 12 h, Schichtdicke,
   Bodendruck, Wind auf 1000 und 925 hPa, Inversion, Feuchte der Grenzschicht und auf 700 hPa,
-  Vertikalbewegung ω700, Niederschlagssignal, T2m.
+  Vertikalbewegung ω700, Niederschlagssignal, T2m, Böe in 10 m (ab T+3). Das Zeitfenster der Böe
+  steht im Kopf: bis T+90 nur die letzte Stunde vor dem Termin, eine Spitze in den zwei Stunden
+  davor fehlt also; danach 3 h, ab T+150 6 h, die Werte steigen deshalb an den Grenzen sprunghaft.
 - **Bergwetter:** Temperatur auf 2000/2500/3000 m, Wind auf 2000 und 3000 m, Feuchte auf 2000 m,
   Nullgradgrenze, Schneefallgrenze bei Niederschlagssignal.
 - **Tagesextreme:** Tmax 06–18 UTC und Tmin 18–06 UTC.
@@ -303,7 +305,8 @@ Die Regeln geben die Richtung vor, ersetzen aber nicht den Blick auf die konkret
 - **Wind am Boden:** Richtung etwa parallel zu den Isobaren, leicht zum tiefen Druck hin abgelenkt.
   Die Stärke folgt aus dem Isobarenabstand und dem Wind auf 1000 bzw. 925 hPa der Tabelle. In
   Tälern lenkt das Gelände den Wind um. ECMWF sieht das nicht, ICON-D2 in größeren Tälern schon
-  (Wind in 10 m und Böen der ICON-Tabelle, Karte `wind10m`).
+  (Wind in 10 m und Böen der ICON-Tabelle, Karte `wind10m`). Für Sturm nach T+48 sind die Böen der
+  ECMWF-Tabelle der Anhaltspunkt; in Tälern und auf Gipfeln glättet das 9-km-Gitter sie.
 - **Bergwetter:**
   - Temperatur und Wind auf 2000–3000 m stehen in der Tabelle.
   - RH ≥ 95 % auf 2000 m heißt: Gipfel in Wolken, schlechte Sicht.

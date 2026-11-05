@@ -16,7 +16,8 @@ defined in lib/chart_products.py; one chart per step unless noted:
     vt_rh700         vertical totals T850 - T500 (convective instability), RH700 lines
     dt850_24h        24 h change of T850 (warm/cold advection), Z500 contours; from T+24
     t2m_wind10m      2 m temperature, 0 deg C line, 10 m wind arrows
-    wind10m          10 m wind speed in km/h (Beaufort bands), streamlines, isobars every 4 hPa
+    wind10m          10 m gusts in km/h (Beaufort bands, max of the last 1/3/6 h), streamlines of the
+                     10 m wind, isobars every 4 hPa; from T+3
     inversion        temperature increase 1000-850 hPa, moist boundary layer hatched, 925 hPa wind line
     mountain_2000    temperature, wind and summits in cloud at 2000 m
     freezing_level   freezing level
@@ -31,7 +32,7 @@ hourly from T+1 to T+48 on the window icon-d2 (Austria and surroundings, Lambert
 with the borders of the Austrian states):
 
     t2m_wind10m      as above
-    wind10m          as above
+    wind10m          as above, gusts of the last hour
     mountain_2000    as above, the profile from 850 and 700 hPa
     weather_summary  as above with 1 h precipitation, plus thunderstorm, hail, fog and storm gusts
     tmax, tmin       as above, from the 6-hourly extremes of the model (lib/icon_extremes.py)

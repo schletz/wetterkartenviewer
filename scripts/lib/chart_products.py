@@ -9,7 +9,7 @@ import numpy as np
 from . import chart_styles as styles
 from .base_map import BaseMap
 from .chart_canvas import ChartCanvas
-from .constants import KELVIN, KMH_PER_MS
+from .constants import IFS_GUST_NAMES, KELVIN, KMH_PER_MS
 from .contour_style import ContourStyle
 from .diagnostics import Diagnostics
 from .forecast_grib import ForecastGrib
@@ -45,6 +45,8 @@ class ChartProducts:
     STATIC = ("orography",)
     ALL = (*STEP, *DAY, *STATIC)
     CLIMATE = ("t850_anomaly",)
+    # Names of the 10 m gust in the file, tried in order per step (ForecastGrib.pick).
+    GUST_NAMES = IFS_GUST_NAMES
     # Model name in the legend strip; weather_summary: precipitation interval in h;
     # valid hours (UTC) of the charts in a contact sheet: one per day over 10 days.
     MODEL = "ECMWF IFS"
@@ -90,6 +92,9 @@ class ChartProducts:
         if product == "weather_summary":
             # Precipitation needs an interval; files without the weather fields give no charts.
             return [s for s in self.grib.steps("tp") if s > 0]
+        if product == "wind10m":
+            # Gusts need an interval too: none at T+0 (ICON-D2 has an empty field there).
+            return sorted({s for name in self.GUST_NAMES for s in self.grib.steps(name) if s > 0})
         steps = self.grib.steps("t")
         if product == "dt850_24h":
             return [s for s in steps if s - CHANGE_HOURS in steps]
@@ -333,17 +338,23 @@ class ChartProducts:
         return canvas
 
     def wind10m(self, step: int) -> ChartCanvas:
-        """The ground wind of the model, as a chart for people.
+        """The ground wind of the model, as a chart for people: gusts in colours, the mean wind as streamlines.
 
-        Unlike the pressure levels, 10 m is the same height above every
-        model ground, and the model's surface friction turns the wind across
-        the isobars towards low pressure, which the streamlines show. Valleys
-        narrower than the 9 km grid channel the real wind differently.
+        The gust is the model's maximum over the interval before the step
+        (IFS 1 h to T+90, 3 h to T+144, then 6 h; ICON-D2 1 h), so it says
+        what people feel better than the mean wind of the valid time. Unlike
+        the pressure levels, 10 m is the same height above every model
+        ground, and the model's surface friction turns the wind across the
+        isobars towards low pressure, which the streamlines show. Valleys
+        narrower than the grid channel the real wind differently.
         """
-        canvas = ChartCanvas(self.base_map, "10 m wind speed (km/h, colours), streamlines, MSLP (hPa)",
+        name = self.grib.pick(self.GUST_NAMES, step)
+        hours = self.grib.window_hours(name, step)
+        # Short: the title shares its line with the valid time; the unit is in the colour bar.
+        canvas = ChartCanvas(self.base_map, f"10 m gusts of the last {hours} h (colours), streamlines, MSLP (hPa)",
                              self.step_label(step))
+        canvas.shade(self.field(name, step, factor=KMH_PER_MS), styles.GUST10M)
         u, v = self.grib.field("10u", step), self.grib.field("10v", step)
-        canvas.shade(self.pixels.resample(np.hypot(u, v) * KMH_PER_MS), styles.WIND10M)
         canvas.outlines()
         smooth = styles.STREAMLINE_SMOOTH_KM
         dx, dy = self.pixels.wind_vectors(self.pixels.resample(u, smooth), self.pixels.resample(v, smooth))

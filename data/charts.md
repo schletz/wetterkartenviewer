@@ -53,7 +53,8 @@ demselben Code wie die Karten. Karte und Zahl am Ort passen deshalb zusammen.
 | `w` | 700 hPa | Pa/s | Vertikalbewegung ω, negativ heißt Hebung |
 | `thick` | 1000–500 hPa | gpm | Schichtdicke |
 | `msl`, `2t` | Boden | Pa, K | Luftdruck auf Meeresniveau, Temperatur in 2 m |
-| `10u`, `10v` | 10 m | m/s | Wind in 10 m über dem Modellboden (nur `wind10m`) |
+| `10u`, `10v` | 10 m | m/s | Wind in 10 m über dem Modellboden |
+| `10fg`, `10fg3` | 10 m | m/s | Maximale Böe seit der letzten Modellausgabe: `10fg` bis +90 h über 1 h, ab +150 h über 6 h, `10fg3` dazwischen über 3 h; nicht bei T+0 (nur `wind10m`) |
 | `mx2t3`, `mn2t3`, `mx2t6`, `mn2t6` | 2 m | K | Extreme der letzten 3 h (bis +144 h) bzw. 6 h |
 | `z`, `sdor`, `lsm` | Boden, nur T+0 | m²/s², m, 0–1 | Orografie als Geopotential, ihre Rauigkeit, Landanteil |
 | `tcc`, `tp`, `ptype` | Boden | 0–1, m, Code | Bewölkung, Niederschlag seit T+0, Niederschlagsart (nur `weather_summary`) |
@@ -300,17 +301,22 @@ in 10 m über dem Modellboden, überall, auch im Gebirge.
 
 ## wind10m
 
-Mitteleuropa. Farben: Windgeschwindigkeit in 10 m in km/h, die Stufen sind die Grenzen der
+Europa, Mitteleuropa, ICON-D2, ab dem ersten Schritt nach T+0. Farben: Böen in 10 m in km/h, das
+Maximum der Zeit vor dem Termin (ECMWF bis +90 h die letzte Stunde, bis +144 h die letzten 3 h, danach
+6 h; ICON-D2 die letzte Stunde, das Fenster steht im Titel). Die Stufen sind die Grenzen der
 Beaufortskala (bis 6 km/h Stärke 0–1, ab 118 km/h Orkan). Graue Linien mit Pfeilen: Stromlinien des
-10-m-Winds. Schwarze Linien: Isobaren alle 4 hPa mit Hoch und Tief.
+mittleren 10-m-Winds. Schwarze Linien: Isobaren alle 4 hPa mit Hoch und Tief.
 
 - Der 10-m-Wind ist der Bodenwind des Modells: anders als 1000 hPa liegt er überall gleich hoch über
   dem Modellboden, auch im Gebirge, und enthält die Bodenreibung.
 - Durch die Reibung kreuzen die Stromlinien die Isobaren schräg zum tiefen Druck hin. Laufen sie
   zusammen, ist dort Konvergenz (Front, Konvergenzlinie), laufen sie auseinander, Divergenz.
 - Der Abstand der Stromlinien sagt nichts über die Geschwindigkeit, die zeigen nur die Farben.
-- Täler und Kanalisierung schmaler als das 9-km-Gitter fehlen, ebenso Böen. Grün und mehr an
-  Küsten und Pässen (Bora, Mistral, Föhn) ist dagegen ein deutliches Signal.
+- Täler und Kanalisierung schmaler als das Modellgitter fehlen. Grün und mehr an Küsten und Pässen
+  (Bora, Mistral, Föhn) ist dagegen ein deutliches Signal.
+- Bei ECMWF deckt die Böe bis +90 h nur die letzte von drei Stunden ab: eine kurze Spitze dazwischen
+  fehlt. Der Sprung bei +90 h auf 3-h- und bei +144 h auf 6-h-Maxima macht die Farben dort kräftiger,
+  ohne dass der Wind zunimmt.
 
 ## tmax, tmin
 

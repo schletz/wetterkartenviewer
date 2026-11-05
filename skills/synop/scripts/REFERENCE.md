@@ -19,7 +19,7 @@ Each script only parses arguments and wires `lib` classes. All insert their own 
 
 | File | Lines | Responsibility | lib classes used |
 | --- | --- | --- | --- |
-| location_table.py | 155 | sample every step at one point in a process pool, print Markdown, optional TSV; the file decides the model (`grib.grid is None` → ICON-D2) | ForecastGrib, GridPointSampler / CellPointSampler, StepSampler / IconStepSampler, LocationTables / IconLocationTables, ForecastTsv |
+| location_table.py | 156 | sample every step at one point in a process pool, print Markdown, optional TSV; the file decides the model (`grib.grid is None` → ICON-D2) | ForecastGrib, GridPointSampler / CellPointSampler, StepSampler / IconStepSampler, LocationTables / IconLocationTables, ForecastTsv |
 | generate_diagram.py | 93 | TSV + climatology → SVG diagram | ForecastTsv, ClimateArchive, T850Climate, DiagramRow, CoupledAxes, TimeAxis, AnomalyBands, ForecastDiagram |
 | build_report.py | 115 | Markdown + SVG + TSV → one HTML file; holds the page CSS (`STYLE`, :23-46) | ForecastTsv, MarkdownHtml |
 | mark_location.py | 93 | copy the charts of every window with a point or box drawn on | ChartGeometry, LocationMarker |
@@ -32,14 +32,14 @@ Every dependency is injected through the constructor ("Ctor deps"); no class cre
 
 | File | Lines | Class | Ctor deps | Responsibility |
 | --- | --- | --- | --- | --- |
-| constants.py | 13 | — | — | `KELVIN`, `WEATHER_PARAMS`, `ICON_NAMES` |
-| forecast_grib.py | 135 | ForecastGrib | path | byte-offset index of either forecast GRIB, names for local and ICON parameters, cached read-only decoding |
+| constants.py | 18 | — | — | `KELVIN`, `WEATHER_PARAMS`, `IFS_GUST_NAMES`, `ICON_NAMES` |
+| forecast_grib.py | 152 | ForecastGrib | path | byte-offset index of either forecast GRIB with start steps, names for local and ICON parameters, cached read-only decoding |
 | point_sampler.py | 21 | PointSampler (ABC) | — | interface of the point samplers: abstract `__call__(values)`, shared `wind(u, v)` |
 | grid_point_sampler.py | 25 | GridPointSampler | grid dict, lat, lng | bilinear value at one point of the regular ECMWF grid |
 | cell_point_sampler.py | 58 | CellPointSampler | clat, clon, valid mask, lat, lng | linear value inside the triangle of the three ICON cells around the point; `nearest(values)` |
-| step_sampler.py | 91 | StepSampler | ForecastGrib, PointSampler | all values of one ECMWF step at the point (dict row) incl. every GRIB value for the TSV |
+| step_sampler.py | 95 | StepSampler | ForecastGrib, PointSampler | all values of one ECMWF step at the point (dict row) incl. every GRIB value for the TSV |
 | icon_step_sampler.py | 59 | IconStepSampler(StepSampler) | ForecastGrib, CellPointSampler | all values of one ICON-D2 step; weather kept in the TSV, `ww`/`ceiling` from the nearest cell |
-| location_tables.py | 117 | LocationTables | ForecastGrib, PointSampler | ECMWF Markdown header + three tables; module functions `number`, `wind`, `table` |
+| location_tables.py | 133 | LocationTables | ForecastGrib, PointSampler | ECMWF Markdown header + three tables; module functions `gust_windows`, `number`, `wind`, `table` |
 | icon_location_tables.py | 114 | IconLocationTables | ForecastGrib, PointSampler | ICON-D2 Markdown header + three tables (hourly ground weather, 3-hourly 850/700 hPa, daily extremes); module function `weather` |
 | forecast_tsv.py | 48 | ForecastTsv | path | write the TSV; read back the air-mass series |
 | climate_archive.py | 201 | ClimateArchive | directory (required), period | index every `*.grb2` of the directory from the header bytes, decode fields, grid, nearest point |
@@ -56,7 +56,7 @@ Every dependency is injected through the constructor ("Ctor deps"); no class cre
 | forecast_diagram.py | 199 | ForecastDiagram | rows, TimeAxis, CoupledAxes, AnomalyBands, climate_label | assemble the SVG (CSS in `STYLE`, :28-57) |
 | markdown_html.py | 52 | MarkdownHtml | — | Markdown subset → HTML blocks + title |
 
-About 2,470 lines of Python: scripts 688, lib 1,777.
+About 2,510 lines of Python: scripts 689, lib 1,819.
 
 External packages (no requirements file exists): `eccodes` (all GRIB I/O), `numpy`, `scipy` (`ndimage.map_coordinates` in grid_point_sampler.py, `spatial.Delaunay` in cell_point_sampler.py), `Pillow` (mark_location, location_marker, fonts), `pandas` (only grib_analyze.py). build_report.py and calendar_days.py need only the standard library plus `lib`.
 
@@ -129,7 +129,7 @@ The scripts depend on what the viewer writes; nothing in the code checks it beyo
 | `icon-d2_<run>.grb2` | ForecastGrib, CellPointSampler | path passed explicitly; `gridType` ≠ `regular_ll` (unstructured, 542 040 cells); raw DWD fields under the shortNames of `ICON_NAMES`; `clat`/`clon`/`hsurf`/`lsm` at T+0 only; boundary zone NaN; `ww` from T+1; `tmax_2m`/`tmin_2m` restart every 6 h from the run start |
 | local parameters | `LOCAL_NAMES` (lib/forecast_grib.py:21) | discipline 0, category 192, parameterNumber 0–5 = `inv`, `rhbl`, `psig`, `snowl`, `uf`, `vf`; another number reads as `local<N>` |
 | fields read by name (ICON) | IconStepSampler, IconLocationTables | `2t`, `10u`/`10v`, `gust`, `msl`, `tcc`, `ceiling`, `tp` (accumulated), `ww`, `u`/`v` 1000/850/700 hPa, `t`/`r`/`z` 850/700 hPa, `tmax_2m`/`tmin_2m`; T+0: `clat`, `clon`, `hsurf`, `lsm` |
-| fields read by name (ECMWF) | StepSampler, LocationTables | `t` 850 hPa and 2000/2500/3000 m, `thick`, `msl`, `uf`/`vf` 1000/925 hPa, `inv`, `rhbl`, `r` 700 hPa and 2000 m, `w` 700 hPa, `psig`, `2t`, `deg0l`, `snowl`, `u`/`v` 2000/2500/3000 m, `gh` 850 hPa; T+0: `orog` (m), `sdor`, `lsm`; daily `mx2t`/`mn2t` at the end step of their window (18 / 06 UTC) |
+| fields read by name (ECMWF) | StepSampler, LocationTables | `t` 850 hPa and 2000/2500/3000 m, `thick`, `msl`, `uf`/`vf` 1000/925 hPa, `inv`, `rhbl`, `r` 700 hPa and 2000 m, `w` 700 hPa, `psig`, `2t`, `deg0l`, `snowl`, `u`/`v` 2000/2500/3000 m, `gh` 850 hPa, the gust `10fg` or `10fg3` (`IFS_GUST_NAMES`, from T+3); T+0: `orog` (m), `sdor`, `lsm`; daily `mx2t`/`mn2t` at the end step of their window (18 / 06 UTC) |
 | missing points | `ForecastGrib._read` (:102) | bitmap → NaN (points below the model ground for `uf`, `vf`, `inv`, `rhbl`) |
 | `<window>/geometry.json` | ChartGeometry | keys `window`, `image.width/height` (map area without legend strip), `projection.pole_x/pole_y/scale_k/cone/lon0` (cone and lon0 default to 1 and 0, the old polar stereographic files), `sheets.scale`, `sheets.tiles` = {product: [[x, y], …]}; `model`, `run` and `projection.formula` are not read |
 | `<window>/**/*.webp` | mark_location | single charts anywhere below the window; contact sheets in a folder named `sheets`, file stem = key of `sheets.tiles` |
@@ -139,7 +139,7 @@ The scripts depend on what the viewer writes; nothing in the code checks it beyo
 
 ### Forecast GRIB index
 
-`ForecastGrib` reads only headers at construction: key `(name, level, endStep)` → byte offset, plus `(name, level)` → `typeOfLevel` in file order (`parameters()`). `stepUnits` is set to hours before reading `endStep`, because ICON gives its time-invariant fields in minutes ("0m"). Names: local category 192 → `LOCAL_NAMES`, else the shortName mapped through `ICON_NAMES` (no ECMWF shortName is a key there). `grid` is None for an unstructured file; its fields are 1-D. Fields are decoded on demand into an `lru_cache` of `CACHED_FIELDS` = 64 (≈ 250 MB per the code comment), per instance, i.e. per process. Arrays are float32 `(nj, ni)` and **read-only** because the cache shares them. `field(name, step, level=None)` with no level returns the first key with that name and step — safe only for single-level parameters. `level` is a pressure in hPa or a height in m (heightAboveSea); **the key does not include `typeOfLevel`**, so the same name at the same level number on two level types would collide (last offset wins).
+`ForecastGrib` reads only headers at construction: key `(name, level, endStep)` → byte offset and `startStep` (`window_hours(name, step)` = end − start), plus `(name, level)` → `typeOfLevel` in file order (`parameters()`). `stepUnits` is set to hours before reading `endStep`, because ICON gives its time-invariant fields in minutes ("0m"). Names: local category 192 → `LOCAL_NAMES`, else the shortName mapped through `ICON_NAMES` (no ECMWF shortName is a key there). `grid` is None for an unstructured file; its fields are 1-D. Fields are decoded on demand into an `lru_cache` of `CACHED_FIELDS` = 64 (≈ 250 MB per the code comment), per instance, i.e. per process. Arrays are float32 `(nj, ni)` and **read-only** because the cache shares them. `first_of(names, step)` gives the first name with a field at the step or None. `field(name, step, level=None)` with no level returns the first key with that name and step — safe only for single-level parameters. `level` is a pressure in hPa or a height in m (heightAboveSea); **the key does not include `typeOfLevel`**, so the same name at the same level number on two level types would collide (last offset wins).
 
 ### Grid dicts and coordinate mapping
 
@@ -151,13 +151,13 @@ The scripts depend on what the viewer writes; nothing in the code checks it beyo
 
 ### Location sampling
 
-`StepSampler.sample(step)` returns one dict: T in °C, thickness in dam (`thick`/10), MSLP in hPa, inversion in K, RH in %, ω700 in Pa/s, freezing level and snow line in m, winds as `(from-direction °, m/s)` or None. `precip` = bilinear `psig` ≥ 0.5 (lib/step_sampler.py:32); `snow_line` only where `precip`. Mountain values for `MOUNTAIN_HEIGHTS` = 2000/2500/3000 m; RH only at the first height. `"grib"` holds `grib_values(step)`: every parameter except the class attribute `HIDDEN` (`WEATHER_PARAMS`) in GRIB units keyed by TSV column, each read through the hook `value(name, field)` (default: the point sampler); fields that exist only at T+0 repeat, other absent fields are None.
+`StepSampler.sample(step)` returns one dict: T in °C, thickness in dam (`thick`/10), MSLP in hPa, inversion in K, RH in %, ω700 in Pa/s, freezing level and snow line in m, winds as `(from-direction °, m/s)` or None. `precip` = bilinear `psig` ≥ 0.5 (lib/step_sampler.py:32); `snow_line` only where `precip`. `gust` (m/s) and `gust_hours` come from the first of `IFS_GUST_NAMES` at the step, both None at T+0. Mountain values for `MOUNTAIN_HEIGHTS` = 2000/2500/3000 m; RH only at the first height. `"grib"` holds `grib_values(step)`: every parameter except the class attribute `HIDDEN` (`WEATHER_PARAMS`) in GRIB units keyed by TSV column, each read through the hook `value(name, field)` (default: the point sampler); fields that exist only at T+0 repeat, other absent fields are None.
 
 `IconStepSampler.sample(step)` (lib/icon_step_sampler.py:28) builds on `grib_values`: T2m and T850/T700 in °C, MSLP in hPa, gust in m/s, `tcc` in %, cloud base = `ceiling` (m above sea level) or None from `NO_CEILING_M` (15 000; ICON writes about 20 000 without a layer), precipitation of the last hour = `tp(step) − tp(step − 1)` (None at T+0), `ww` as float, height of 850/700 hPa = `z`/`GRAVITY`, winds at 10 m, 1000, 850, 700 hPa. Wind 1000 is None where (MSLP − 1000 hPa)·`M_PER_HPA` (8 m/hPa) is below `hsurf`: ICON has no `z1000` and extrapolates below the ground. `HIDDEN` = `clat`, `clon` only (ICON-D2 resolves its weather); `NEAREST` = `ww`, `ceiling` take `CellPointSampler.nearest`, because interpolated codes and cloud bases between 800 m and 20 km exist in no cell.
 
 `IconLocationTables` (lib/icon_location_tables.py): header with `hsurf`, `lsm`, the same height note and 850 hPa warning as ECMWF (constants imported from location_tables.py), surface table every hour, upper table every `UPPER_HOURS` = 3 h, extremes from the rows (no extra reads): window (start, end] as for ECMWF, skipped unless it lies inside the run; per hour `tmax_2m`/`tmin_2m` where its 6 h period (restart = (step − 1) // 6·6) begins at or after the window start, else the hourly `2t`. `weather(code)` prints the code with its text from `WEATHER` (WMO 4677).
 
-`LocationTables.header` gives model height (`orog`), `sdor`, `lsm`; with `--elevation` the T2m shift `MIXED_LAPSE_K_PER_100M` (0.65) × (model − real height)/100; a warning when mean gh850 − model height < `NEAR_GROUND_M` (500 m). Head lists and cell lists of `main_table`/`mountain_table` are written side by side by hand and must stay aligned (lib/location_tables.py:56-81). Mountain winds only at the first and last height; freezing level and snow line rounded to 100 m. `extremes_table` groups `mx2t`/`mn2t` by the UTC date of their end step.
+`LocationTables.header` gives model height (`orog`), `sdor`, `lsm`; with `--elevation` the T2m shift `MIXED_LAPSE_K_PER_100M` (0.65) × (model − real height)/100; a warning when mean gh850 − model height < `NEAR_GROUND_M` (500 m). Head lists and cell lists of `main_table`/`mountain_table` are written side by side by hand and must stay aligned (lib/location_tables.py:56-81). `main_table` ends with `Gust m/s`; the header names the gust windows of the run as `gust_windows(rows)` reads them from the rows ("1 h to T+90, 3 h to T+144, 6 h to T+240"), so a changed publication of the viewer shows up there. Mountain winds only at the first and last height; freezing level and snow line rounded to 100 m. `extremes_table` groups `mx2t`/`mn2t` by the UTC date of their end step.
 
 ### TSV
 
@@ -181,7 +181,8 @@ Anomaly shading: for every k in `SIGMA_STEPS` (0, 1, 2, 3; generate_diagram.py:3
 | --- | --- | --- |
 | `KELVIN` | lib/constants.py:3 | 273.15 |
 | `WEATHER_PARAMS` | lib/constants.py:8 | `tcc`, `tp`, `ptype`; left out of the ECMWF TSV because a 9 km global model gets fog, low stratus and their precipitation wrong (comment :5-7) |
-| `ICON_NAMES` | lib/constants.py:12 | ecCodes shortName → viewer name of the ICON fields (`tlat`→`clat`, `CLCT`→`tcc`, `prmsl`→`msl`, `WW`→`ww`, `max_i10fg`→`gust`, `ceil`→`ceiling`, …); a copy of the viewer's `constants.ICON_NAMES` |
+| `IFS_GUST_NAMES` | lib/constants.py | `10fg`, `10fg3`: names of the ECMWF 10 m gust by step (1 h to T+90, 3 h to T+144, then 6 h); a copy of the viewer's `constants.IFS_GUST_NAMES` |
+| `ICON_NAMES` | lib/constants.py | ecCodes shortName → viewer name of the ICON fields (`tlat`→`clat`, `CLCT`→`tcc`, `prmsl`→`msl`, `WW`→`ww`, `max_i10fg`→`gust`, `ceil`→`ceiling`, …); a copy of the viewer's `constants.ICON_NAMES` |
 | `LOCAL_CATEGORY`, `LOCAL_NAMES` | lib/forecast_grib.py:25-27 | 192; parameterNumber → name, fixed by the viewer |
 | `CACHED_FIELDS` | lib/forecast_grib.py:29 | 64 decoded fields per instance |
 | `NEIGHBOURS`, `MAX_DISTANCE_KM` | lib/cell_point_sampler.py:12-14 | 12 cells triangulated around the point; 5 km to the nearest cell centre at most |
@@ -256,7 +257,7 @@ No logging framework, no tests, no retries; only fetch_data.py uses the network.
 ## Pitfalls
 
 - **Destructive:** mark_location, location_table `--tsv`, generate_diagram `--out` and build_report `--out` overwrite their targets without asking; mark_location never deletes stale copies in `--out`.
-- **External contract in two constants:** `LOCAL_NAMES` and `MOUNTAIN_HEIGHTS` must match what the viewer writes; a mismatch shows up as `KeyError` or as `local<N>` columns, not as a clear message.
+- **External contract in three constants:** `LOCAL_NAMES`, `MOUNTAIN_HEIGHTS` and `IFS_GUST_NAMES` must match what the viewer writes (an ECMWF file without gusts gives an empty Gust column, no error); a mismatch shows up as `KeyError` or as `local<N>` columns, not as a clear message.
 - **Memory:** each location worker builds its own `ForecastGrib` with up to 64 cached fields (ICON: 542 040 cells, about 2 MB per field); default worker count is the CPU count.
 - **ICON 1000 hPa:** u/v at 1000 hPa exist everywhere, extrapolated below the ground; the table hides them there by an estimate from MSLP (8 m/hPa), the TSV keeps them.
 - **ICON names:** `ICON_NAMES` and `NO_CEILING_M` mirror the viewer (scripts/lib/constants.py, charts.md "ICON-D2-Datei"); a renamed or rescaled field there shows up here as `KeyError` or a wrong unit.

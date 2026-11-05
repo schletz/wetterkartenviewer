@@ -61,7 +61,9 @@ Von `maps/` ist nur `manifest.json` committet. Welche Videos nach `maps/` kommen
 `src/config/viewer.config.json`. Nach einer Änderung dort genügt `download_data`: Gibt es
 keinen neuen Lauf, kodiert es nur die Layer ohne Video nach. Videos entfernter Layer bleiben bis
 zum nächsten Lauf liegen. Ein neuer Lauf leert die Fenster seines Modells in `maps/` und baut sie
-neu, `--force` alle.
+neu, `--force` alle. Ändert sich nur das Aussehen der Karten (gleiche Läufe), bleibt das Manifest
+gleich und der Push startet kein Deployment; `download_data --force` startet es dann über
+`gh workflow run deploy.yml`.
 
 Codeänderungen kommen als normale Commits ins Repo; `publish_maps.py` pusht sie beim nächsten
 Lauf mit. Die Historie enthält so nur Code und pro Lauf einen kleinen Manifest-Commit, die Videos

@@ -12,7 +12,7 @@ The API sections follow Javadoc: intro, fields, methods per module or class.
 
 - Download one ECMWF IFS HRES run (0.1°, cropped to Europe, derived fields appended) and one DWD ICON-D2 run (icosahedral grid ≈ 2.2 km, unchanged) into `data/`.
 - Render WebP charts for three windows into `data/`, encode each tile layer of the viewer as `maps/<window>/<product>.mp4` (one frame per step), write `maps/manifest.json`.
-- Cut T925, T850, T500, RH850, RH700 and the 1000–500 hPa thickness (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to an Austria box as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
+- Cut T925, T850, T500, RH850, RH700, the 10 m gusts and the 1000–500 hPa thickness (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to an Austria box as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
 - Upload the videos and series files to a GitHub release, push a manifest commit; GitHub Actions builds and deploys the app with them.
 - IFS updates every 12 h, ICON-D2 every 3 h; `download_loop.sh` runs the whole chain every 10 min on an always-on machine.
 - `data/` is also the data directory of the skill synop (source in `skills/synop`, installed to `~/.claude/skills/synop`), see *Contract with the skill synop*; `blob_mirror.py` mirrors it into a public Azure blob container so the skill works without this repository.
@@ -98,7 +98,7 @@ folder "data/<window>/" as window_dir {
 }
 folder "maps/" {
  artifact "<window>/<product>.mp4" as videos
- artifact "austria/t850, t2m, heights,\nthickness, t500, rh850,\nrh700, t925.json" as series
+ artifact "austria/t850, t2m, heights,\nthickness, t500, rh850,\nrh700, t925, gust10m.json" as series
  artifact "manifest.json" as manifest
 }
 artifact "src/config/viewer.config.json" as config
@@ -130,7 +130,7 @@ render_charts --> charts
 render_charts --> geometry
 charts --> tile_videos
 tile_videos --> videos
-ecmwf_grib --> point_series : t925, t850, t500,\nr850, r700, 2t, thick, orog
+ecmwf_grib --> point_series : t925, t850, t500,\nr850, r700, 2t, 10fg, 10fg3,\nthick, orog
 icon_grib --> point_series : 2t, hsurf
 era5 --> point_series
 point_series --> series
@@ -522,7 +522,8 @@ Written by `build_manifest` (scripts/maps_manifest.py), typed as `Manifest` (src
  "t500": { "file": "austria/t500.json", "version": "2026110112" },
  "rh850": { "file": "austria/rh850.json", "version": "2026110112" },
  "rh700": { "file": "austria/rh700.json", "version": "2026110112" },
- "t925": { "file": "austria/t925.json", "version": "2026110112" } } }
+ "t925": { "file": "austria/t925.json", "version": "2026110112" },
+ "gust10m": { "file": "austria/gust10m.json", "version": "2026110112" } } }
 ```
 
 - `run` (top): the ECMWF run. The slider and all `steps`, ICON ones included, count from it.
@@ -539,7 +540,7 @@ Written by `build_manifest` (scripts/maps_manifest.py), typed as `Manifest` (src
 
 Written by `write_series` (scripts/point_series.py), typed in src/model/seriesFiles.ts, read by `TemperatureSeries` (REFERENCE.webapp.md). Compact JSON; GitHub Pages serves it gzip'd.
 
-Encoding of every series: whole multiples of `scale` (0.1 K, 0.1 dam for the thickness, 1 % for rh850 and rh700), **time-major** (all points of time 0, then all of time 1 …), **deltas along time** (time 0 absolute). Measured: about a fifth of the raw size after gzip; time-major packs ≈ 20 % better than one series per point, binary Int16 is no smaller after gzip, 0.2 K would save another quarter of ICON. One file with all series gzips no smaller than the separate files (1 294 259 vs 1 293 013 B, run 2026110400), and separate files keep the browser cache of those whose version did not change (t2m changes with every ICON run).
+Encoding of every series: whole multiples of `scale` (0.1 K, 0.1 dam for the thickness, 1 % for rh850 and rh700, 1 km/h for gust10m), **time-major** (all points of time 0, then all of time 1 …), **deltas along time** (time 0 absolute). Measured: about a fifth of the raw size after gzip; time-major packs ≈ 20 % better than one series per point, binary Int16 is no smaller after gzip, 0.2 K would save another quarter of ICON. One file with all series gzips no smaller than the separate files (1 294 259 vs 1 293 013 B, run 2026110400), and separate files keep the browser cache of those whose version did not change (t2m changes with every ICON run).
 Regular grids (`grid`: `lat0` northernmost row, `lon0`, `dlat` step southwards, `dlon`, `nj`, `ni`; index = row × ni + col) cover `BOX` (46.3–49.1° N, 9.5–17.2° E); the ERA5 window is wider by half a grid step so the nearest point of every box location is in it.
 
 | File, version | Content | Size (run 2026110112) |
@@ -551,6 +552,7 @@ Regular grids (`grid`: `lat0` northernmost row, `lon0`, `dlat` step southwards, 
 | `t925.json`, ECMWF run | `ecmwf` with `t925` (°C), encoded like t500; no climate; the app draws it on the T2m axis; where the ground lies above 925 hPa (Alps) the IFS value is extrapolated below ground | 422 KB, gzip 98 KB (run 2026110400) |
 | `rh850.json`, ECMWF run | `ecmwf` with `rh850` (`r` at 850 hPa, %); `scale` 1 (whole percent: 1 % ≈ 0.15 K of dew point at 80 %); raw, unclipped (the IFS gives up to ≈ 107 %, the app clamps); IFS RH refers to water above 0 °C, ice below −23 °C, mixed in between; no climate; the app lifts a parcel from 850 hPa with it | 411 KB, gzip 95 KB (run 2026110300) |
 | `rh700.json`, ECMWF run | `ecmwf` with `rh700` (`r` at 700 hPa, %), encoded like rh850; the app draws it as a line over the thickness axis (0–100 %) | 422 KB, gzip 98 KB (run 2026110400) |
+| `gust10m.json`, ECMWF run | `ecmwf` with `gust10m` (km/h, `10fg`/`10fg3` × `KMH_PER_MS`, steps 3…240, none at T+0) and `hours` (per step the interval it covers: 1, 3 or 6), `scale` 1 (`WIND_SCALE`; the band limits are whole km/h); `colours`: the bands of `chart_styles.GUST10M` as `[lower, upper, "#rrggbb"]` (last upper 300), so the app colours its bar like the wind10m chart without a copy of the scale; no climate | ≈ 0.4 MB, gzip ≈ 80 KB |
 | `heights.json`, `<icon run>-<cells>` | ICON cells within `BORDER_MARGIN` of Austria in file order (25 344): `lat`, `lon` as deltas of `coord_scale` 1e-4°, `hsurf` (m) | 316 KB, gzip 78 KB |
 
 `climate` (both levels): `period`, `grid` (0.25°, 12×32), `first_day` (00 UTC of the ECMWF run), `days` (to the last step, 11), `hours` (00…21), `months` (touched by the days); `term` (per day and hour, day-major), `daily`, `monthly`, each `{mean (°C), std (K)}`.
@@ -595,6 +597,7 @@ Steps `STEPS`: 0…141 every 3 h (48) + 144…240 every 6 h (17) = 65.
 | uvw700 | u, v, w at 700 × 65 | 195 |
 | uv_low | u, v at 850/925/1000 × 65 | 390 |
 | sfc | msl, 2t, 10u, 10v × 65 | 260 |
+| gust / gust3 | 10fg × 3…90 and 150…240 / 10fg3 × 93…144 (`IFS_HOURLY_LAST_STEP` 90) | 46 / 18 |
 | static | z, sdor, lsm, T+0 only | 3 |
 | minmax3 / minmax6 | mx2t3, mn2t3 × 3…144 / mx2t6, mn2t6 × 150…240 | 96 / 32 |
 | weather | tcc, tp, ptype × 65 | 195 |
@@ -602,11 +605,12 @@ Steps `STEPS`: 0…141 every 3 h (48) + 144…240 every 6 h (17) = 65.
 | DerivedWriter per step (`PER_STEP` 21) | t, r, u, v at heightAboveSea 2000/2500/3000; `deg0l` (228024, ecCodes sets isothermal level 273); `inv`, `rhbl`, `psig`, `snowl` (local, surface); `uf`, `vf` at 1000/925 hPa (local) | 1365 |
 | DerivedWriter once | `orog` (228002, m) | 1 |
 | DerivedWriter per complete day | `mx2t` (201) / `mn2t` (202), `stepRange` = whole window | 10 + 9 |
-| **Total** (00z and 12z) | | **3791** |
+| **Total** (00z and 12z) | | **3855** |
 
 `RequestPlan.expected_total` computes this total; `output_complete` compares it with the target file.
 Local parameters (`LOCAL_NAMES`): discipline 0, category 192, number 0 `inv`, 1 `rhbl`, 2 `psig`, 3 `snowl`, 4 `uf`, 5 `vf`; ecCodes reads them as `unknown`, `ForecastGrib._name` renames them.
 Missing values: NaN is written as bitmap missing; it occurs for `inv`/`rhbl`/`uf`/`vf` below the model ground, for heights outside the profile levels (wind at 3000 m where gh700 < 3000 m) and for `deg0l`/`snowl` where 500 hPa is above 0 °C. `snowl` is set everywhere, not only where `psig`.
+Gusts (`IFS_GUST_NAMES`): Open Data publishes the maximum since the previous model output, so `10fg` covers the last hour to T+90 (hourly output; stepRange 2-3), `10fg3` the last 3 h from T+93 to T+144, `10fg` again the last 6 h from T+150 (checked run 2026110500). The 0.1° files have no `10fg` at T+93…144 and only a constant field at T+0, which is not requested. Readers pick the name per step (`ForecastGrib.pick`) and the window from the start step (`window_hours`).
 `tp` accumulates from T+0 in m. `tcc`, `tp`, `ptype` (`WEATHER_PARAMS`) only feed `weather_summary`: a 9 km global model gets fog and its precipitation wrong.
 Fields lost on the server get a placeholder: a copy of the same field at another step with every value missing (`missing_message`). The file then has the full message count and counts as complete; `ForecastGrib.field` raises `MissingFieldError`, `has()` stays true.
 
@@ -639,7 +643,7 @@ Total 4 + 22 × 49 + 48 = 1130 messages. The aliases give ICON fields the IFS na
 update_maps.py <data> <maps> [--base YYYYMMDDHH] [--icon-run YYYYMMDDHH] [--force]
 maps_manifest.py <data> <maps> --run YYYYMMDDHH
 point_series.py <data> <maps> [--force] (newest ecmwf_*/icon-d2_*.grb2 of data)
-publish_maps.py <maps> (gh and git run in the repo root)
+publish_maps.py <maps> [--force] (gh and git run in the repo root; other options ignored)
 fetch_maps.py <maps> <target> --repository owner/name
 blob_mirror.py <data> (credentials from the environment or .env)
 download_ecmwf_data.py <out file|existing dir> [--base YYYYMMDDHH] [--max-step N] [--keep-raw]
@@ -648,7 +652,7 @@ render_charts.py <grib> <outdir> [--climate DIR] [--projection icon-d2|openchart
  [--products a,b|all] [--workers N]
 build_borders.py <VGD_50_generalisiert.shp> [target.geojson]
 make_icon_test_grib.py <source.grb2> <target.grb2> [--step N] (default 12)
-download_data.cmd | download_data.sh [update_maps options] = update_maps.py data maps, then publish_maps.py maps
+download_data.cmd | download_data.sh [update_maps options] = update_maps.py data maps, then publish_maps.py maps, both with all options
 download_loop.sh [--yes] every 600 s: git fetch, reset --hard origin/main, download_data.sh,
  then rsync -a --delete data/ to $WETTER_MIRROR_DIR (default ~/Downloads/wetterviewer_data; skipped if the folder is missing)
 ```
@@ -689,8 +693,8 @@ Without a new run a call takes ≈ 3.5 s.
 
 ### point_series.py
 
-Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 925, 850 and 500, `r` 850 and 700, `2t`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours`).
-A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness, t500, t925, rh850 and rh700 per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
+Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 925, 850 and 500, `r` 850 and 700, `2t`, `10fg`, `10fg3`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours`).
+A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness, t500, t925, rh850, rh700 and gust10m per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
 A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. ICON cells with NaN `hsurf` (boundary zone) are dropped. Without any ICON file t2m.json has no `icon` and heights.json is not written; the app then shows nothing (it needs heights).
 
 | Field | Meaning |
@@ -699,13 +703,17 @@ A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. IC
 | `BORDER_MARGIN = 0.15` | ICON cells farther from Austria (degrees of latitude, longitudes × cos 47.7°) are left out; outline from `AUSTRIA_BORDERS` (`ISO` AT, `LEVEL` country, outer rings, `matplotlib.path`), distance by `cKDTree` |
 | `SCALE = 0.1`, `COORD_SCALE = 1e-4` | value (K or dam) and coordinate units |
 | `RH_SCALE = 1.0` | unit of rh850.json and rh700.json (%); its `scale` is set apart from `common`, since the document's `scale` must equal the encoding scale |
+| `WIND_SCALE = 1.0` | unit of gust10m.json (km/h), set apart like `RH_SCALE` |
 
 | Function | Summary |
 | --- | --- |
 | `write_series(data, maps, ecmwf_grib, icon_grib, force=False)` | write the stale files; `icon_grib` None → t2m without ICON |
 | `time_major_deltas(fields, scale) -> list[int]` | the encoding |
 | `box_window(grid, margin) -> (rows, cols, grid)` | part of a regular grid inside `BOX` ± margin |
-| `ecmwf_block(grib, name, level, key, offset=-KELVIN, factor=1, scale=SCALE)`, `icon_block(grib, cells)`, `climate_block(archive, level, run, last_step)`, `heights_document(grib, cells)` | the parts of the files |
+| `derived_block(grib, steps, key, field_of, scale=SCALE)` | `field_of(step)` at each of `steps`, cut to the box; a `MissingFieldError` inside drops the step |
+| `gust_block(grib)` | gusts of both names in km/h plus `hours` per kept step |
+| `colour_bands(scale) -> list` | `ColourScale.bands` as `[lower, upper, "#rrggbb"]` |
+| `ecmwf_block(grib, name, level, key, offset=-KELVIN, factor=1, scale=SCALE)` (via `derived_block`), `icon_block(grib, cells)`, `climate_block(archive, level, run, last_step)`, `heights_document(grib, cells)` | the parts of the files |
 | `austria_cells(lat, lon)`, `icon_cells(grib)` | cell indices in file order |
 | `newest(data, prefix) -> Path \| None` | newest finished `<prefix>*.grb2` (also used by update_maps.py when the ICON download failed) |
 
@@ -774,10 +782,12 @@ Settings come from an encoder comparison on `z500_t850` (per user): libaom CRF 2
 Uploads first, then pushes, so the deploy of the new manifest finds every video. Asset names carry no run; a deploy of an older manifest during an upload may fetch new videos, the next push redeploys (`cancel-in-progress`).
 Pushes `HEAD` without asking, including local code commits; the commit holds only the manifest, other staged changes stay staged. History grows ≈ 20 KB per run. `gh` must be installed and logged in.
 Aborts before any upload without manifest, without videos in it, or if one is missing.
+**No deploy without a changed manifest** (per user): only the push of a new manifest commit starts the Pages workflow, which copies the videos from the release (fetch_maps.py). If the manifest stays the same, e.g. after `update_maps.py --force` re-rendered the same runs with a changed chart layout, the new videos land in the release, but the site keeps serving the old ones. `--force` therefore runs `gh workflow run deploy.yml` (`DEPLOY_WORKFLOW`; default branch, `workflow_dispatch`) when no manifest commit was made. Options it does not know are ignored (`parse_known_args`): download_data passes all its options to both scripts, and update_maps.py, which runs first, rejects typos.
 
 | Field | Meaning |
 | --- | --- |
 | `PARALLEL_UPLOADS = 4` | gh processes at once, one video each |
+| `DEPLOY_WORKFLOW = "deploy.yml"` | started by `--force` without a manifest commit |
 
 | Function | Summary |
 | --- | --- |
@@ -787,7 +797,7 @@ Aborts before any upload without manifest, without videos in it, or if one is mi
 | `upload_files(maps, files)` | videos and series files alike; per file: copy under its asset name into a temp dir, `gh release upload --clobber` (deletes the old asset first); one gh call per file so `Progress` can report each |
 | `prune_assets(files)` | delete assets the manifest does not list: videos of earlier runs exist nowhere afterwards |
 | `commit_message(maps, run) -> str` | "Data update <run>z" + ", <window> <run>z" per window of another run |
-| `commit_manifest(maps, run)` | `git add` + `git commit -- maps/manifest.json` if it changed |
+| `commit_manifest(maps, run) -> bool` | `git add` + `git commit -- maps/manifest.json` if it changed; whether it committed |
 
 ### fetch_maps.py and maps_release.py
 
@@ -856,7 +866,7 @@ Every request is a cartesian product param × levelist × step; `expected` relie
 
 | Method | Summary |
 | --- | --- |
-| `__init__(steps, base_time)` | groups t, gh, r, uvw700, uv_low, sfc, static, minmax3, minmax6, weather (:24-37) |
+| `__init__(steps, base_time)` | groups t, gh, r, uvw700, uv_low, sfc, static, minmax3, minmax6, weather, gust, gust3 |
 | `expected(request) -> int` (static) | messages a request must yield |
 | `fields() -> set[(param, level, step)]` | every expected raw message, for placeholders |
 | `expected_total() -> int` | groups + per step thickness and `PER_STEP` + `orog` + one extreme per complete day (via `ExtremeWindows`) |
@@ -983,6 +993,8 @@ Arrays are float32 and **read-only** (shared via `lru_cache`); never modify them
 | `__init__(path, aliases=None)` | index the file |
 | `parameters()`, `steps(name)` | (shortName, level, typeOfLevel) in file order / end steps ascending |
 | `has(name, step, level=None) -> bool` | true for placeholders too |
+| `pick(names, step, level=None) -> str` | first of `names` with a message at the step, else `names[0]` (its `field` then raises); for `IFS_GUST_NAMES` |
+| `window_hours(name, step, level=None) -> int` | end − start step of the message, e.g. 1/3/6 for the IFS gusts, 1 for ICON `gust`; `MissingFieldError` if absent |
 | `field(name, step, level=None) -> ndarray` | `MissingFieldError` if absent or all values NaN (placeholder, remembered in `_empty`) |
 | `message(name, step, level=None) -> bytes` | encoded message, e.g. as template |
 | `valid_time(step)` | |
@@ -1072,6 +1084,7 @@ Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L w
 
 | Field | Meaning |
 | --- | --- |
+| `GUST_NAMES = IFS_GUST_NAMES` | names of the 10 m gust, tried per step; ICON `("gust",)` |
 | `STEP` | `z500_t850`, `t500`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `dt850_24h`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `weather_summary` |
 | `DAY = {'tmax': 'max', 'tmin': 'min'}`, `STATIC = ('orography',)`, `ALL` | |
 | `CLIMATE = ('t850_anomaly',)` | products that need `climate` |
@@ -1086,7 +1099,7 @@ Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L w
 | Method | Summary |
 | --- | --- |
 | `__init__(grib, surface, base_map, pixels, climate=None, climate_pixels=None)` | |
-| `keys(product) -> list` | STEP: `t` steps; `weather_summary`: `tp` steps > 0; `dt850_24h`: steps with `step − 24`; DAY: `extreme_days`; STATIC: `[None]` |
+| `keys(product) -> list` | STEP: `t` steps; `weather_summary`: `tp` steps > 0; `wind10m`: steps > 0 of `GUST_NAMES` (IFS from T+3, ICON from T+1); `dt850_24h`: steps with `step − 24`; DAY: `extreme_days`; STATIC: `[None]` |
 | `path(out_dir, product, key) -> Path` | `<window>/<product>/<YYYYMMDDHH>.webp`, `<YYYYMMDD>.webp`, `orography.webp` |
 | `draw(product, key) -> ChartCanvas` | |
 | `field(name, step, level=None, smooth_km=0, offset=0, factor=1)` | `(value + offset) * factor` on the pixels |
@@ -1098,6 +1111,7 @@ Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L w
 | `weather_summary(step)` | precipitation = `tp(step) − tp(step − min(PRECIP_HOURS, step))`, ≥ 0, mm; ptype symbols where ptype fits and ≥ 0.2 mm |
 | `cloud_cover`, `precipitation`, `precipitation_type`, `extreme_days`, `daily_extreme_field` | hooks |
 | `orography()` | rough terrain hatched only if `surface.sdor` |
+| `wind10m(step)` | gusts of `GUST_NAMES` shaded in `GUST10M` (km/h, Beaufort bands), window from `window_hours` in the title; streamlines of the mean 10 m wind, `MSLP_SUMMARY` isobars |
 | other products | one method each, see `STEP` |
 
 ### IconProducts (icon_products.py)
@@ -1208,7 +1222,7 @@ chart_styles.py holds every scale and threshold:
 | `WW_PTYPE` | 5 ← 70–75, 77, 85, 86; 7 ← 68, 69, 83, 84; 3 ← 56, 57, 66, 67; 8 ← 79 |
 | `WW_SYMBOLS`, `WW_SYMBOL_SPACING_PX = 20` | lightning (yellow, dark red edge), hail triangle, fog three lines with halo |
 | `STORM_GUST_KMH = 75`, `GUST_SPACING_PX = 60` | Bft 9, DWD "Sturmböen" |
-| `WIND10M` | km/h, bands = Beaufort limits |
+| `GUST10M` | gusts of wind10m in km/h, bands = Beaufort limits; also copied into gust10m.json |
 | `STREAMLINE_SMOOTH_KM = 15`, `STREAMLINE_DENSITY = 3` | streamlines only; chosen by eye |
 | `Z500`, `Z700`, `Z850`, `MSLP`, `MSLP_DETAIL`, `MSLP_SUMMARY` | 4 dam (bold 528/552/576); 4 dam (bold 288/300/312); 4 dam (bold 140/152/164); 5 hPa; 2 hPa (weak gradients decide inversion/foehn); 4 hPa |
 | `ISOTHERM_850`, `ISOTHERM_500` | 4 K isotherms at band borders; brown and thin under Z lines, black, solid, bold every 20 K on `t500` (no other lines there) |
@@ -1274,7 +1288,8 @@ No logging framework, no tests, no cleanup of `.part` files after an exception. 
 - **Executable bit** of `.sh` files lives only in the git index: add new ones with `git add --chmod=+x`.
 - **Removing a layer**: it leaves the manifest at once but its video stays in `maps/` until a new run or `--force` empties the window.
 - **Changing encoding settings**: same-run videos are not re-encoded; delete the MP4s or use `--force`.
-- **Network and time**: every call queries both servers; IFS downloads 2211 global raw messages before cropping; rendering takes minutes on all CPUs; up to three windows render in parallel, each with CPU-count workers holding their own `ForecastGrib` cache, `BaseMap` and grids.
+- **Changing a chart layout within a run**: `download_data --force` (both scripts get `--force`); `update_maps.py --force` alone re-renders, and publish_maps.py without `--force` uploads but does not deploy (see *publish_maps.py*).
+- **Network and time**: every call queries both servers; IFS downloads 2405 global raw messages before cropping; rendering takes minutes on all CPUs; up to three windows render in parallel, each with CPU-count workers holding their own `ForecastGrib` cache, `BaseMap` and grids.
 - **Model fields below ground** are extrapolated by the model; Diagnostics masks per grid point, the charts mask by fixed model heights.
 - Branch `legacy` holds the old app, archive only.
 

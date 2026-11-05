@@ -3,6 +3,7 @@
  * (components/TemperatureDiagram.tsx places them, components/TemperaturePanel.tsx draws one).
  */
 import type { BandPolygon } from './anomalyBands'
+import type { ColourBand } from './seriesFiles'
 import type { ValuePoint } from './TemperatureSeries'
 
 export const TITLE_HEIGHT = 16
@@ -11,6 +12,8 @@ export const LEGEND_LINE_HEIGHT = 14
 const HEADER_GAP = 6
 /** Below the plot: tick marks and day labels. */
 const TIME_AXIS_HEIGHT = 24
+/** Height of a colour bar at the bottom of the plot; the value axis ends above it. */
+export const COLOUR_BAR_HEIGHT = 10
 
 /** A series of the panel; null breaks the line. */
 export interface PanelLine {
@@ -26,8 +29,20 @@ export interface BandSwatchClasses {
   line: string
 }
 
-/** A legend line: a line swatch or a swatch of layered areas. */
-export type LegendEntry = { text: string } & ({ line: string } | { bands: BandSwatchClasses })
+/**
+ * A legend entry: a line swatch, a swatch of layered areas, or a colour scale (its boxes with the text beside them,
+ * the band limits in a second row below).
+ */
+export type LegendEntry = { text: string } & ({ line: string } | { bands: BandSwatchClasses } | { colours: ColourBand[] })
+
+/**
+ * A series shown as a strip of colours at the bottom of the plot, below the value axis: every value colours the
+ * time halfway to its neighbours with its band.
+ */
+export interface ColourBar {
+  values: ValuePoint[]
+  colours: ColourBand[]
+}
 
 /**
  * A signed series without an axis of its own, drawn around the middle of the panel's value axis: a zero line
@@ -59,6 +74,8 @@ export interface PanelSpec {
   bands?: BandPolygon[]
   /** Signed areas around the middle of the axis, below the lines. */
   centred?: CentredBands
+  /** Strip of colours at the bottom of the plot; the value axis ends above it. */
+  colourBar?: ColourBar
   /** Label distances of the value axis. */
   steps: readonly number[]
   /** Share of the height the plots split among themselves. */
@@ -85,9 +102,15 @@ export interface PlacedPanel {
   plotBottom: number
 }
 
+/** Legend rows of an entry: a colour scale needs a second one for its band limits. */
+export function legendRows(entry: LegendEntry): number {
+  return 'colours' in entry ? 2 : 1
+}
+
 /** Pixels a panel needs besides its plot. */
 function overhead(panel: PanelSpec): number {
-  return TITLE_HEIGHT + panel.legend.length * LEGEND_LINE_HEIGHT + HEADER_GAP + TIME_AXIS_HEIGHT
+  const rows = panel.legend.reduce((sum, entry) => sum + legendRows(entry), 0)
+  return TITLE_HEIGHT + rows * LEGEND_LINE_HEIGHT + HEADER_GAP + TIME_AXIS_HEIGHT
 }
 
 /**

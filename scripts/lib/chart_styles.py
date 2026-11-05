@@ -183,9 +183,10 @@ WW_SYMBOL_SPACING_PX = 20
 STORM_GUST_KMH = 75.0
 GUST_SPACING_PX = 60
 
-# wind10m, a chart for people: km/h with the band limits of the Beaufort scale (force 0-1 to 12),
+# Gusts of wind10m, a chart for people: km/h with the band limits of the Beaufort scale (force 0-1 to 12),
 # so a band reads as a force; blue (calm) over green and yellow to red and purple (hurricane).
-WIND10M = ColourScale("10 m wind speed (km/h), bands = Beaufort 0–1 … 12", (
+# point_series.py copies the bands into gust10m.json for the bar of the start page diagram.
+GUST10M = ColourScale("10 m gusts (km/h), bands = Beaufort 0–1 … 12", (
     (0, 6, (215, 230, 255)), (6, 12, (160, 195, 255)), (12, 20, (95, 150, 245)), (20, 29, (60, 200, 225)),
     (29, 39, (80, 200, 120)), (39, 50, (175, 225, 60)), (50, 62, (255, 230, 0)), (62, 75, (255, 170, 0)),
     (75, 89, (255, 95, 0)), (89, 103, (215, 0, 0)), (103, 118, (200, 0, 150)), (118, 300, (120, 0, 170)),

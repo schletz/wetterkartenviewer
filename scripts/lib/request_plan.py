@@ -5,7 +5,7 @@ from pathlib import Path
 
 import eccodes
 
-from .constants import PROFILE_LEVELS, WEATHER_PARAMS
+from .constants import IFS_HOURLY_LAST_STEP, PROFILE_LEVELS, WEATHER_PARAMS
 from .derived_writer import PER_STEP
 from .extreme_windows import ExtremeWindows
 
@@ -21,6 +21,8 @@ class RequestPlan:
         self.steps, self.base_time = steps, base_time
         steps_3h = [s for s in steps if 0 < s <= 144]
         steps_6h = [s for s in steps if s > 144]
+        # Open Data names the gust 10fg3 where the model writes 3-hourly, else 10fg (constants.IFS_GUST_NAMES).
+        steps_3h_output = [s for s in steps_3h if s > IFS_HOURLY_LAST_STEP]
         groups = {
             "t": dict(param="t", levelist=PROFILE_LEVELS, step=steps),
             "gh": dict(param="gh", levelist=PROFILE_LEVELS, step=steps),
@@ -34,6 +36,8 @@ class RequestPlan:
             "minmax3": dict(param=["mx2t3", "mn2t3"], step=steps_3h),
             "minmax6": dict(param=["mx2t6", "mn2t6"], step=steps_6h),
             "weather": dict(param=list(WEATHER_PARAMS), step=steps),
+            "gust": dict(param="10fg", step=[s for s in steps if s not in steps_3h_output and s > 0]),
+            "gust3": dict(param="10fg3", step=steps_3h_output),
         }
         self.groups = {name: req for name, req in groups.items() if req["step"]}
 

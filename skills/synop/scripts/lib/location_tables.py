@@ -51,6 +51,9 @@ class LocationTables:
                   "- Levels below the model ground are extrapolated by the model and shown as a dash "
                   "(wind and boundary layer values at 1000 and 925 hPa).",
                   "- Wind: direction it blows from and m/s."]
+        if any(row["gust"] is not None for row in rows):
+            lines.append(f"- Gust: strongest 10 m gust in the hours before the step, m/s ({gust_windows(rows)}). "
+                         "A 1 h window at 3-hourly steps misses gusts in the two hours before it.")
         return "\n".join(lines)
 
     def main_table(self, rows: list[dict]) -> str:
@@ -64,9 +67,9 @@ class LocationTables:
                           number(change, 1, signed=True), number(row["thickness"]), number(row["mslp"]),
                           wind(row["wind1000"]), wind(row["wind925"]), number(row["inversion"], 1, signed=True),
                           number(row["rh_bl"]), number(row["rh700"]), number(row["omega700"], 2, signed=True),
-                          "x" if row["precip"] else "", number(row["t2m"], 1)])
+                          "x" if row["precip"] else "", number(row["t2m"], 1), number(row["gust"])])
         return table(["UTC", "T+", "T850 °C", "ΔT850/12h", "Z1000–500 dam", "MSLP hPa", "Wind 1000", "Wind 925",
-                      "Inv K", "RH BL %", "RH700 %", "ω700 Pa/s", "Precip", "T2m °C"], cells)
+                      "Inv K", "RH BL %", "RH700 %", "ω700 Pa/s", "Precip", "T2m °C", "Gust m/s"], cells)
 
     def mountain_table(self, rows: list[dict]) -> str:
         """Temperature, wind and humidity at fixed heights, freezing level and snow line per step."""
@@ -93,6 +96,19 @@ class LocationTables:
 
     def _time(self, row: dict) -> str:
         return f"{self.grib.valid_time(row['step']):%d.%m. %H}"
+
+
+def gust_windows(rows: list[dict]) -> str:
+    """Gust windows of the run as read from the file, e.g. "1 h to T+90, 3 h to T+144, 6 h to T+240"."""
+    spans: list[list[int]] = []  # [hours, last step]
+    for row in rows:
+        if row["gust_hours"] is None:
+            continue
+        if spans and spans[-1][0] == row["gust_hours"]:
+            spans[-1][1] = row["step"]
+        else:
+            spans.append([row["gust_hours"], row["step"]])
+    return ", ".join(f"{hours} h to T+{last}" for hours, last in spans)
 
 
 def number(value: float | None, digits: int = 0, signed: bool = False) -> str:

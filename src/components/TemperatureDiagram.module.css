@@ -36,6 +36,11 @@
   font-weight: 600;
 }
 
+/* Band limits of a colour scale legend: smaller, so three digits fit under one box. */
+.svg .scaleLabel {
+  font-size: 10px;
+}
+
 .svg .holiday {
   fill: #c62828;
 }

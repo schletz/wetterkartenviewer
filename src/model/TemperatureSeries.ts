@@ -1,7 +1,7 @@
 import type { GeoLocation } from './GeoLocation'
 import {
   cumulative, gridIndex, inBox, pointSeries, runTime,
-  type ClimateBlock, type EcmwfBlock, type RegularGrid, type SeriesFiles,
+  type ClimateBlock, type ColourBand, type EcmwfBlock, type RegularGrid, type SeriesFiles,
 } from './seriesFiles'
 
 /** An ICON cell centre is never farther from a location inside its cells than this (degrees of latitude). */
@@ -52,6 +52,11 @@ export interface LocationTemperatures {
   rh850: PointSeries | null
   /** ECMWF RH700 in %; null without RH700 file. */
   rh700: PointSeries | null
+  /**
+   * ECMWF maximum 10 m gust in km/h, the hours before each value it covers and the colour bands of the wind10m
+   * chart; null without gust10m file.
+   */
+  gust10m: { series: PointSeries; hours: number[]; colours: ColourBand[] } | null
 }
 
 /** Picks the series of one location out of the files of the Austria box. */
@@ -69,7 +74,7 @@ export class TemperatureSeries {
 
   /** The series of the location; null outside Austria and its margin (no ICON cell near). */
   at(location: GeoLocation): LocationTemperatures | null {
-    const { t850, t2m, heights, thickness, t500, rh850, rh700, t925 } = this.files
+    const { t850, t2m, heights, thickness, t500, rh850, rh700, t925, gust10m } = this.files
     if (!inBox(t850.box, location)) return null
     const cell = this.nearestCell(location)
     if (cell === null) return null
@@ -106,6 +111,13 @@ export class TemperatureSeries {
       t500: t500 === undefined ? null : ecmwfSeries(t500.ecmwf, t500.ecmwf.t500, t500.scale, location),
       rh850: rh850 === undefined ? null : ecmwfSeries(rh850.ecmwf, rh850.ecmwf.rh850, rh850.scale, location),
       rh700: rh700 === undefined ? null : ecmwfSeries(rh700.ecmwf, rh700.ecmwf.rh700, rh700.scale, location),
+      gust10m: gust10m === undefined
+        ? null
+        : {
+            series: ecmwfSeries(gust10m.ecmwf, gust10m.ecmwf.gust10m, gust10m.scale, location),
+            hours: gust10m.ecmwf.hours,
+            colours: gust10m.colours,
+          },
     }
   }
 

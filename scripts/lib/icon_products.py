@@ -28,6 +28,8 @@ class IconProducts(ChartProducts):
     """
 
     STEP = ("t2m_wind10m", "wind10m", "mountain_2000", "weather_summary")
+    # vmax_10m, the maximum of the last hour.
+    GUST_NAMES = ("gust",)
     DAY = {"tmax": "max", "tmin": "min"}
     STATIC = ("orography",)
     ALL = (*STEP, *DAY, *STATIC)

@@ -1,11 +1,18 @@
 import { WARM } from '../model/anomalyBands'
+import { bandColour } from '../model/colourBands'
 import { holidayName } from '../model/holidays'
-import { LEGEND_LINE_HEIGHT, TITLE_HEIGHT, type BandSwatchClasses, type PlacedPanel, type TimeAxis } from '../model/panelLayout'
+import {
+  COLOUR_BAR_HEIGHT, LEGEND_LINE_HEIGHT, TITLE_HEIGHT, legendRows,
+  type BandSwatchClasses, type ColourBar, type PlacedPanel, type TimeAxis,
+} from '../model/panelLayout'
+import type { ColourBand } from '../model/seriesFiles'
 import type { ValuePoint } from '../model/TemperatureSeries'
 import { ValueAxis } from '../model/ValueAxis'
 import styles from './TemperatureDiagram.module.css'
 
 const LEGEND_SWATCH_WIDTH = 22
+/** Width of one box of a colour scale in the legend; wide enough for a three-digit limit below it. */
+const SCALE_BOX_WIDTH = 20
 const MIN_DAY_LABEL_WIDTH = 26
 const DAY_MS = 86_400_000
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
@@ -32,7 +39,9 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
   const { panel, top, plotTop, plotBottom } = placed
   const { x } = time
   const values = panel.lines.flatMap((line) => line.values.flatMap((p) => (p === null ? [] : [p.value])))
-  const axis = new ValueAxis(values, plotTop, plotBottom, panel.steps)
+  // A colour bar takes the bottom rows of the plot, so no line runs across it.
+  const axisBottom = panel.colourBar === undefined ? plotBottom : plotBottom - COLOUR_BAR_HEIGHT
+  const axis = new ValueAxis(values, plotTop, axisBottom, panel.steps)
   const clipId = `temperature-${panel.key}`
   // Centred areas: zero in the middle of the axis, shrunk below maxScale only if the largest would leave the plot.
   const centre = (axis.min + axis.max) / 2
@@ -66,7 +75,9 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
       </defs>
       <text className={styles.panelTitle} x={left} y={top + 12}>{panel.title}</text>
       {panel.legend.map((entry, i) => {
-        const y = top + TITLE_HEIGHT + i * LEGEND_LINE_HEIGHT + 7
+        const rows = panel.legend.slice(0, i).reduce((sum, previous) => sum + legendRows(previous), 0)
+        const y = top + TITLE_HEIGHT + rows * LEGEND_LINE_HEIGHT + 7
+        if ('colours' in entry) return <ScaleSwatch key={entry.text} x={left} y={y} colours={entry.colours} text={entry.text} />
         return (
           <g key={entry.text}>
             {'line' in entry
@@ -101,6 +112,9 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
         <line key={tick} className={styles.axis} x1={x(tick)} x2={x(tick)} y1={plotBottom}
           y2={plotBottom + (new Date(tick).getUTCHours() === 0 ? 7 : 4)} />
       ))}
+      {panel.colourBar !== undefined && (
+        <ColourStrip bar={panel.colourBar} x={x} left={left} right={right} top={axisBottom} bottom={plotBottom} />
+      )}
       <rect className={styles.frame} x={left} y={plotTop} width={right - left} height={plotBottom - plotTop} />
       <g clipPath={`url(#${clipId})`}>
         {panel.bands?.map((band, i) => (
@@ -119,6 +133,47 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
         ))}
         {panel.lines.map((line) => <path key={line.className} className={`${styles.line} ${line.className}`} d={path(line.values)} />)}
       </g>
+    </g>
+  )
+}
+
+/** The colour bar between `top` and `bottom`: each value fills the time halfway to its neighbours. */
+function ColourStrip({ bar, x, left, right, top, bottom }: {
+  bar: ColourBar; x: TimeAxis['x']; left: number; right: number; top: number; bottom: number
+}) {
+  const columns = bar.values.map((p) => Math.min(right, Math.max(left, x(p.valid))))
+  return (
+    <g>
+      {bar.values.map((point, i) => {
+        const from = i === 0 ? left : (columns[i - 1] + columns[i]) / 2
+        const to = i === columns.length - 1 ? right : (columns[i] + columns[i + 1]) / 2
+        // Steps outside the time axis collapse to zero width at its ends.
+        return to > from && (
+          <rect key={+point.valid} x={from} y={top} width={to - from} height={bottom - top}
+            fill={bandColour(bar.colours, point.value)} />
+        )
+      })}
+      <line className={styles.axis} x1={left} x2={right} y1={top} y2={top} />
+    </g>
+  )
+}
+
+/** Legend of a colour scale as on the charts: its boxes with the text beside them, the inner band limits below. */
+function ScaleSwatch({ x, y, colours, text }: { x: number; y: number; colours: ColourBand[]; text: string }) {
+  const width = colours.length * SCALE_BOX_WIDTH
+  return (
+    <g>
+      {colours.map(([lower, , colour], k) => (
+        <g key={lower}>
+          <rect x={x + k * SCALE_BOX_WIDTH} y={y - 5} width={SCALE_BOX_WIDTH} height={10} fill={colour} />
+          {k > 0 && (
+            <text className={styles.scaleLabel} x={x + k * SCALE_BOX_WIDTH} y={y + LEGEND_LINE_HEIGHT + 3}
+              textAnchor="middle">{lower}</text>
+          )}
+        </g>
+      ))}
+      <rect className={styles.frame} x={x} y={y - 5} width={width} height={10} />
+      <text x={x + width + 6} y={y + 4}>{text}</text>
     </g>
   )
 }

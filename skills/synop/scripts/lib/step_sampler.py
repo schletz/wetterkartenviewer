@@ -5,7 +5,7 @@ precipitation signal, ...) are fields of the forecast file; this module only
 reads them at the point and converts units.
 """
 
-from .constants import KELVIN, WEATHER_PARAMS
+from .constants import IFS_GUST_NAMES, KELVIN, WEATHER_PARAMS
 from .forecast_grib import ForecastGrib
 from .point_sampler import PointSampler
 
@@ -22,12 +22,14 @@ class StepSampler:
         self.grib, self.point = grib, point
 
     def sample(self, step: int) -> dict:
-        """Values of one step in deg C, dam, hPa, m, % and Pa/s, wind as (direction, speed).
+        """Values of one step in deg C, dam, hPa, m, % and Pa/s, wind as (direction, speed), gust in m/s.
 
-        The key "grib" holds every parameter of the forecast file in GRIB
-        units (see grib_values).
+        "gust" is the maximum 10 m gust over the "gust_hours" before the step,
+        both None at T+0. The key "grib" holds every parameter of the forecast
+        file in GRIB units (see grib_values).
         """
         field, point = self.grib.field, self.point
+        gust = self.grib.first_of(IFS_GUST_NAMES, step)
         # Bilinear between grid points with and without signal; at least half of it counts.
         precip = point(field("psig", step)) >= 0.5
         row = {
@@ -43,6 +45,8 @@ class StepSampler:
             "omega700": point(field("w", step, 700)),
             "precip": precip,
             "t2m": point(field("2t", step)) - KELVIN,
+            "gust": point(field(gust, step)) if gust else None,
+            "gust_hours": self.grib.window_hours(gust, step) if gust else None,
             "freezing": point(field("deg0l", step)),
             "snow_line": point(field("snowl", step)) if precip else None,
             "rh2000": point(field("r", step, MOUNTAIN_HEIGHTS[0])),

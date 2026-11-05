@@ -57,7 +57,7 @@ function timeLabel(time: Date): string {
 }
 
 /**
- * Meteogram of T2m (ECMWF and ICON-D2) with the ECMWF T925, T850 (ECMWF) with its anomaly against the ERA5 climate, the
+ * Meteogram of T2m (ECMWF and ICON-D2) with the ECMWF T925 and the ECMWF 10 m gusts as a colour bar, T850 (ECMWF) with its anomaly against the ERA5 climate, the
  * ECMWF 1000–500 hPa thickness with the Showalter index of a parcel lifted from 850 hPa with its dew point from
  * RH850 as layered areas around the middle of its axis, blue above (stable), red below (unstable), and RH700 as a
  * line spanning the axis from 0 to 100 %, in panels one below the other like the ENS meteograms. Fills its parent.
@@ -65,7 +65,7 @@ function timeLabel(time: Date): string {
 export default function TemperatureDiagram({ temperatures }: TemperatureDiagramProps) {
   const box = useRef<HTMLDivElement>(null)
   const size = useElementSize(box)
-  const { t850, climate850, t2mEcmwf, t2mIcon, t925, thickness, t500, rh850, rh700 } = temperatures
+  const { t850, climate850, t2mEcmwf, t2mIcon, t925, thickness, t500, rh850, rh700, gust10m } = temperatures
 
   const plotRight = size.width - MARGIN_RIGHT
   const start = t850.values[0].valid.getTime()
@@ -115,11 +115,14 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
   const panels: PanelSpec[] = [
     {
       key: 't2m',
-      title: t925 === null ? 'Temperatur in 2 m (°C)' : 'Temperatur in 2 m und 925 hPa (°C)',
+      title: [t925 === null ? 'Temperatur in 2 m (°C)' : 'Temperatur in 2 m und 925 hPa (°C)',
+        ...(gust10m === null ? [] : ['Böen in 10 m (km/h)'])].join(', '),
       legend: [
         { line: styles.t2mEcmwf, text: `ECMWF ${pointLabel(t2mEcmwf.point, t2mEcmwf.height)}` },
         ...(t2mIcon === null ? [] : [{ line: styles.t2mIcon, text: `ICON-D2 ${pointLabel(t2mIcon.point, t2mIcon.height)}` }]),
         ...(t925 === null ? [] : [{ line: styles.t925, text: 'ECMWF 925 hPa' }]),
+        // The bands of the wind10m chart, so a colour means the same speed in the diagram and on the map.
+        ...(gust10m === null ? [] : [{ colours: gust10m.colours, text: 'ECMWF Böen, Stufen = Beaufort 0–1 … 12' }]),
       ],
       // T925 first, so the T2m lines lie on top of it.
       lines: [
@@ -127,6 +130,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
         { values: t2mEcmwf.values, className: styles.t2mEcmwf },
         ...(icon.length > 0 ? [{ values: icon, className: styles.t2mIcon }] : []),
       ],
+      ...(gust10m === null ? {} : { colourBar: { values: gust10m.series.values, colours: gust10m.colours } }),
       steps: TEMPERATURE_STEPS,
       weight: 1,
     },
@@ -173,6 +177,8 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
   const iconByTime = new Map(icon.map((p) => [+p.valid, p.value]))
   const ecmwfByTime = new Map(t2mEcmwf.values.map((p) => [+p.valid, p.value]))
   const t925ByTime = new Map(t925?.values.map((p) => [+p.valid, p.value]) ?? [])
+  // Gust and the hours before the valid time it covers.
+  const gustByTime = new Map(gust10m?.series.values.map((p, i) => [+p.valid, { value: p.value, hours: gust10m.hours[i] }]) ?? [])
   const thicknessByTime = new Map(thickness?.values.map((p) => [+p.valid, p.value]) ?? [])
   const rh700ByTime = new Map(rh700?.values.map((p) => [+p.valid, p.value]) ?? [])
   const columns = t850.values.map((p) => x(p.valid))
@@ -184,6 +190,8 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     if (iconValue !== undefined) parts.push(`T2m ICON-D2 ${decimals(iconValue, 1)} °C`)
     const t925Value = t925ByTime.get(+point.valid)
     if (t925Value !== undefined) parts.push(`T925 ${decimals(t925Value, 1)} °C`)
+    const gust = gustByTime.get(+point.valid)
+    if (gust !== undefined) parts.push(`Böe 10 m ${decimals(gust.value, 0)} km/h (${gust.hours} h)`)
     parts.push(`T850 ${decimals(point.value, 1)} °C`)
     const climate = climate850[i]
     if (climate !== null) {
@@ -218,7 +226,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     <div ref={box} className={styles.diagram}>
       {size.width > 0 && size.height > 0 && (
         <svg className={styles.svg} viewBox={`0 0 ${size.width} ${size.height}`} role="img"
-          aria-label="T2m von ECMWF und ICON-D2, T925 von ECMWF, T850 von ECMWF mit Abweichung vom Klimamittel, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt, relative Feuchte in 700 hPa">
+          aria-label="T2m von ECMWF und ICON-D2, T925 und Böen in 10 m von ECMWF, T850 von ECMWF mit Abweichung vom Klimamittel, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt, relative Feuchte in 700 hPa">
           {placed.map((p) => <TemperaturePanel key={p.panel.key} placed={p} time={time} left={PLOT_LEFT} right={plotRight} />)}
           {t850.values.map((point, i) => {
             // Each hover column reaches halfway to its neighbours, so the 3 h and 6 h steps cover the plots without gaps.

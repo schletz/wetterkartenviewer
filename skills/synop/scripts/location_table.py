@@ -5,7 +5,8 @@ three tables for every step from T+0 to T+240:
 
     free atmosphere and boundary layer   T850, its 12 h change, thickness, MSLP, wind at 1000 and
                                          925 hPa, inversion, moisture of the boundary layer and at
-                                         700 hPa, vertical motion, precipitation signal, T2m
+                                         700 hPa, vertical motion, precipitation signal, T2m,
+                                         10 m gust (from T+3; its window, 1/3/6 h, in the header)
     mountain weather                     temperature and wind at 2000/2500/3000 m, humidity at
                                          2000 m, freezing level, snow line where precipitation is likely
     daily extremes                       Tmax 06-18 UTC and Tmin 18-06 UTC at 2 m

@@ -143,6 +143,20 @@ export interface Rh700File {
   ecmwf: EcmwfBlock & { rh700: number[] }
 }
 
+/** A colour band of a chart scale: values from `lower` to `upper` get `colour` ("#rrggbb"). */
+export type ColourBand = [lower: number, upper: number, colour: string]
+
+/** ECMWF maximum 10 m gust in km/h with the colour bands of the wind10m chart; no climatology. */
+export interface Gust10mFile {
+  version: string
+  box: Box
+  scale: number
+  /** Ascending and contiguous; values outside get the nearest band. */
+  colours: ColourBand[]
+  /** `hours`: length of the interval before each step the gust covers (1 h to T+90, 3 h to T+144, then 6 h). */
+  ecmwf: EcmwfBlock & { gust10m: number[]; hours: number[] }
+}
+
 export interface SeriesFiles {
   t850: T850File
   t2m: T2mFile
@@ -157,6 +171,8 @@ export interface SeriesFiles {
   rh700?: Rh700File
   /** Missing in manifests of older pipelines. */
   t925?: T925File
+  /** Missing in manifests of older pipelines. */
+  gust10m?: Gust10mFile
 }
 
 /** Values of one point over time, in units of the file (°C or K). */

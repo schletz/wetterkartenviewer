@@ -42,6 +42,7 @@ class ForecastGrib:
     def __init__(self, path: Path):
         self.path = Path(path)
         self._offsets: dict[tuple, int] = {}               # (name, level, end step) -> byte offset
+        self._starts: dict[tuple, int] = {}                # (name, level, end step) -> start step
         self._level_types: dict[tuple[str, int], str] = {}  # (name, level) -> typeOfLevel, in file order
         with self.path.open("rb") as fh:
             while (gid := eccodes.codes_grib_new_from_file(fh, headers_only=True)) is not None:
@@ -50,6 +51,7 @@ class ForecastGrib:
                     eccodes.codes_set(gid, "stepUnits", 1)
                     key = (self._name(gid), eccodes.codes_get(gid, "level"), eccodes.codes_get(gid, "endStep"))
                     self._offsets[key] = int(eccodes.codes_get(gid, "offset"))
+                    self._starts[key] = eccodes.codes_get(gid, "startStep")
                     self._level_types.setdefault(key[:2], eccodes.codes_get(gid, "typeOfLevel"))
                     if not hasattr(self, "base_time"):
                         self._read_grid(gid)
@@ -90,6 +92,21 @@ class ForecastGrib:
     def has(self, name: str, step: int, level: int | None = None) -> bool:
         """Whether a field exists."""
         return self._key(name, step, level) is not None
+
+    def first_of(self, names: tuple[str, ...], step: int) -> str | None:
+        """First of ``names`` with a field at the step, None if none has one (e.g. IFS_GUST_NAMES at T+0)."""
+        return next((name for name in names if self.has(name, step)), None)
+
+    def window_hours(self, name: str, step: int, level: int | None = None) -> int:
+        """Hours of the interval a field covers before its end step (0 for an instant field).
+
+        Raises:
+            KeyError: if the file holds no such field.
+        """
+        key = self._key(name, step, level)
+        if key is None:
+            raise KeyError(f"{name} level {level} step {step} not in {self.path.name}")
+        return step - self._starts[key]
 
     def field(self, name: str, step: int, level: int | None = None) -> np.ndarray:
         """Values of one field as a read-only (nj, ni) float32 array, NaN where missing; 1-D on the ICON grid.

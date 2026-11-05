@@ -1,6 +1,6 @@
 """Write the temperature series of Austria that the start page of the viewer draws for its location.
 
-Eight JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
+Nine JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
 
     t850.json      ECMWF T850 of every step on the 0.1 deg grid of the box, with the ERA5
                    climatology of T850 (mean, stdev) for the days of the run
@@ -12,9 +12,11 @@ Eight JSON files in maps/austria/ (published like the videos, listed in the mani
     t925.json      ECMWF T925 (no climatology), drawn beside T2m
     rh850.json     ECMWF relative humidity at 850 hPa in % (no climatology), for the parcel lifted from 850 hPa
     rh700.json     ECMWF relative humidity at 700 hPa in % (no climatology), drawn as a line
+    gust10m.json   ECMWF 10 m gust in km/h (no climatology) with the hours it covers and the colour
+                   bands of the wind10m chart, drawn as a colour bar in the T2m panel
 
 Every series is stored as whole tenths of a degree (of a dam for the
-thickness; rh850 and rh700 as whole percent), as deltas along time and
+thickness; rh850 and rh700 as whole percent, gust10m as whole km/h), as deltas along time and
 time-major (all points of the first time, then all of the second ...): the
 first time holds absolute values, every further one the change since the
 previous time. Neighbouring points change alike, which gzip packs to about a
@@ -42,6 +44,7 @@ Usage: python scripts/point_series.py data maps [--force]
 
 import argparse
 import json
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -49,8 +52,9 @@ import numpy as np
 from matplotlib.path import Path as Polygon
 from scipy.spatial import cKDTree
 
+from lib import chart_styles
 from lib.climate_archive import DIRECTORY as CLIMATE_DIRECTORY, ClimateArchive
-from lib.constants import ICON_NAMES, KELVIN
+from lib.constants import ICON_NAMES, IFS_GUST_NAMES, KELVIN, KMH_PER_MS
 from lib.forecast_grib import ForecastGrib
 from lib.missing_field_error import MissingFieldError
 from lib.projection import AUSTRIA_BORDERS
@@ -64,6 +68,8 @@ BORDER_MARGIN = 0.15
 SCALE, COORD_SCALE = 0.1, 1e-4
 # Relative humidity in whole percent: 1 % is about 0.15 K of dew point at 80 %, and the file packs better.
 RH_SCALE = 1.0
+# Gusts in whole km/h: the band limits of the wind10m chart (Beaufort) are whole km/h.
+WIND_SCALE = 1.0
 
 
 def time_major_deltas(fields: np.ndarray, scale: float = SCALE) -> list[int]:
@@ -94,17 +100,41 @@ def ecmwf_block(grib: ForecastGrib, name: str, level: int | None, key: str, offs
 
     The defaults turn K into deg C. A step lost on the server is left out.
     """
+    return derived_block(grib, grib.steps(name), key, lambda step: (grib.field(name, step, level) + offset) * factor,
+                         scale)
+
+
+def derived_block(grib: ForecastGrib, all_steps: list[int], key: str, field_of: Callable[[int], np.ndarray],
+                  scale: float = SCALE) -> dict:
+    """A field computed by ``field_of(step)`` at each of ``all_steps``, under ``key`` in multiples of ``scale``.
+
+    A step at which ``field_of`` misses a field on the server is left out.
+    """
     rows, cols, window = box_window(grib.grid)
     steps, fields = [], []
-    for step in grib.steps(name):
+    for step in all_steps:
         try:
-            fields.append((grib.field(name, step, level)[rows, cols] + offset) * factor)
+            fields.append(field_of(step)[rows, cols])
         except MissingFieldError:
             continue
         steps.append(step)
     # Model orography (m) of the grid points, for the height the series belongs to.
     orog = np.rint(grib.field("orog", 0)[rows, cols]).astype(np.int64).ravel().tolist()
     return {"run": run_of(grib), "steps": steps, "grid": window, "orog": orog, key: time_major_deltas(fields, scale)}
+
+
+def gust_block(grib: ForecastGrib) -> dict:
+    """IFS 10 m gusts in km/h at every step that has one, with ``hours``: the interval before each step it covers."""
+    steps = sorted({step for name in IFS_GUST_NAMES for step in grib.steps(name)})
+    block = derived_block(grib, steps, "gust10m",
+                          lambda step: grib.field(grib.pick(IFS_GUST_NAMES, step), step) * KMH_PER_MS, WIND_SCALE)
+    block["hours"] = [grib.window_hours(grib.pick(IFS_GUST_NAMES, step), step) for step in block["steps"]]
+    return block
+
+
+def colour_bands(scale) -> list[list]:
+    """Bands of a chart colour scale as [lower, upper, "#rrggbb"], so the app colours a series like the chart."""
+    return [[lower, upper, "#{:02x}{:02x}{:02x}".format(*rgb)] for lower, upper, rgb in scale.bands]
 
 
 def austria_cells(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
@@ -185,7 +215,7 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     icon_run = icon_grib.stem.split("_")[-1] if icon_grib else "none"
     targets = {name: maps / file for name, file in SERIES_FILES.items()}
     versions = {"t850": ecmwf_run, "t2m": f"{ecmwf_run}-{icon_run}", "thickness": ecmwf_run, "t500": ecmwf_run,
-                "rh850": ecmwf_run, "rh700": ecmwf_run, "t925": ecmwf_run}
+                "rh850": ecmwf_run, "rh700": ecmwf_run, "t925": ecmwf_run, "gust10m": ecmwf_run}
     stale = [name for name, version in versions.items() if force or read_version(targets[name]) != version]
     heights_missing = icon_grib is not None and (force or read_version(targets["heights"]) is None)
     if not stale and not heights_missing:
@@ -215,6 +245,10 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
         if name in stale:
             write_document(targets[name], {"version": versions[name], "box": BOX, "scale": RH_SCALE,
                                            "ecmwf": ecmwf_block(ecmwf, "r", level, name, 0.0, scale=RH_SCALE)})
+    if "gust10m" in stale:
+        write_document(targets["gust10m"], {"version": versions["gust10m"], "box": BOX, "scale": WIND_SCALE,
+                                            "colours": colour_bands(chart_styles.GUST10M),
+                                            "ecmwf": gust_block(ecmwf)})
     icon = cells = None
     if icon_grib is not None and ("t2m" in stale or heights_missing):
         icon = ForecastGrib(icon_grib, ICON_NAMES)

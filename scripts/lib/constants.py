@@ -9,6 +9,12 @@ GRAVITY = 9.80665   # m/s2, geopotential to geopotential height
 # global model gets fog, low stratus and their precipitation wrong.
 WEATHER_PARAMS = ("tcc", "tp", "ptype")
 
+# Maximum 10 m gust of IFS Open Data, over the time since the previous model output: 10fg over the
+# last hour to T+90 (hourly output) and over the last 6 h after T+144; 10fg3 over the last 3 h between.
+# Never at T+0. ForecastGrib.pick finds the one a step has.
+IFS_GUST_NAMES = ("10fg", "10fg3")
+IFS_HOURLY_LAST_STEP = 90
+
 # Pressure levels of the temperature, humidity and height profile, ground to about 5.5 km.
 # 600 hPa (about 4.2 km) halves the gap above 700 hPa for 3000 m values and the freezing level.
 PROFILE_LEVELS = [500, 600, 700, 850, 925, 1000]

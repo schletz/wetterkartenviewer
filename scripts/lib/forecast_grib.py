@@ -90,6 +90,22 @@ class ForecastGrib:
         """End steps in hours at which a parameter is available, ascending."""
         return sorted({end for name, _, end in self._index if name == short_name})
 
+    def pick(self, names: tuple[str, ...], step: int, level: int | None = None) -> str:
+        """First of ``names`` with a message at the step, else the first name (whose field then raises
+        MissingFieldError); for a parameter published under several names, e.g. IFS_GUST_NAMES."""
+        return next((name for name in names if self.has(name, step, level)), names[0])
+
+    def window_hours(self, short_name: str, step: int, level: int | None = None) -> int:
+        """Length in hours of the interval a field covers (end step - start step), 0 for an instant.
+
+        Raises:
+            MissingFieldError: if the file holds no such field.
+        """
+        key = self._key(short_name, step, level)
+        if key is None:
+            raise MissingFieldError(f"{self._label(short_name, step, level)} not in {self.path.name}")
+        return step - self._index[key][0]
+
     def has(self, short_name: str, step: int, level: int | None = None) -> bool:
         """Whether a field has a message, possibly a placeholder without values."""
         return self._key(short_name, step, level) is not None

@@ -13,9 +13,16 @@ so the repository does not grow with the videos. The push triggers the Pages dep
 the manifest lists (fetch_maps.py); uploading first means it never finds a
 manifest without its videos.
 
+Without a changed manifest there is no commit, so the push deploys nothing:
+videos of the same runs rendered again (update_maps.py --force, e.g. after a
+change of the chart layout) reach the release but not the site. --force then
+starts the deployment workflow by hand (gh workflow run). Options of
+update_maps.py are accepted and ignored, so download_data passes all its
+options to both scripts.
+
 Requires the GitHub CLI gh, logged in with write access to the repository.
 
-Usage: python scripts/publish_maps.py maps
+Usage: python scripts/publish_maps.py maps [--force]
 """
 
 import argparse
@@ -35,6 +42,8 @@ from maps_release import TAG, asset_name
 ROOT = Path(__file__).resolve().parent.parent
 # gh processes uploading at a time, one video each.
 PARALLEL_UPLOADS = 4
+# GitHub Pages workflow (.github/workflows/deploy.yml, has workflow_dispatch).
+DEPLOY_WORKFLOW = "deploy.yml"
 
 
 def call(*command: str) -> str:
@@ -101,22 +110,26 @@ def commit_message(maps: Path, run: str) -> str:
     return f"Data update {run}z" + "".join(f", {window} {window_run}z" for window, window_run in others)
 
 
-def commit_manifest(maps: Path, run: str) -> None:
-    """Commit the manifest alone, if it changed; other staged changes stay staged."""
+def commit_manifest(maps: Path, run: str) -> bool:
+    """Commit the manifest alone, if it changed; other staged changes stay staged. Returns whether it committed."""
     manifest = str((maps / MANIFEST).resolve())
     call("git", "add", manifest)
     if subprocess.run(["git", "diff", "--cached", "--quiet", "--", manifest], cwd=ROOT).returncode:
         message = commit_message(maps, run)
         call("git", "commit", "-q", "-m", message, "--", manifest)
         print(f"committed {message}")
-    else:
-        print("manifest unchanged")
+        return True
+    print("manifest unchanged")
+    return False
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("maps", type=Path, help="video directory of the viewer")
-    args = parser.parse_args()
+    parser.add_argument("--force", action="store_true",
+                        help="start the deployment even if the manifest did not change")
+    # download_data passes the options of update_maps.py too; update_maps.py has already rejected unknown ones.
+    args, _ = parser.parse_known_args()
     # Whole lines at once, also when the output goes to a file or an agent.
     sys.stdout.reconfigure(line_buffering=True)
     run, files = read_run(args.maps), published_files(args.maps)
@@ -133,10 +146,15 @@ def main() -> None:
     else:
         print("every file is up to date in the release")
     prune_assets(files)
-    commit_manifest(args.maps, run)
+    committed = commit_manifest(args.maps, run)
     print("pushing")
     # Pushes also local commits of code changes; a push of an unchanged HEAD is a no-op.
     call("git", "push", "-q", "origin", "HEAD")
+    if args.force and not committed:
+        # The workflow runs on the default branch; a push of code commits may have started it already,
+        # which costs one more deployment at most (cancel-in-progress).
+        call("gh", "workflow", "run", DEPLOY_WORKFLOW)
+        print(f"started {DEPLOY_WORKFLOW}: the manifest is unchanged, so the push deploys nothing")
     print(f"charts of run {run} published")
 
 
