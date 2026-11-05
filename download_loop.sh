@@ -1,7 +1,7 @@
 #!/bin/sh
-# Unattended publishing (e.g. on an always-on Mac): every INTERVAL seconds, bring the checkout to
-# origin/main (git fetch + reset --hard, so code changes and manifests pushed from other machines
-# arrive) and run download_data.sh. publish_maps.py commits the manifest only when a new run was
+# Unattended publishing (e.g. on an always-on Mac): every INTERVAL seconds run download_data.sh, which
+# first brings the checkout to origin/main (git fetch + reset --hard, so code changes and manifests
+# pushed from other machines arrive). publish_maps.py commits the manifest only when a new run was
 # rendered and pushes it; without a new run nothing is committed. data/ and maps/ are ignored by git,
 # so the reset keeps the downloaded runs and the encoded videos.
 #
@@ -31,27 +31,23 @@ confirm() {
     esac
 }
 
-# One pass: sync with origin, then download, render and publish. A failed fetch skips the pass,
-# so a network outage never runs the pipeline on stale code.
+# One pass: download_data.sh syncs with origin (a failed fetch ends it before the pipeline, so a
+# network outage never runs on stale code), then downloads, renders and publishes. The reset was
+# confirmed once at the start, so download_data.sh does not ask again.
 update() {
-    if ! git fetch -q origin "$BRANCH"; then
-        log "git fetch failed, skipping this pass"
-        return
-    fi
     script=$(git hash-object "$SELF")
-    git reset -q --hard "origin/$BRANCH" || { log "git reset failed, skipping this pass"; return; }
-    log "at $(git log -1 --format='%h %s')"
-    # The shell has read this file once; a changed version takes effect by starting it again.
-    if [ "$(git hash-object "$SELF")" != "$script" ]; then
-        log "download_loop.sh changed, restarting it"
-        exec "$SELF" --yes
-    fi
-    if ./download_data.sh; then
+    if WETTER_RESET_CONFIRMED=1 ./download_data.sh; then
         log "pass finished"
     else
         log "pass failed (exit $?), retrying in the next pass"
     fi
     mirror_data
+    # The shell has read this file once; a version changed by the reset takes effect by starting it
+    # again, from the next pass on.
+    if [ "$(git hash-object "$SELF")" != "$script" ]; then
+        log "download_loop.sh changed, restarting it"
+        exec "$SELF" --yes
+    fi
 }
 
 # Mirror data/ into MIRROR_DIR: only new or changed files (size or mtime differ) are copied, files

@@ -652,8 +652,9 @@ render_charts.py <grib> <outdir> [--climate DIR] [--projection icon-d2|openchart
  [--products a,b|all] [--workers N]
 build_borders.py <VGD_50_generalisiert.shp> [target.geojson]
 make_icon_test_grib.py <source.grb2> <target.grb2> [--step N] (default 12)
-download_data.cmd | download_data.sh [update_maps options] = update_maps.py data maps, then publish_maps.py maps, both with all options
-download_loop.sh [--yes] every 600 s: git fetch, reset --hard origin/main, download_data.sh,
+download_data.cmd | download_data.sh [update_maps options] = update_maps.py data maps, then publish_maps.py maps, both with all options;
+ download_data.sh first runs git fetch + reset --hard origin/main (not the .cmd)
+download_loop.sh [--yes] every 600 s: download_data.sh (WETTER_RESET_CONFIRMED=1),
  then rsync -a --delete data/ to $WETTER_MIRROR_DIR (default ~/Downloads/wetterviewer_data; skipped if the folder is missing)
 ```
 
@@ -1272,7 +1273,7 @@ Line: `render opencharts_europe [######..............]  30 % 390/1300 charts, 0:
 | ICON file with `--products` outside `IconProducts.ALL` | argparse error, exit 2 |
 | upload breaks off | `sys.exit`; some assets replaced, manifest not committed; the next call uploads what `changed_files` detects |
 | blob upload fails (network, key) | update_maps.py: warning on stderr, exit 0, publish still runs; uploaded files stay, `current_run.json` stays missing (readers refuse the container), the next call sends the rest and writes it |
-| push rejected | `sys.exit`; local manifest commit stays (download_loop.sh discards it on its next reset) |
+| push rejected | `sys.exit`; local manifest commit stays (the next download_data.sh discards it with its reset, without asking) |
 | ICON download failed | `write_series` takes the newest `icon-d2_*.grb2` still in `data/`; none → t2m.json without `icon`, the app shows no diagram until heights.json exists |
 
 No logging framework, no tests, no cleanup of `.part` files after an exception. The stress test (fake ECMWF server, ICON 404, random bytes) existed only in a session scratchpad.
@@ -1284,7 +1285,8 @@ No logging framework, no tests, no cleanup of `.part` files after an exception. 
 - **Video and steps can drift**: whoever changes `data/<window>/<product>/` outside update_maps.py must delete the video.
 - **Fallback chains switch videos**; an ICON daily product in a chain covers only its day until 23 UTC.
 - **ICON steps hang on the ECMWF run**; relating steps to the ICON run means changing `chart_frames`, `ChartIndex` and `currentStep` together.
-- **download_loop.sh resets to origin/main every round**: unpushed commits and changes to tracked files are lost (`data/`, videos are ignored and stay). A failed push heals itself. Only on branch `main`. The script restarts itself with `exec … --yes` if the reset changed it.
+- **download_data.sh resets to origin/main on every call** (so `download_data.sh --force` runs the pushed code): unpushed commits and changes to tracked files are lost (`data/`, videos are ignored and stay). A failed push heals itself. Only on branch `main`; a failed fetch exits 1 before the pipeline. It asks first (`/dev/tty`; no terminal = abort, exit 1) if changed tracked files or unpushed commits touching more than `maps/manifest.json` would be lost; `WETTER_RESET_CONFIRMED=1` skips the question. After the reset it `exec`s itself with `WETTER_SYNCED=1` (no second sync), so a changed download_data.sh takes effect in the same call. `main "$@"; exit` on one line: the shell must not read on in the replaced file. download_data.cmd has no sync (dev machine; cmd.exe rereads a batch file by offset, a reset mid-run would break it).
+- **download_loop.sh** asks once at its start (or `--yes`) and calls download_data.sh with `WETTER_RESET_CONFIRMED=1`; after the pass it restarts itself with `exec … --yes` if the reset changed it, effective from the next pass.
 - **download_loop.sh mirrors `data/` with `--delete`** after every pass, also a failed one: files in the mirror folder that are not in `data/` are deleted. Copying is decided by size and mtime; a re-rendered window is copied again in full.
 - **Executable bit** of `.sh` files lives only in the git index: add new ones with `git add --chmod=+x`.
 - **Removing a layer**: it leaves the manifest at once but its video stays in `maps/` until a new run or `--force` empties the window.
