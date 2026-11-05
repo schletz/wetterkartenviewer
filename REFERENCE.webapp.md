@@ -304,7 +304,7 @@ Types: `ChartVideo {file, steps, run?, end?}`, `ChartFrame {index, step}`, `Seri
 
 ### ChartProjection (src/model/ChartProjection.ts)
 
-Same formula as `Projection`. `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 690`, `MAP_HEIGHT = 600`. `PROJECTIONS` holds the Python values; for `icon-d2` as literals computed by Python (`print(ICON_D2)`): change both sides together.
+Same formula as `Projection`. `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 690`, `MAP_HEIGHT = 600`. `PROJECTIONS` holds the Python values; for `icon-d2` and `opencharts_central_europe` (lon0 15) as literals computed by Python (`print(ICON_D2)`, `print(CENTRAL_EUROPE)`): change both sides together.
 `toPixel(location)` → null outside 1200×600. `projectionOf(chartPath)` → null for an unknown window (no marker).
 
 ### Temperature diagram (src/components/TemperatureChart.tsx, TemperatureDiagram.tsx, src/model/TemperaturePanel.tsx, src/model/TemperatureSeries.ts, panelLayout.ts, ValueAxis.ts, anomalyBands.ts, moistAdiabat.ts, seriesFiles.ts)
@@ -384,7 +384,7 @@ CSS that must match the image size: `aspect-ratio: 1200 / 690` in ChartImage.mod
 
 ## Pitfalls
 
-- **Values shared with the pipeline**: projection parameters (`PROJECTIONS` in ChartProjection.ts vs scripts/lib/projection.py; `icon-d2` as literals computed by Python); image size 1200×690 (`IMAGE_*`, the two CSS files, chart_canvas.py, tile_videos.py); window names; the layer format (`LayerConfig`/`layerPaths` vs `tile_chart_paths`).
+- **Values shared with the pipeline**: projection parameters (`PROJECTIONS` in ChartProjection.ts vs scripts/lib/projection.py; `icon-d2` and `opencharts_central_europe` as literals computed by Python); image size 1200×690 (`IMAGE_*`, the two CSS files, chart_canvas.py, tile_videos.py); window names; the layer format (`LayerConfig`/`layerPaths` vs `tile_chart_paths`).
 - **Browser memory and AV1**: every shown video stays as a blob until reload (all 14 ≈ 67 MB); without an AV1 decoder the tiles stay empty.
 - **Fallback chains switch videos**: before the first and after the last ICON frame the tile shows the ECMWF video, loaded only at that moment; `resolve` does not check that a video loads.
 - **Steps hang on the ECMWF run**: relating steps to the ICON run means changing `ChartIndex`, `currentStep` and the pipeline's `chart_frames` together.

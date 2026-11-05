@@ -9,22 +9,25 @@ y axis pointing down, is
     x   = pole_x + rho * sin(cone * (lon - lon0))
     y   = pole_y + rho * cos(cone * (lon - lon0))
 
-cone = 1 is the polar stereographic projection of the ECMWF open charts
-windows (lon0 = 0, a vertical zero meridian); 0 < cone < 1 is Lambert's
+cone = 1 is the polar stereographic projection of the open charts windows
+(Europe with lon0 = 0, a vertical zero meridian as on ECMWF open charts;
+central Europe with lon0 = 15, vertical through Austria); 0 < cone < 1 is Lambert's
 conformal conic projection with two standard parallels (``Projection.lambert``).
 (pole_x, pole_y) is the apex of the cone, where every meridian meets.
 
-The open charts parameters come from least squares fits to measured control
-points: "opencharts_europe" RMS 0.45 px, "opencharts_central_europe" RMS 0.4 px
-(three points; a free central meridian came out at 0.04 deg, i.e. none).
-The central Europe window is the rectangle x 316-770, y 205-432 of the
-Europe window enlarged 2.645 times. The north pole lies above every image.
+The parameters of "opencharts_europe" come from a least squares fit to
+measured control points of ECMWF open charts (RMS 0.45 px). "opencharts_central_europe"
+had been fitted the same way (RMS 0.4 px, lon0 = 0, the rectangle x 316-770,
+y 205-432 of the Europe window enlarged 2.645 times); it keeps that scale
+and the centre of that window (48.28 N 7.10 E at pixel 600/300), turned to
+the central meridian 15 E (``Projection.recentred``). The north pole lies
+above every image.
 
 Both directions accept scalars and numpy arrays, so whole pixel grids or
 coastlines can be projected in one call.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -82,6 +85,13 @@ class Projection:
         return cls(name, float(probe.width / 2 - x), float(probe.height / 2 - y), float(scale_k), graticule_step,
                    cone=float(cone), lon0=lon0, **options)
 
+    def recentred(self, lon0: float, **options) -> "Projection":
+        """The same window turned to another central meridian, keeping scale and the geographic image centre."""
+        centre = self.pixel_to_latlon(self.width / 2, self.height / 2)
+        probe = replace(self, pole_x=0.0, pole_y=0.0, lon0=lon0, **options)
+        x, y = probe.latlon_to_pixel(*centre)
+        return replace(probe, pole_x=float(self.width / 2 - x), pole_y=float(self.height / 2 - y))
+
     def latlon_to_pixel(self, lat, lon):
         """Project a geographic position (deg N, deg E) onto the image; returns (x, y)."""
         rho = self.scale_k * np.tan(np.radians(45.0 - np.asarray(lat) / 2.0)) ** self.cone
@@ -126,8 +136,11 @@ class Projection:
 
 
 EUROPE = Projection("opencharts_europe", pole_x=481.0, pole_y=-180.8, scale_k=1320.8, graticule_step=10)
+# Central Europe: the fitted open charts window (lon0 = 0) turned to 15 E, so the meridians
+# over central Europe stand upright; meridians labelled along 41 N, since 40 N leaves the
+# image between 5 and 25 E.
 CENTRAL_EUROPE = Projection("opencharts_central_europe", pole_x=435.35, pole_y=-1021.0, scale_k=3493.4,
-                            graticule_step=5)
+                            graticule_step=5).recentred(15.0, label_lat=41.0)
 # ICON-D2 for Austria and its surroundings: the parallels of the Austrian Lambert projection
 # (EPSG:31287); 0.75 km per pixel is about 8 px per model cell, as dense as ECMWF on the
 # central Europe window, so the chart suggests no more detail than the model has. The centre lies

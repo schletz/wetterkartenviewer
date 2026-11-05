@@ -583,7 +583,7 @@ Entries of other products in an existing file are kept, so single-product runs a
 The skill reads `data/` (docstrings scripts/update_maps.py, scripts/lib/local_params.py), locally or as its mirror `https://wetterkartenviewer.blob.core.windows.net/forecastdata/<path relative to data/>` (container-level public access: blobs and the listing `?restype=container&comp=list` need no credentials; see *blob_mirror.py*). Changing any of these breaks it until the skill is updated:
 product names and the folder layout above, `geometry.json` keys, GRIB short names, levels, units and `stepRange` of the daily extremes, the local parameter numbers 0–5 in category 192, `charts.md`.
 The skill has its own copies of `ForecastGrib` and `ClimateArchive`.
-Its `ChartGeometry` (`skills/synop/scripts/lib/chart_geometry.py`) ignores `cone`/`lon0`: right for `opencharts_*` (cone 1, lon0 0), wrong markers on `icon-d2` until updated.
+Its `ChartGeometry` (`skills/synop/scripts/lib/chart_geometry.py`) reads `cone`/`lon0` (defaults 1 and 0 for files without them), so a window's projection may change without touching the skill.
 
 ### Forecast file (IFS)
 
@@ -1174,15 +1174,16 @@ Frozen dataclass of one window, same model as `ChartProjection` in TS: conformal
 | Window | pole_x | pole_y | scale_k | cone | lon0 | graticule / labels (lon, lat) | borders |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `EUROPE` `opencharts_europe` | 481.0 | −180.8 | 1320.8 | 1 | 0 | 10° / 0°, 40° | world_countries |
-| `CENTRAL_EUROPE` `opencharts_central_europe` | 435.35 | −1021.0 | 3493.4 | 1 | 0 | 5° / 0°, 40° | world_countries |
+| `CENTRAL_EUROPE` `opencharts_central_europe` | 782.86… | −1018.60… | 3493.4 | 1 | 15 | 5° / 0°, 41° | world_countries |
 | `ICON_D2` `icon-d2` | 733.24… | −7464.41… | 15611.89… | 0.73736… | 13.333… | 2° / 7°, 46° | borders_austria |
 
-Opencharts values are least-squares fits to ECMWF opencharts control points (RMS 0.45/0.4 px) and will not change (per user). `icon-d2` comes from `lambert`: parallels 46°/49°, lon0 13° 20′ as Austria Lambert (EPSG:31287), centre 47.6° N 12.0° E, 0.75 km/px ≈ 8 px per model cell; west of Austria's centre because the model ends at ≈ 18.3° E; spans 5.72–18.19° E, 45.36–49.63° N, all inside ICON-D2.
+`EUROPE` is a least-squares fit to ECMWF opencharts control points (RMS 0.45 px) and will not change (per user). `CENTRAL_EUROPE` is the fitted opencharts window (pole 435.35/−1021.0, lon0 0, RMS 0.4 px) turned by `recentred` to lon0 15° E (per user: upright meridians over central Europe), same scale and image centre 48.28° N 7.10° E; spans 35.5–57.5° N, 22.5° W–37.3° E, with Lisbon, Kyiv and Istanbul inside, Italy south of ≈ 40.3° N (at 15° E) and the north of Jutland outside. Meridian labels on 41° N, because 40° N runs below the image between 5° and 25° E. `icon-d2` comes from `lambert`: parallels 46°/49°, lon0 13° 20′ as Austria Lambert (EPSG:31287), centre 47.6° N 12.0° E, 0.75 km/px ≈ 8 px per model cell; west of Austria's centre because the model ends at ≈ 18.3° E; spans 5.72–18.19° E, 45.36–49.63° N, all inside ICON-D2.
 Fields: `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 600`, `EARTH_RADIUS_KM = 6371`, `WORLD_COUNTRIES`, `AUSTRIA_BORDERS`, `PROJECTIONS`.
 
 | Method | Summary |
 | --- | --- |
 | `lambert(name, parallels, lon0, centre, km_per_px, graticule_step, borders=, label_lon=, label_lat=)` | label positions must lie in the image |
+| `recentred(lon0, **options)` | same window turned to another central meridian, scale and geographic image centre kept; options replace fields (labels) |
 | `latlon_to_pixel(lat, lon)`, `pixel_to_latlon(x, y)` | the app has no inverse |
 | `km_per_px(lat)` | 6371 · cos(lat) / (cone · rho) |
 | `north_east()` | unit vectors north/east per pixel, shape (2, h, w), used to rotate u/v |

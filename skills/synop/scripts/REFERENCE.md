@@ -131,7 +131,7 @@ The scripts depend on what the viewer writes; nothing in the code checks it beyo
 | fields read by name (ICON) | IconStepSampler, IconLocationTables | `2t`, `10u`/`10v`, `gust`, `msl`, `tcc`, `ceiling`, `tp` (accumulated), `ww`, `u`/`v` 1000/850/700 hPa, `t`/`r`/`z` 850/700 hPa, `tmax_2m`/`tmin_2m`; T+0: `clat`, `clon`, `hsurf`, `lsm` |
 | fields read by name (ECMWF) | StepSampler, LocationTables | `t` 850 hPa and 2000/2500/3000 m, `thick`, `msl`, `uf`/`vf` 1000/925 hPa, `inv`, `rhbl`, `r` 700 hPa and 2000 m, `w` 700 hPa, `psig`, `2t`, `deg0l`, `snowl`, `u`/`v` 2000/2500/3000 m, `gh` 850 hPa, the gust `10fg` or `10fg3` (`IFS_GUST_NAMES`, from T+3); T+0: `orog` (m), `sdor`, `lsm`; daily `mx2t`/`mn2t` at the end step of their window (18 / 06 UTC) |
 | missing points | `ForecastGrib._read` (:102) | bitmap → NaN (points below the model ground for `uf`, `vf`, `inv`, `rhbl`) |
-| `<window>/geometry.json` | ChartGeometry | keys `window`, `image.width/height` (map area without legend strip), `projection.pole_x/pole_y/scale_k/cone/lon0` (cone and lon0 default to 1 and 0, the old polar stereographic files), `sheets.scale`, `sheets.tiles` = {product: [[x, y], …]}; `model`, `run` and `projection.formula` are not read |
+| `<window>/geometry.json` | ChartGeometry | keys `window`, `image.width/height` (map area without legend strip), `projection.pole_x/pole_y/scale_k/cone/lon0` (cone and lon0 default to 1 and 0 for files without them), `sheets.scale`, `sheets.tiles` = {product: [[x, y], …]}; `model`, `run` and `projection.formula` are not read |
 | `<window>/**/*.webp` | mark_location | single charts anywhere below the window; contact sheets in a folder named `sheets`, file stem = key of `sheets.tiles` |
 | `era5_means/*.grb2` (era5_means.grb2) | ClimateArchive | see Climatology archive |
 
@@ -147,7 +147,7 @@ The scripts depend on what the viewer writes; nothing in the code checks it beyo
 
 `CellPointSampler` (lib/cell_point_sampler.py:24): takes the `NEIGHBOURS` = 12 nearest cell centres in a local km plane, triangulates them (Delaunay) and keeps the triangle containing the point with its barycentric weights; outside if there is none, the nearest centre is more than `MAX_DISTANCE_KM` = 5 km away or a corner is NaN in the `valid` mask (boundary zone). `__call__` = weighted sum (NaN propagates), `nearest` = value of the nearest cell. The viewer draws the ICON charts with the same linear interpolation.
 
-`ChartGeometry.latlon_to_pixel` (lib/chart_geometry.py:50): Lambert conformal conic with the north pole at the apex, `rho = scale_k·tan(45° − lat/2)^cone`, `θ = cone·(lon − lon0)` with lon − lon0 wrapped to ±180°, `x = pole_x + rho·sin θ`, `y = pole_y + rho·cos θ`, origin top-left, y down; parameters from geometry.json. cone = 1, lon0 = 0 are the ECMWF windows (polar stereographic). Checked against the viewer's `Projection.latlon_to_pixel`: identical for all three windows.
+`ChartGeometry.latlon_to_pixel` (lib/chart_geometry.py): Lambert conformal conic with the north pole at the apex, `rho = scale_k·tan(45° − lat/2)^cone`, `θ = cone·(lon − lon0)` with lon − lon0 wrapped to ±180°, `x = pole_x + rho·sin θ`, `y = pole_y + rho·cos θ`, origin top-left, y down; parameters from geometry.json. cone = 1 are the ECMWF windows (polar stereographic; `opencharts_europe` lon0 = 0, `opencharts_central_europe` lon0 = 15° E), `icon-d2` is Lambert (cone ≈ 0.737, lon0 13° 20′ E). Checked against the viewer's `Projection.latlon_to_pixel`: identical for all three windows.
 
 ### Location sampling
 

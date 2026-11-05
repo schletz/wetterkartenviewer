@@ -9,7 +9,7 @@ export const MAP_HEIGHT = 600
  * Pixel geometry of a chart window, the same model as scripts/lib/projection.py:
  * a conformal conic projection whose central meridian lon0 runs vertically through
  * the apex (poleX, poleY), origin top left, y pointing down. cone = 1 is the polar
- * stereographic projection of the ECMWF open charts windows, 0 < cone < 1 Lambert's.
+ * stereographic projection of the open charts windows, 0 < cone < 1 Lambert's.
  *
  *     rho = scaleK * tan(45 deg - lat / 2) ** cone
  *     x   = poleX + rho * sin(cone * (lon - lon0))
@@ -45,7 +45,7 @@ export class ChartProjection {
 /** Parameters as in scripts/lib/projection.py (and data/<window>/geometry.json). */
 const PROJECTIONS: Record<string, ChartProjection> = {
   opencharts_europe: new ChartProjection(481.0, -180.8, 1320.8),
-  opencharts_central_europe: new ChartProjection(435.35, -1021.0, 3493.4),
+  opencharts_central_europe: new ChartProjection(782.860271281935, -1018.6025723039893, 3493.4, 1, 15),
   'icon-d2': new ChartProjection(733.2439628710566, -7464.407027195254, 15611.893414386514, 0.7373615976163657,
     13.333333333333334),
 }
