@@ -11,8 +11,9 @@ y axis pointing down, is
 
 cone = 1 is the polar stereographic projection of the open charts windows
 (Europe with lon0 = 0, a vertical zero meridian as on ECMWF open charts;
-central Europe with lon0 = 15, vertical through Austria); 0 < cone < 1 is Lambert's
-conformal conic projection with two standard parallels (``Projection.lambert``).
+central Europe with lon0 = 10, vertical through Germany near the image
+centre); 0 < cone < 1 is Lambert's conformal conic projection with two
+standard parallels (``Projection.lambert``).
 (pole_x, pole_y) is the apex of the cone, where every meridian meets.
 
 The parameters of "opencharts_europe" come from a least squares fit to
@@ -20,7 +21,7 @@ measured control points of ECMWF open charts (RMS 0.45 px). "opencharts_central_
 had been fitted the same way (RMS 0.4 px, lon0 = 0, the rectangle x 316-770,
 y 205-432 of the Europe window enlarged 2.645 times); it keeps that scale
 and the centre of that window (48.28 N 7.10 E at pixel 600/300), turned to
-the central meridian 15 E (``Projection.recentred``). The north pole lies
+the central meridian 10 E (``Projection.recentred``). The north pole lies
 above every image.
 
 Both directions accept scalars and numpy arrays, so whole pixel grids or
@@ -136,11 +137,11 @@ class Projection:
 
 
 EUROPE = Projection("opencharts_europe", pole_x=481.0, pole_y=-180.8, scale_k=1320.8, graticule_step=10)
-# Central Europe: the fitted open charts window (lon0 = 0) turned to 15 E, so the meridians
-# over central Europe stand upright; meridians labelled along 41 N, since 40 N leaves the
-# image between 5 and 25 E.
+# Central Europe: the fitted open charts window (lon0 = 0) turned to 10 E, so the meridians
+# near the image centre stand upright; meridians labelled along 41 N, since 40 N leaves the
+# image between 5 and 15 E.
 CENTRAL_EUROPE = Projection("opencharts_central_europe", pole_x=435.35, pole_y=-1021.0, scale_k=3493.4,
-                            graticule_step=5).recentred(15.0, label_lat=41.0)
+                            graticule_step=5).recentred(10.0, label_lat=41.0)
 # ICON-D2 for Austria and its surroundings: the parallels of the Austrian Lambert projection
 # (EPSG:31287); 0.75 km per pixel is about 8 px per model cell, as dense as ECMWF on the
 # central Europe window, so the chart suggests no more detail than the model has. The centre lies

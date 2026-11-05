@@ -89,8 +89,8 @@ demselben Code wie die Karten. Karte und Zahl am Ort passen deshalb zusammen.
 ## Allgemeines
 
 **Fenster.** Die beiden IFS-Fenster sind polarstereografisch wie ECMWF open charts, Europa mit
-dem Zentralmeridian 0°, Mitteleuropa mit 15° E (die Meridiane über Österreich stehen senkrecht).
-`icon-d2` ist eine Lambert-Kegelprojektion (Standardparallelen 46° und 49° N, Zentralmeridian
+dem Zentralmeridian 0°, Mitteleuropa mit 10° E (der Meridian durch Deutschland, nahe der Bildmitte,
+steht senkrecht). `icon-d2` ist eine Lambert-Kegelprojektion (Standardparallelen 46° und 49° N, Zentralmeridian
 13°20′ E wie die österreichische Lambert-Projektion). Alle haben eine Kartenfläche von 1200×600 px,
 darunter liegt ein Legendenstreifen von 90 px. `geometry.json` gibt die Formel mit `cone` und `lon0`;
 bei den IFS-Fenstern ist `cone` 1.
@@ -98,7 +98,7 @@ bei den IFS-Fenstern ist `cone` 1.
 | Fenster | Bereich | km pro Pixel | Standardprodukte |
 |---|---|---|---|
 | `opencharts_europe` | Atlantik bis Westrussland, Nordafrika bis Nordkap | 7,6 (35° N) bis 9,4 (70° N) | alle Produkte |
-| `opencharts_central_europe` | 35,5–57,5° N, 22,5° W–37,3° E (Lissabon bis Kiew, Dänemark bis Neapel) | etwa 3,2 | alle außer `z500_t850`, `t500`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h` |
+| `opencharts_central_europe` | 36,5–57,2° N, 22,9° W–37,4° E (Lissabon bis Kiew, Dänemark bis Neapel) | etwa 3,2 | alle außer `z500_t850`, `t500`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h` |
 | `icon-d2` | 45,3–49,6° N, 5,7–18,2° E (Burgund bis Bratislava, Mailand bis Würzburg) | 0,75 | `t2m_wind10m`, `wind10m`, `mountain_2000`, `weather_summary`, `tmax`, `tmin`, `orography` (ICON-D2) |
 
 Europa zeigt, was stromauf liegt und in den nächsten Tagen ankommt. Mitteleuropa zeigt Fronten
@@ -112,7 +112,7 @@ sonst außerhalb Mitteleuropas nimm die Produkte des Europafensters.
 
 Eine Karte lässt sich damit ohne weitere Datei lesen.
 
-**Zahlen.** Auf Mitteleuropa-Karten stehen Werte über Land in einem Raster von etwa 250 km. Eine
+**Zahlen.** Auf Mitteleuropa-Karten stehen Werte über Land in einem Raster von etwa 130 km (icon-d2 etwa 30 km). Eine
 Zahl ist exakt, ein Farbband deckt 4 K oder 300 m ab. Für den Ort selbst nimm die Werte aus
 `location_table.py`.
 

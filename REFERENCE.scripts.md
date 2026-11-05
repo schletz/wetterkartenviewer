@@ -1105,7 +1105,7 @@ Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L w
 | `field(name, step, level=None, smooth_km=0, offset=0, factor=1)` | `(value + offset) * factor` on the pixels |
 | `wind_arrows`, `speed`, `profile(step)`, `diagnostics(step)` | |
 | `key_label`, `day_label`, `step_label`, `_run` | legend lines; "<MODEL> run DD.MM.YYYY HH UTC" |
-| `print_values` | only on `detail` windows, default over land |
+| `print_values` | only on `detail` windows, default over land; no white halo (per user: the colours stay visible, 9 pt bold stays legible even on 28–32 °C) |
 | `isobars(canvas, step, isobars=None)` | `MSLP_DETAIL` (2 hPa) on detail windows, else `MSLP` (5 hPa) |
 | `mountain_2000(step)` | hatches `summit_cloud(profile, step, height)` after 10 km smoothing; IFS: RH at height ≥ `SUMMIT_CLOUD_RH` |
 | `weather_summary(step)` | precipitation = `tp(step) − tp(step − min(PRECIP_HOURS, step))`, ≥ 0, mm; ptype symbols where ptype fits and ≥ 0.2 mm |
@@ -1157,7 +1157,7 @@ One matplotlib figure: map 1200×600 plus a legend strip of 90 px → 1200×690.
 | `no_data(note)` | "No data available" chart |
 | `outlines()` | coasts and borders (0.6 px black), states dashed `#303030` 0.4 px below them, graticule labels |
 | `contours(values, style, …)`, `isolines`, `extrema`, `hatch` | |
-| `arrows`, `streamlines`, `values`, `symbols` | |
+| `arrows`, `streamlines`, `values`, `symbols` | `values(…, start=None, halo=True)`: lattice from `start` (default half the spacing), white outline optional |
 | `save(path)` | |
 
 ### ContactSheet (contact_sheet.py)
@@ -1174,10 +1174,10 @@ Frozen dataclass of one window, same model as `ChartProjection` in TS: conformal
 | Window | pole_x | pole_y | scale_k | cone | lon0 | graticule / labels (lon, lat) | borders |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `EUROPE` `opencharts_europe` | 481.0 | −180.8 | 1320.8 | 1 | 0 | 10° / 0°, 40° | world_countries |
-| `CENTRAL_EUROPE` `opencharts_central_europe` | 782.86… | −1018.60… | 3493.4 | 1 | 15 | 5° / 0°, 41° | world_countries |
+| `CENTRAL_EUROPE` `opencharts_central_europe` | 667.24… | −1029.52… | 3493.4 | 1 | 10 | 5° / 0°, 41° | world_countries |
 | `ICON_D2` `icon-d2` | 733.24… | −7464.41… | 15611.89… | 0.73736… | 13.333… | 2° / 7°, 46° | borders_austria |
 
-`EUROPE` is a least-squares fit to ECMWF opencharts control points (RMS 0.45 px) and will not change (per user). `CENTRAL_EUROPE` is the fitted opencharts window (pole 435.35/−1021.0, lon0 0, RMS 0.4 px) turned by `recentred` to lon0 15° E (per user: upright meridians over central Europe), same scale and image centre 48.28° N 7.10° E; spans 35.5–57.5° N, 22.5° W–37.3° E, with Lisbon, Kyiv and Istanbul inside, Italy south of ≈ 40.3° N (at 15° E) and the north of Jutland outside. Meridian labels on 41° N, because 40° N runs below the image between 5° and 25° E. `icon-d2` comes from `lambert`: parallels 46°/49°, lon0 13° 20′ as Austria Lambert (EPSG:31287), centre 47.6° N 12.0° E, 0.75 km/px ≈ 8 px per model cell; west of Austria's centre because the model ends at ≈ 18.3° E; spans 5.72–18.19° E, 45.36–49.63° N, all inside ICON-D2.
+`EUROPE` is a least-squares fit to ECMWF opencharts control points (RMS 0.45 px) and will not change (per user). `CENTRAL_EUROPE` is the fitted opencharts window (pole 435.35/−1021.0, lon0 0, RMS 0.4 px) turned by `recentred` to lon0 10° E (per user: the meridian through Germany, near the image centre, stands upright), same scale and image centre 48.28° N 7.10° E; spans 36.5–57.2° N, 22.9° W–37.4° E, with Lisbon, Naples, Kyiv and Istanbul inside, Sicily and the north of Jutland outside. Meridian labels on 41° N, because 40° N runs below the image between 5° and 15° E. `icon-d2` comes from `lambert`: parallels 46°/49°, lon0 13° 20′ as Austria Lambert (EPSG:31287), centre 47.6° N 12.0° E, 0.75 km/px ≈ 8 px per model cell; west of Austria's centre because the model ends at ≈ 18.3° E; spans 5.72–18.19° E, 45.36–49.63° N, all inside ICON-D2.
 Fields: `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 600`, `EARTH_RADIUS_KM = 6371`, `WORLD_COUNTRIES`, `AUSTRIA_BORDERS`, `PROJECTIONS`.
 
 | Method | Summary |
@@ -1232,7 +1232,7 @@ chart_styles.py holds every scale and threshold:
 | `PRECIP_RH = 90`, `SNOW_LINE_BELOW_FREEZING_M = 350` | also Diagnostics (`psig`, `snowl`) |
 | `MOUNTAIN_HEIGHT_M = 2000`, `SUMMIT_CLOUD_RH = 95` | chart height (defined apart from `MOUNTAIN_HEIGHTS`), IFS in cloud |
 | `ICON_SUMMIT_CLOUD_RH = 90`, `SUMMIT_CLOUD_AREA = 50` | ICON cell in cloud, hatched share |
-| `VALUE_SPACING_PX = 80` | printed values, detail windows only |
+| `VALUE_SPACING_PX = 40`, `VALUE_START_PX = 30` | lattice of the printed values (first row/column at 30 px), detail windows only: ≈ 130 km on central Europe, ≈ 30 km on icon-d2 |
 
 ## API: scripts/lib/ — shared
 

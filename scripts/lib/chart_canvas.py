@@ -251,18 +251,22 @@ class ChartCanvas:
                            arrowsize=0.7, zorder=Z_ARROW)
         self._notes.append(label)
 
-    def values(self, values: np.ndarray, spacing: int, where: np.ndarray, fmt: str, label: str) -> None:
+    def values(self, values: np.ndarray, spacing: int, where: np.ndarray, fmt: str, label: str,
+               start: int | None = None, halo: bool = True) -> None:
         """Print the value of a pixel field, rounded to an integer, on a regular lattice where ``where`` is true.
 
         Reading a number is exact, reading a colour band gives a range of 4 K.
+        ``start`` is the first lattice row and column in px (default: half the spacing);
+        ``halo`` draws a white outline around each number.
         """
-        halo = [patheffects.withStroke(linewidth=2.5, foreground="white")]
-        for y in range(spacing // 2, IMAGE_HEIGHT, spacing):
-            for x in range(spacing // 2, IMAGE_WIDTH, spacing):
+        effects = [patheffects.withStroke(linewidth=2.5, foreground="white")] if halo else []
+        first = spacing // 2 if start is None else start
+        for y in range(first, IMAGE_HEIGHT, spacing):
+            for x in range(first, IMAGE_WIDTH, spacing):
                 if where[y, x]:
                     # Adding 0.0 turns the -0.0 of rounding into 0.0, so no "-0" appears.
                     self.ax.text(x, y, fmt.format(np.round(values[y, x]) + 0.0), fontsize=9, fontweight="bold",
-                                 ha="center", va="center", zorder=Z_MARKER, path_effects=halo)
+                                 ha="center", va="center", zorder=Z_MARKER, path_effects=effects)
         self._notes.append(label)
 
     def symbols(self, where: np.ndarray, spacing: int, style: SymbolStyle, note: str = "") -> None:

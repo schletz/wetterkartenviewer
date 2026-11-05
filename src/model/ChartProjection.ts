@@ -45,7 +45,7 @@ export class ChartProjection {
 /** Parameters as in scripts/lib/projection.py (and data/<window>/geometry.json). */
 const PROJECTIONS: Record<string, ChartProjection> = {
   opencharts_europe: new ChartProjection(481.0, -180.8, 1320.8),
-  opencharts_central_europe: new ChartProjection(782.860271281935, -1018.6025723039893, 3493.4, 1, 15),
+  opencharts_central_europe: new ChartProjection(667.2406461645551, -1029.522214181987, 3493.4, 1, 10),
   'icon-d2': new ChartProjection(733.2439628710566, -7464.407027195254, 15611.893414386514, 0.7373615976163657,
     13.333333333333334),
 }

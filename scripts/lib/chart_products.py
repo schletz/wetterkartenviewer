@@ -172,7 +172,10 @@ class ChartProducts:
                      where: np.ndarray | None = None) -> None:
         """Numbers (default: over land) on zoomed windows; on the Europe window they would hide the patterns."""
         if self.detail:
-            canvas.values(values, styles.VALUE_SPACING_PX, self.land if where is None else where, fmt, label)
+            # No white halo: the colours stay visible around the dense numbers, and 9 pt bold
+            # stays legible on the darkest bands too.
+            canvas.values(values, styles.VALUE_SPACING_PX, self.land if where is None else where, fmt, label,
+                          start=styles.VALUE_START_PX, halo=False)
 
     def frost_line(self, canvas: ChartCanvas, celsius: np.ndarray) -> None:
         """Bold 0 deg C line of a 2 m temperature field on the model grid."""

@@ -304,7 +304,7 @@ Types: `ChartVideo {file, steps, run?, end?}`, `ChartFrame {index, step}`, `Seri
 
 ### ChartProjection (src/model/ChartProjection.ts)
 
-Same formula as `Projection`. `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 690`, `MAP_HEIGHT = 600`. `PROJECTIONS` holds the Python values; for `icon-d2` and `opencharts_central_europe` (lon0 15) as literals computed by Python (`print(ICON_D2)`, `print(CENTRAL_EUROPE)`): change both sides together.
+Same formula as `Projection`. `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 690`, `MAP_HEIGHT = 600`. `PROJECTIONS` holds the Python values; for `icon-d2` and `opencharts_central_europe` (lon0 10) as literals computed by Python (`print(ICON_D2)`, `print(CENTRAL_EUROPE)`): change both sides together.
 `toPixel(location)` → null outside 1200×600. `projectionOf(chartPath)` → null for an unknown window (no marker).
 
 ### Temperature diagram (src/components/TemperatureChart.tsx, TemperatureDiagram.tsx, src/model/TemperaturePanel.tsx, src/model/TemperatureSeries.ts, panelLayout.ts, ValueAxis.ts, anomalyBands.ts, moistAdiabat.ts, seriesFiles.ts)

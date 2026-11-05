@@ -250,5 +250,7 @@ ICON_SUMMIT_CLOUD_RH = 90.0
 SUMMIT_CLOUD_AREA = 50.0
 # The T850 palette at the mountain height, so one colour means one temperature on every chart.
 MOUNTAIN_T = ColourScale(f"Temperature at {MOUNTAIN_HEIGHT_M:g} m (°C)", T850.bands, legend_range=T850.legend_range)
-# Central Europe: values printed on a lattice of this spacing (about 250 km), over land only.
-VALUE_SPACING_PX = 80
+# Central Europe: values printed on a lattice of this spacing (about 130 km), over land only,
+# the first row and column VALUE_START_PX from the top left corner.
+VALUE_SPACING_PX = 40
+VALUE_START_PX = 30

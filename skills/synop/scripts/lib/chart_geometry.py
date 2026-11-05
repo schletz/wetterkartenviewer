@@ -10,7 +10,7 @@ the file gives the parameters of
 in image coordinates (origin top left, y down), and the tile origins and
 scale of every contact sheet. cone = 1 is the polar stereographic
 projection of the ECMWF windows (central meridian lon0 = 0 for Europe,
-15 E for central Europe); a geometry.json without these keys means
+10 E for central Europe); a geometry.json without these keys means
 cone = 1 and lon0 = 0.
 """
 
