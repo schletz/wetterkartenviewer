@@ -12,7 +12,7 @@ The API sections follow Javadoc: intro, fields, methods per module or class.
 
 - Download one ECMWF IFS HRES run (0.1°, cropped to Europe, derived fields appended) and one DWD ICON-D2 run (icosahedral grid ≈ 2.2 km, unchanged) into `data/`.
 - Render WebP charts for three windows into `data/`, encode each tile layer of the viewer as `maps/<window>/<product>.mp4` (one frame per step), write `maps/manifest.json`.
-- Cut T850, T500, RH850, RH700, the 10 m gusts and the 1000–500 hPa thickness (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to an Austria box as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
+- Cut T850, T500, RH850, RH700, θe850, the 10 m gusts and the 1000–500 hPa thickness (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to an Austria box as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
 - Upload the videos and series files to a GitHub release, push a manifest commit; GitHub Actions builds and deploys the app with them.
 - IFS updates every 12 h, ICON-D2 every 3 h; `download_loop.sh` runs the whole chain every 10 min on an always-on machine.
 - `data/` is also the data directory of the skill synop (source in `skills/synop`, installed to `~/.claude/skills/synop`), see *Contract with the skill synop*; `blob_mirror.py` mirrors it into a public Azure blob container so the skill works without this repository.
@@ -98,7 +98,7 @@ folder "data/<window>/" as window_dir {
 }
 folder "maps/" {
  artifact "<window>/<product>.mp4" as videos
- artifact "austria/t850, t2m, heights,\nthickness, t500, rh850,\nrh700, gust10m.json" as series
+ artifact "austria/t850, t2m, heights,\nthickness, t500, rh850,\nrh700, thetae850, gust10m.json" as series
  artifact "manifest.json" as manifest
 }
 artifact "src/config/viewer.config.json" as config
@@ -131,7 +131,7 @@ render_charts --> charts
 render_charts --> geometry
 charts --> tile_videos
 tile_videos --> videos
-ecmwf_grib --> point_series : t850, t500,\nr850, r700, 2t, 10fg, 10fg3,\nthick, orog
+ecmwf_grib --> point_series : t850, t500,\nr850, r700, papt850, 2t,\n10fg, 10fg3, thick, orog
 icon_grib --> point_series : 2t, hsurf
 era5 --> point_series
 era5_orog --> point_series : z
@@ -355,7 +355,11 @@ package "meteorology" {
  }
  class Diagnostics {
  Inversion, moist layer, precipitation
- signal and snow line.
+ signal, snow line and theta-e.
+ }
+ class "moist_air.py" as moist_air <<module>> {
+ Theta-e after Bolton 1980 from T and
+ IFS humidity, as the app computes it.
  }
  class IconExtremes {
  Daily 2 m max/min of ICON from
@@ -393,6 +397,7 @@ HeightProfile --> ForecastGrib : grib
 Diagnostics --> HeightProfile : profile
 Diagnostics --> ModelSurface : surface
 Diagnostics ..> chart_styles : thresholds
+Diagnostics ..> moist_air : equivalent_potential_temperature
 IconExtremes --> ForecastGrib : grib
 IconExtremes ..> ExtremeWindows
 T850Climate --> ClimateArchive : archive
@@ -524,6 +529,7 @@ Written by `build_manifest` (scripts/maps_manifest.py), typed as `Manifest` (src
  "t500": { "file": "austria/t500.json", "version": "2026110112" },
  "rh850": { "file": "austria/rh850.json", "version": "2026110112" },
  "rh700": { "file": "austria/rh700.json", "version": "2026110112" },
+ "thetae850": { "file": "austria/thetae850.json", "version": "2026110112" },
  "gust10m": { "file": "austria/gust10m.json", "version": "2026110112" } } }
 ```
 
@@ -552,6 +558,7 @@ Regular grids (`grid`: `lat0` northernmost row, `lon0`, `dlat` step southwards, 
 | `t500.json`, ECMWF run | `ecmwf` with `t500` (°C); no climate; the app forms T850 − T500 | 396 KB, gzip 68 KB (run 2026103112) |
 | `rh850.json`, ECMWF run | `ecmwf` with `rh850` (`r` at 850 hPa, %); `scale` 1 (whole percent: 1 % ≈ 0.15 K of dew point at 80 %); raw, unclipped (the IFS gives up to ≈ 107 %, the app clamps); IFS RH refers to water above 0 °C, ice below −23 °C, mixed in between; no climate; the app lifts a parcel from 850 hPa with it | 411 KB, gzip 95 KB (run 2026110300) |
 | `rh700.json`, ECMWF run | `ecmwf` with `rh700` (`r` at 700 hPa, %), encoded like rh850; the app draws it as a line over the thickness axis (0–100 %) | 422 KB, gzip 98 KB (run 2026110400) |
+| `thetae850.json`, ECMWF run | `ecmwf` with `thetae850` (`papt` at 850 hPa, **K**, not °C), scale 0.1; no climate; written only if the IFS file has `papt` (else a message and no file, the app draws no line); the app draws it as a line in the T850 panel without an axis of its own | 449 KB, gzip 118 KB (run 2026110600) |
 | `gust10m.json`, ECMWF run | `ecmwf` with `gust10m` (km/h, `10fg`/`10fg3` × `KMH_PER_MS`, steps 3…240, none at T+0) and `hours` (per step the interval it covers: 1, 3 or 6), `scale` 1 (`WIND_SCALE`; the band limits are whole km/h); `colours`: the bands of `chart_styles.GUST10M` as `[lower, upper, "#rrggbb"]` (last upper 300), so the app colours its bar like the wind10m chart without a copy of the scale; no climate | ≈ 0.4 MB, gzip ≈ 80 KB |
 | `heights.json`, `<icon run>-<cells>` | ICON cells within `BORDER_MARGIN` of Austria in file order (25 344): `lat`, `lon` as deltas of `coord_scale` 1e-4°, `hsurf` (m) | 316 KB, gzip 78 KB |
 
@@ -602,10 +609,10 @@ Steps `STEPS`: 0…141 every 3 h (48) + 144…240 every 6 h (17) = 65.
 | minmax3 / minmax6 | mx2t3, mn2t3 × 3…144 / mx2t6, mn2t6 × 150…240 | 96 / 32 |
 | weather | tcc, tp, ptype × 65 | 195 |
 | ForecastWriter | `thick` = gh500 − gh1000, GRIB2 0/3/12, isobaricLayer 1000–500 | 65 |
-| DerivedWriter per step (`PER_STEP` 21) | t, r, u, v at heightAboveSea 2000/2500/3000; `deg0l` (228024, ecCodes sets isothermal level 273); `inv`, `rhbl`, `psig`, `snowl` (local, surface); `uf`, `vf` at 1000/925 hPa (local) | 1365 |
+| DerivedWriter per step (`PER_STEP` 22) | t, r, u, v at heightAboveSea 2000/2500/3000; `deg0l` (228024, ecCodes sets isothermal level 273); `inv`, `rhbl`, `psig`, `snowl` (local, surface); `uf`, `vf` at 1000/925 hPa (local); `papt` at 850 hPa (3014 = GRIB2 0/0/3 „pseudo-adiabatic potential temperature or equivalent potential temperature“, K; ecCodes names it `papt`, so the skill's TSV column is `papt850`) | 1430 |
 | DerivedWriter once | `orog` (228002, m) | 1 |
 | DerivedWriter per complete day | `mx2t` (201) / `mn2t` (202), `stepRange` = whole window | 10 + 9 |
-| **Total** (00z and 12z) | | **3855** |
+| **Total** (00z and 12z) | | **3920** |
 
 `RequestPlan.expected_total` computes this total; `output_complete` compares it with the target file.
 Local parameters (`LOCAL_NAMES`): discipline 0, category 192, number 0 `inv`, 1 `rhbl`, 2 `psig`, 3 `snowl`, 4 `uf`, 5 `vf`; ecCodes reads them as `unknown`, `ForecastGrib._name` renames them.
@@ -695,7 +702,7 @@ Without a new run a call takes ≈ 3.5 s.
 ### point_series.py
 
 Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 850 and 500, `r` 850 and 700, `2t`, `10fg`, `10fg3`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours` for T850, `daily` for T2m) with its orography through `era5_orography`.
-A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness, t500, rh850, rh700 and gust10m per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
+A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness, t500, rh850, rh700, thetae850 and gust10m per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
 A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. ICON cells with NaN `hsurf` (boundary zone) are dropped. Without any ICON file t2m.json has no `icon` and heights.json is not written; the app then shows nothing (it needs heights).
 
 | Field | Meaning |
@@ -927,13 +934,14 @@ The same `Diagnostics`/`HeightProfile` code computes the GRIB fields and the cha
 | Field | Meaning |
 | --- | --- |
 | `MOUNTAIN_HEIGHTS = (2000, 2500, 3000)` | heightAboveSea; never a value equal to a pressure level number (500…1000): the index has no level type and would overwrite it |
-| `PER_STEP` | 21; **must match the `jobs` of `step_messages` by hand**, else `output_complete` is never true; imported by `RequestPlan` |
-| `PARAM_IDS` | deg0l 228024, orog 228002, max 201, min 202 |
+| `PER_STEP` | 22; **must match the `jobs` of `step_messages` by hand**, else `output_complete` is never true; imported by `RequestPlan` |
+| `THETA_E_LEVEL = 850` | level of `papt`; its template is `t` of that level, so the level keys stay |
+| `PARAM_IDS` | deg0l 228024, papt 3014, orog 228002, max 201, min 202 |
 | `MAX_WORKERS = 8` | processes, each up to ≈ 250 MB cache |
 
 | Function / method | Summary |
 | --- | --- |
-| `step_messages(step) -> list[bytes]` | worker: the 21 messages of one step, templates via `grib.message` |
+| `step_messages(step) -> list[bytes]` | worker: the 22 messages of one step, templates via `grib.message` |
 | `append(path) -> int` | compute in a pool, append, return the count |
 | `_extremes(grib)` | daily max/min as one message over the whole window |
 
@@ -1048,6 +1056,16 @@ Pressure levels only; a level counts where its geopotential is more than `ABOVE_
 | `precipitation_signal()` | `max(r850, r700) ≥ PRECIP_RH` (90) and smoothed `w700 < 0`; unmasked (`psig`) |
 | `freezing_level()` | `HeightProfile.freezing_level` (`deg0l`) |
 | `snow_line()` | `max(freezing_level − 350 m, ground)` (`snowl`) |
+| `equivalent_potential_temperature(level)` | `moist_air.equivalent_potential_temperature(t, r, level)`, unmasked like `t` of the level (`papt`) |
+
+### moist_air.py
+
+θe after Bolton (1980): vapour pressure from the IFS RH (mixed phase: water above 273.16 K, ice below 250.16 K, weight α² between; RH clamped to 1…100 %), dew point by the inverse of Bolton's saturation formula, LCL temperature eq. 15, θe eq. 43 (exponent 0.2854, mixing ratio in g/kg). Dry air gives θ. **Same formulas as `equivalentPotentialTemperature850` in src/model/moistAdiabat.ts** (checked equal to 4 decimals): the app scales its θe line with θ of dry and θe of saturated air from there, so a change on one side shifts the line on the other.
+
+| Function | Summary |
+| --- | --- |
+| `ifs_saturation_vapour_pressure(t)`, `vapour_pressure(t, rh)`, `dew_point(e)` | hPa, hPa, K; arrays |
+| `equivalent_potential_temperature(t, rh, p) -> ndarray` | K, float64; T in K, RH in %, p in hPa. Checked at 850 hPa: 5.1 °C 77 % → 306.08 K, 0.5 °C 99 % → 299.96 K, 14 °C 100 % → 335.98 K |
 
 ### IconExtremes (icon_extremes.py)
 
@@ -1286,6 +1304,7 @@ No logging framework, no tests, no cleanup of `.part` files after an exception. 
 ## Pitfalls
 
 - **Values that must stay in sync**: projection parameters (Python, TS); image size 1200×690 (chart_canvas.py, tile_videos.py, TS, CSS); `MOUNTAIN_HEIGHT_M` vs `MOUNTAIN_HEIGHTS`; `PER_STEP` vs `step_messages`; product names in the classes vs render_charts.py docstring (`--help`) and data/charts.md; window names in `PROJECTIONS`, `WINDOWS`/`ICON_WINDOWS`, `DEFAULTS`, TS `PROJECTIONS`; `PREFIX` vs `ICON_PREFIX` vs `blob_mirror.MODELS` (also the keys of `current_run.json` the skill reads); layer format TS vs Python; two profile level lists (IFS `constants.PROFILE_LEVELS`, ICON `PROFILE_LEVELS`).
+- **θe formulas**: scripts/lib/moist_air.py (GRIB field `papt`) vs src/model/moistAdiabat.ts (axis of the θe line).
 - **Series format** (point_series.py vs src/model/seriesFiles.ts, `TemperatureSeries`): encoding, key names, grid convention; `SERIES_FILES` names vs `REQUIRED`/`OPTIONAL` in src/hooks/useSeriesFiles.ts. t2m.json's ICON part must have the cells of heights.json (`cells` equal; the app drops ICON otherwise). Changing the format without changing the runs needs `point_series.py --force` (or `update_maps.py --force`), else the files stay.
 - **Video and steps can drift**: whoever changes `data/<window>/<product>/` outside update_maps.py must delete the video.
 - **Fallback chains switch videos**; an ICON daily product in a chain covers only its day until 23 UTC.
@@ -1310,7 +1329,7 @@ No logging framework, no tests, no cleanup of `.part` files after an exception. 
 - **Renaming a product**: method name, `STEP`/`DAY`/`STATIC`, `DEFAULTS` (IFS) and `IconProducts.STEP`, render_charts.py docstring, viewer.config.json layers, data/charts.md (anchors too), README example, skills/synop/SKILL.md. Charts already rendered keep the old name until their window is rendered again (`data/<window>/` is emptied first, then blob_mirror and the `--delete` mirror follow): with the same run only windows with a tile layer of the new name (`stale_windows`), i.e. not `opencharts_europe`, which waits for the next ECMWF run or `--force`. The committed maps/manifest.json keeps the old name until then, so a deploy before that shows the layer without a video.
 - **New ICON parameter**: DWD folder in `FORECAST_PARAMS`/`STATIC_PARAMS` (`<folder>@<hPa>`, no 925 hPa), alias in `ICON_NAMES` if needed. It must reach step 48 and yield one message per file after the hour filter. Multi-level parameters need unique levels.
 - **New GRIB parameter (IFS)**: group in `RequestPlan.__init__`, a complete cartesian product of what Open Data publishes.
-- **New derived field**: entry in `jobs` of `step_messages`, adjust `PER_STEP` by hand; without WMO/ECMWF id the next free number in `LOCAL_NAMES` (never reuse numbers); one-off fields also in the `+ 1` of `expected_total` (request_plan.py).
+- **New derived field**: entry in `jobs` of `step_messages`, adjust `PER_STEP` by hand (forecast files written before count as incomplete, so the next call downloads their run again); without WMO/ECMWF id the next free number in `LOCAL_NAMES` (never reuse numbers); one-off fields also in the `+ 1` of `expected_total` (request_plan.py).
 - **New pressure level**: IFS `constants.PROFILE_LEVELS` (only published levels, no 800 hPa) and the wind groups `uvw700`/`uv_low`; ICON both lists.
 - **New chart window**: `Projection` in `PROJECTIONS` (Lambert via `lambert`); IFS: `ChartProducts.DEFAULTS` and `WINDOWS`; ICON: `IconProducts.DEFAULTS`, `ICON_WINDOWS`, window inside the ICON domain (render_charts.py defaults to `icon-d2` for ICON files); always TS `PROJECTIONS`. The IFS crop box grows automatically; old files keep the old box. Another image size touches `IMAGE_*`, `WIDTH`/`HEIGHT`, both CSS files and `ContactSheet`.
 - **Other climatology**: `PERIOD`/`DIRECTORY` or `--climate`; GRIB2 template 4.8, one message per field, `HHz` for every hour 00…21, T850 in K, regular grid north → south. Remove `check_climate` if no CLIMATE product remains. Update the README link.

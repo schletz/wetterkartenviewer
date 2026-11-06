@@ -70,6 +70,7 @@ demselben Code wie die Karten. Karte und Zahl am Ort passen deshalb zusammen.
 | `rhbl` | — | % | höchste Feuchte auf 925 oder 1000 hPa, also die Feuchte der Grenzschicht |
 | `psig` | — | 0/1 | Niederschlagssignal: RH auf 850 oder 700 hPa ≥ 90 % und Hebung auf 700 hPa |
 | `uf`, `vf` | 1000, 925 hPa | m/s | Wind dieser Fläche, nur wo sie über dem Modellboden liegt |
+| `papt` | 850 hPa | K | Äquivalentpotentielle Temperatur θe nach Bolton (1980) aus `t` und `r`. Sie bleibt beim Heben und Senken erhalten, ein Sprung am Ort heißt also neue Luftmasse (Front). Wie `t` auf 850 hPa auch unter dem Modellboden gesetzt (extrapoliert). GRIB2 0/0/3, ecCodes nennt sie `papt`, in der Ortstabelle Spalte `papt850`. |
 | `orog` | nur T+0 | m | Höhe des Modellbodens |
 | `mx2t`, `mn2t` | 2 m | K | Tmax 06–18 UTC und Tmin 18 UTC des Vortags bis 06 UTC. Der Endschritt fällt auf den Tag selbst. |
 

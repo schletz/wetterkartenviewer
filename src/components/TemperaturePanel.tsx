@@ -3,7 +3,7 @@ import { bandColour } from '../model/colourBands'
 import { holidayName } from '../model/holidays'
 import {
   COLOUR_BAR_HEIGHT, LEGEND_LINE_HEIGHT, TITLE_HEIGHT, legendRows,
-  type BandSwatchClasses, type ColourBar, type PlacedPanel, type TimeAxis,
+  type BandSwatchClasses, type ColourBar, type PlacedPanel, type ScaledLine, type TimeAxis,
 } from '../model/panelLayout'
 import type { ColourBand } from '../model/seriesFiles'
 import type { ValuePoint } from '../model/TemperatureSeries'
@@ -50,8 +50,14 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
     ? 0
     : Math.min(centred.maxScale, (CENTRED_FILL * (axis.max - centre)) / centred.extent)
 
-  // Percent lines span the axis range: 0 % at its bottom, 100 % at its top.
-  const percentY = (value: number) => plotBottom - (Math.min(100, Math.max(0, value)) / 100) * (plotBottom - plotTop)
+  // A scaled line maps its range linearly onto the axis range, clamped to it.
+  const scaledY = (line: ScaledLine) => {
+    const [low, high] = line.range(axis.min, axis.max)
+    return (value: number) => {
+      const share = Math.min(1, Math.max(0, (value - low) / (high - low)))
+      return axis.y(axis.min + share * (axis.max - axis.min))
+    }
+  }
 
   const path = (points: (ValuePoint | null)[], y: (value: number) => number = (value) => axis.y(value)) => {
     let penDown = false
@@ -127,8 +133,8 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
         {centred !== undefined && (
           <line className={`${styles.line} ${centred.classes.line}`} x1={left} x2={right} y1={axis.y(centre)} y2={axis.y(centre)} />
         )}
-        {panel.percentLines?.map((line) => (
-          <path key={line.className} className={`${styles.line} ${line.className}`} d={path(line.values, percentY)} />
+        {panel.scaledLines?.map((line) => (
+          <path key={line.className} className={`${styles.line} ${line.className}`} d={path(line.values, scaledY(line))} />
         ))}
         {panel.lines.map((line) => <path key={line.className} className={`${styles.line} ${line.className}`} d={path(line.values)} />)}
       </g>

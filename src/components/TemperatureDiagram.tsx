@@ -2,9 +2,9 @@ import { useRef } from 'react'
 import { useElementSize } from '../hooks/useElementSize'
 import { anomalyPolygons, thresholdPolygons } from '../model/anomalyBands'
 import { dailyMeans } from '../model/dailyMeans'
-import { parcelLift } from '../model/moistAdiabat'
+import { equivalentPotentialTemperature850, parcelLift, potentialTemperature850 } from '../model/moistAdiabat'
 import type { GeoLocation } from '../model/GeoLocation'
-import { placePanels, type LegendEntry, type PanelSpec, type TimeAxis } from '../model/panelLayout'
+import { placePanels, type LegendEntry, type PanelSpec, type ScaledLine, type TimeAxis } from '../model/panelLayout'
 import type { ClimatePoint, DailyClimate, LocationTemperatures, ValuePoint } from '../model/TemperatureSeries'
 import { TEMPERATURE_STEPS, THICKNESS_STEPS } from '../model/ValueAxis'
 import styles from './TemperatureDiagram.module.css'
@@ -41,6 +41,15 @@ const THICKNESS_PER_KELVIN = 1.6
  */
 const SHOWALTER_STABLE = [0, 1, 3] as const
 const SHOWALTER_UNSTABLE = [0, -3, -6] as const
+/** RH700 spans the thickness axis: 0 % at its bottom, 100 % at its top. */
+const PERCENT_RANGE = () => [0, 100] as const
+/**
+ * θe850 spans the T850 axis from the θe of dry air at its lowest to that of saturated air at its highest temperature:
+ * the lowest and the highest θe air within the axis range can have, so the line never leaves the plot while T850
+ * stays on it, and its scale follows from the axis alone.
+ */
+const THETA_E_RANGE = (min: number, max: number) =>
+  [potentialTemperature850(min), equivalentPotentialTemperature850(max, 100)] as const
 
 interface TemperatureDiagramProps {
   temperatures: LocationTemperatures
@@ -77,14 +86,15 @@ function timeLabel(time: Date): string {
 /**
  * Meteogram of T2m (ECMWF and ICON-D2) with the anomaly of the ECMWF daily mean against the ERA5 climate of the
  * daily mean as bars per day and the ECMWF 10 m gusts as a colour bar, T850 (ECMWF) with its anomaly against the
- * ERA5 climate, the ECMWF 1000–500 hPa thickness with the Showalter index of a parcel lifted from 850 hPa with its dew point from
+ * ERA5 climate and θe850 as a line spanning the axis from the θe of dry air at its lowest to that of saturated air at
+ * its highest temperature, the ECMWF 1000–500 hPa thickness with the Showalter index of a parcel lifted from 850 hPa with its dew point from
  * RH850 as layered areas around the middle of its axis, blue above (stable), red below (unstable), and RH700 as a
  * line spanning the axis from 0 to 100 %, in panels one below the other like the ENS meteograms. Fills its parent.
  */
 export default function TemperatureDiagram({ temperatures }: TemperatureDiagramProps) {
   const box = useRef<HTMLDivElement>(null)
   const size = useElementSize(box)
-  const { t850, climate850, t2mEcmwf, climate2m, t2mIcon, thickness, t500, rh850, rh700, gust10m } = temperatures
+  const { t850, climate850, t2mEcmwf, climate2m, t2mIcon, thickness, t500, rh850, rh700, thetae850, gust10m } = temperatures
 
   const plotRight = size.width - MARGIN_RIGHT
   const start = t850.values[0].valid.getTime()
@@ -171,6 +181,9 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
   const extent = Math.max(0, ...showalter.map((q) => (q === null ? 0 : Math.abs(q.value))))
   // Stable (above zero) blue, unstable red: the reverse of the T850 anomaly colours.
   const showalterClasses = { above: styles.cold, below: styles.warm, line: styles.parcel }
+  const thetaELines: ScaledLine[] = thetae850 === null
+    ? []
+    : [{ values: thetae850.values, className: styles.thetaE, range: THETA_E_RANGE }]
 
   const panels: PanelSpec[] = [
     {
@@ -198,16 +211,18 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     },
     {
       key: 't850',
-      title: 'Temperatur in 850 hPa (°C)',
+      title: ['Temperatur in 850 hPa (°C)', ...(thetae850 === null ? [] : ['θe'])].join(', '),
       legend: [
         { line: styles.t850, text: `ECMWF ${pointLabel(t850.point, t850.height)}` },
         climateLegend(temperatures.climatePoint),
+        ...(thetae850 === null ? [] : [{ line: styles.thetaE, text: 'ECMWF θe 850 hPa, Achse unten mit 0 %, oben mit 100 % RH' }]),
       ],
       lines: [
         { values: anomaly850.line, className: styles.climate },
         { values: t850.values, className: styles.t850 },
       ],
       bands: anomaly850.bands,
+      scaledLines: thetaELines,
       steps: TEMPERATURE_STEPS,
       weight: 1,
     },
@@ -225,7 +240,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
         ...(rh700 === null ? [] : [{ line: styles.rh700, text: 'ECMWF RH 700 hPa, Achse unten 0 %, oben 100 %' }]),
       ],
       lines: [{ values: thickness.values, className: styles.thickness }],
-      ...(rh700 === null ? {} : { percentLines: [{ values: rh700.values, className: styles.rh700 }] }),
+      ...(rh700 === null ? {} : { scaledLines: [{ values: rh700.values, className: styles.rh700, range: PERCENT_RANGE }] }),
       ...(!hasTotals ? {} : {
         centred: { polygons: showalterBands, extent, maxScale: THICKNESS_PER_KELVIN, classes: showalterClasses },
       }),
@@ -242,6 +257,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
   const gustByTime = new Map(gust10m?.series.values.map((p, i) => [+p.valid, { value: p.value, hours: gust10m.hours[i] }]) ?? [])
   const thicknessByTime = new Map(thickness?.values.map((p) => [+p.valid, p.value]) ?? [])
   const rh700ByTime = new Map(rh700?.values.map((p) => [+p.valid, p.value]) ?? [])
+  const thetaEByTime = new Map(thetae850?.values.map((p) => [+p.valid, p.value]) ?? [])
   const columns = t850.values.map((p) => x(p.valid))
   const tooltip = (point: ValuePoint, i: number) => {
     const parts = [timeLabel(point.valid)]
@@ -258,6 +274,8 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     const gust = gustByTime.get(+point.valid)
     if (gust !== undefined) parts.push(`Böe 10 m ${decimals(gust.value, 0)} km/h (${gust.hours} h)`)
     parts.push(`T850 ${decimals(point.value, 1)} °C`, ...climateParts(point.value, climate850[i]))
+    const thetaE = thetaEByTime.get(+point.valid)
+    if (thetaE !== undefined) parts.push(`θe850 ${decimals(thetaE, 1)} K`)
     const thicknessValue = thicknessByTime.get(+point.valid)
     if (thicknessValue !== undefined) parts.push(`Z1000–500 ${decimals(thicknessValue, 1)} dam`)
     const upper = t500ByTime.get(+point.valid)
@@ -283,7 +301,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     <div ref={box} className={styles.diagram}>
       {size.width > 0 && size.height > 0 && (
         <svg className={styles.svg} viewBox={`0 0 ${size.width} ${size.height}`} role="img"
-          aria-label="T2m von ECMWF und ICON-D2 mit Abweichung des Tagesmittels vom Klimamittel und Böen in 10 m von ECMWF, T850 von ECMWF mit Abweichung vom Klimamittel, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt, relative Feuchte in 700 hPa">
+          aria-label="T2m von ECMWF und ICON-D2 mit Abweichung des Tagesmittels vom Klimamittel und Böen in 10 m von ECMWF, T850 von ECMWF mit Abweichung vom Klimamittel und äquivalentpotentieller Temperatur in 850 hPa, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt, relative Feuchte in 700 hPa">
           {placed.map((p) => <TemperaturePanel key={p.panel.key} placed={p} time={time} left={PLOT_LEFT} right={plotRight} />)}
           {t850.values.map((point, i) => {
             // Each hover column reaches halfway to its neighbours, so the 3 h and 6 h steps cover the plots without gaps.

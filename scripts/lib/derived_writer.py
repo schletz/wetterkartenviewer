@@ -6,6 +6,8 @@ is computed here once, with the same code that draws the charts:
 
     t, r, u, v at 2000/2500/3000 m   standard parameters on heightAboveSea levels, per step
     deg0l                            freezing level in m (ECMWF 228024), per step
+    papt at 850 hPa                  equivalent potential temperature in K after Bolton (1980), per step;
+                                     GRIB2 0/0/3, ECMWF 3014, which ecCodes calls papt
     inv, rhbl, psig, snowl           local parameters (local_params.py) on the surface, per step
     uf, vf at 1000/925 hPa           local parameters: wind, missing where the level lies below the ground
     orog                             model orography in m (ECMWF 228002), T+0 only
@@ -36,10 +38,13 @@ MOUNTAIN_HEIGHTS = (2000, 2500, 3000)
 PROFILE_PARAMS = ("t", "r", "u", "v")
 FREE_LEVELS = (1000, 925)
 SURFACE_FIELDS = ("inv", "rhbl", "psig", "snowl")
-# Messages per step: profile values at every height, the freezing level, the surface fields, free winds.
-PER_STEP = len(PROFILE_PARAMS) * len(MOUNTAIN_HEIGHTS) + 1 + len(SURFACE_FIELDS) + 2 * len(FREE_LEVELS)
-# ECMWF parameter ids where one exists.
-PARAM_IDS = {"deg0l": 228024, "orog": 228002, "max": 201, "min": 202}
+# Pressure level of the equivalent potential temperature: above the boundary layer in the lowlands, so it
+# follows the air mass rather than the daily cycle.
+THETA_E_LEVEL = 850
+# Messages per step: profile values at every height, the freezing level, the surface fields, free winds, theta-e.
+PER_STEP = len(PROFILE_PARAMS) * len(MOUNTAIN_HEIGHTS) + 1 + len(SURFACE_FIELDS) + 2 * len(FREE_LEVELS) + 1
+# ECMWF parameter ids where one exists; 3014 is GRIB2 0/0/3, the pseudo-adiabatic (equivalent) potential temperature.
+PARAM_IDS = {"deg0l": 228024, "papt": 3014, "orog": 228002, "max": 201, "min": 202}
 # Ground surface as level of a single level field (code table 4.5: 1).
 SURFACE = {"typeOfFirstFixedSurface": 1, "scaleFactorOfFirstFixedSurface": None, "scaledValueOfFirstFixedSurface": None}
 # Each worker caches up to 64 decoded fields (~250 MB), so the pool stays small.
@@ -91,6 +96,9 @@ def step_messages(step: int) -> list[bytes]:
     jobs += [(t850, surface_values[name], {**local_keys(name), **SURFACE}) for name in SURFACE_FIELDS]
     jobs += [(grib.message(component, step, level), partial(diagnostics.free, component, level), local_keys(name))
              for level in FREE_LEVELS for component, name in (("u", "uf"), ("v", "vf"))]
+    # The template of T on the same level keeps the level keys.
+    jobs.append((grib.message("t", step, THETA_E_LEVEL),
+                 partial(diagnostics.equivalent_potential_temperature, THETA_E_LEVEL), {"paramId": PARAM_IDS["papt"]}))
     return [encode(template, or_missing(grib, compute), keys) for template, compute, keys in jobs]
 
 

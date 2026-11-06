@@ -6,6 +6,8 @@
   --thickness: var(--text);
   /* Darker than the grey zero line of the Showalter areas, which it crosses. */
   --rh700: #6f6e69;
+  /* Neither red nor blue, so it stands apart from the anomaly areas it crosses. */
+  --theta-e: #2f8a57;
   --climate: #8a8984;
   --warm: #e0453a;
   --cold: #3a7be0;
@@ -95,6 +97,12 @@
 .rh700 {
   stroke: var(--rh700);
   stroke-width: 1;
+}
+
+/* Thinner than T850: θe has no axis of its own. */
+.thetaE {
+  stroke: var(--theta-e);
+  stroke-width: 1.5;
 }
 
 .climate {

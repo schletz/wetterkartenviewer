@@ -12,6 +12,7 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 
 from . import chart_styles as styles
+from . import moist_air
 from .height_profile import HeightProfile
 from .model_surface import ModelSurface
 
@@ -60,6 +61,14 @@ class Diagnostics:
         humid = np.maximum(self.grib.field("r", self.step, 850), self.grib.field("r", self.step, 700))
         omega = gaussian_filter(self.grib.field("w", self.step, 700), OMEGA_SIGMA, mode="nearest")
         return (humid >= styles.PRECIP_RH) & (omega < 0)
+
+    def equivalent_potential_temperature(self, level: int) -> np.ndarray:
+        """Equivalent potential temperature (K) on a pressure level from its T and IFS relative humidity (moist_air.py).
+
+        Like T on that level it is not masked below the model ground, where the model extrapolates both.
+        """
+        return moist_air.equivalent_potential_temperature(
+            self.grib.field("t", self.step, level), self.grib.field("r", self.step, level), level).astype(np.float32)
 
     def freezing_level(self) -> np.ndarray:
         """Freezing level in m (see HeightProfile.freezing_level)."""

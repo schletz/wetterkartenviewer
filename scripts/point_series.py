@@ -1,6 +1,6 @@
 """Write the temperature series of Austria that the start page of the viewer draws for its location.
 
-Eight JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
+Nine JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
 
     t850.json      ECMWF T850 of every step on the 0.1 deg grid of the box, with the ERA5
                    climatology of T850 (mean, stdev) for the days of the run
@@ -12,6 +12,8 @@ Eight JSON files in maps/austria/ (published like the videos, listed in the mani
     t500.json      ECMWF T500 (no climatology), for the vertical totals T850 - T500
     rh850.json     ECMWF relative humidity at 850 hPa in % (no climatology), for the parcel lifted from 850 hPa
     rh700.json     ECMWF relative humidity at 700 hPa in % (no climatology), drawn as a line
+    thetae850.json ECMWF equivalent potential temperature at 850 hPa in K (the derived field papt;
+                   no climatology), drawn as a line in the T850 panel
     gust10m.json   ECMWF 10 m gust in km/h (no climatology) with the hours it covers and the colour
                    bands of the wind10m chart, drawn as a colour bar in the T2m panel
 
@@ -228,7 +230,7 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     icon_run = icon_grib.stem.split("_")[-1] if icon_grib else "none"
     targets = {name: maps / file for name, file in SERIES_FILES.items()}
     versions = {"t850": ecmwf_run, "t2m": f"{ecmwf_run}-{icon_run}", "thickness": ecmwf_run, "t500": ecmwf_run,
-                "rh850": ecmwf_run, "rh700": ecmwf_run, "gust10m": ecmwf_run}
+                "rh850": ecmwf_run, "rh700": ecmwf_run, "thetae850": ecmwf_run, "gust10m": ecmwf_run}
     stale = [name for name, version in versions.items() if force or read_version(targets[name]) != version]
     heights_missing = icon_grib is not None and (force or read_version(targets["heights"]) is None)
     if not stale and not heights_missing:
@@ -257,6 +259,13 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
         if name in stale:
             write_document(targets[name], {"version": versions[name], "box": BOX, "scale": RH_SCALE,
                                            "ecmwf": ecmwf_block(ecmwf, "r", level, name, 0.0, scale=RH_SCALE)})
+    if "thetae850" in stale:
+        # Forecast files of older pipelines lack the derived field; the app then draws no theta-e line.
+        if ecmwf.has("papt", 0, 850):
+            write_document(targets["thetae850"], {"version": versions["thetae850"], **common,
+                                                  "ecmwf": ecmwf_block(ecmwf, "papt", 850, "thetae850", 0.0)})
+        else:
+            print(f"{ecmwf_grib.name} has no papt at 850 hPa, {SERIES_FILES['thetae850']} not written")
     if "gust10m" in stale:
         write_document(targets["gust10m"], {"version": versions["gust10m"], "box": BOX, "scale": WIND_SCALE,
                                             "colours": colour_bands(chart_styles.GUST10M),

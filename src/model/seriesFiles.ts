@@ -140,6 +140,14 @@ export interface Rh700File {
   ecmwf: EcmwfBlock & { rh700: number[] }
 }
 
+/** ECMWF equivalent potential temperature at 850 hPa in K (Bolton 1980, the derived field papt); no climatology. */
+export interface ThetaE850File {
+  version: string
+  box: Box
+  scale: number
+  ecmwf: EcmwfBlock & { thetae850: number[] }
+}
+
 /** A colour band of a chart scale: values from `lower` to `upper` get `colour` ("#rrggbb"). */
 export type ColourBand = [lower: number, upper: number, colour: string]
 
@@ -166,6 +174,8 @@ export interface SeriesFiles {
   rh850?: Rh850File
   /** Missing in manifests of older pipelines. */
   rh700?: Rh700File
+  /** Missing in manifests of older pipelines. */
+  thetae850?: ThetaE850File
   /** Missing in manifests of older pipelines. */
   gust10m?: Gust10mFile
 }

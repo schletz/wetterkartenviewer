@@ -213,6 +213,8 @@ wie dort (Listen in `charts.md`, „GRIB-Datei“ und „ICON-D2-Datei“):
   (`t850`, `gh500`, `uf1000`), auf festen Höhen mit Level und `m` (`t2000m`, `u3000m`), sonst ohne
   (`msl`, `2t`, `thick`, `deg0l`, `inv`, `psig`, `mx2t`, `orog`; bei ICON `tcc`, `tp`, `ww`, `gust`,
   `ceiling`, `tmax_2m`, `hsurf`).
+- **Nur im ECMWF-TSV, nicht in der Tabelle:** `papt850`, die äquivalentpotentielle Temperatur θe auf
+  850 hPa in K (Deutung unter „Luftmasse mit θe850“).
 - **Einheiten:** wie im GRIB, also K, gpm, %, m/s, Pa/s, Pa, m. Bei ICON abweichend: `tcc` in %, `tp`
   in mm seit T+0 (die Stundenmenge ist die Differenz zweier Zeilen), `z850`/`z700` als Geopotential
   in m²/s² (÷ 9,81 = m).
@@ -250,7 +252,7 @@ meist 8–14 Kontaktabzüge und 10–30 Einzelkarten, verteilt nach der Wetterla
    Gradient, Inversion und Feuchte der Grenzschicht entscheiden über Hochnebel und Höchstwerte und
    ändern sich auch bei gleicher Höhenlage.
 4. **Umstellung oder Ereignis:** Trogdurchgang, Höhentief in weniger als etwa 1000 km,
-   Frontdurchgang, |ΔT850/12h| ≥ 3, Niederschlagssignal, Föhn. Dann die passenden Produkte in 3-
+   Frontdurchgang, |ΔT850/12h| ≥ 3 oder ein Sprung in θe850, Niederschlagssignal, Föhn. Dann die passenden Produkte in 3-
    bzw. 6-h-Schritten rund um das Ereignis. Nur so lässt sich sagen, ob die Front in der Nacht oder
    am Nachmittag durchzieht.
 5. **Gebirge und Bergwetter:** `mountain_2000`, `freezing_level` und `snow_line` zu den Terminen
@@ -284,8 +286,20 @@ Die Regeln geben die Richtung vor, ersetzen aber nicht den Blick auf die konkret
     meist nur Schauer oder ein schmales Niederschlagsband.
 - **Blockierende Lage (Omega):** Sie hält oft viele Tage an. Das Wetter entscheidet sich daran, ob
   der Ort unter dem Rücken oder an einer Trogflanke liegt.
-- **Frontdurchgang:** Er zeigt sich an mehreren Stellen gleichzeitig: Sprung in ΔT850/12h, RH700
-  steigt mit Hebung, Knick in den Isobaren, Wechsel der Windrichtung.
+- **Frontdurchgang:** Er zeigt sich an mehreren Stellen gleichzeitig: Sprung in ΔT850/12h und
+  θe850, RH700 steigt mit Hebung, Knick in den Isobaren, Wechsel der Windrichtung.
+- **Luftmasse mit θe850** (`papt850` im ECMWF-TSV): θe bleibt beim Heben und Absinken erhalten und
+  enthält die Feuchte als latente Wärme. Ändert es sich am Ort, ist eine andere Luftmasse da; Hebung
+  allein, etwa vor einem Trog, lässt es fast gleich.
+  - Ein Sprung von etwa 4 K und mehr in 6–12 h markiert eine Front: fallend Kaltfront, steigend
+    Warmfront oder Warmsektor. Er ist meist deutlicher als in T850, weil feuchte Warmluft und
+    trockene Kaltluft sich in θe stärker unterscheiden als in der Temperatur.
+  - Der Zeitpunkt des Sprungs ist der Zeitpunkt der Luftmassengrenze auf 850 hPa. RH700 und ω700
+    können davor oder danach umschlagen, bei einer Anafront bleibt RH700 hinter der Front hoch.
+  - Fällt θe850, während die Schichtdicke steigt, ist die Kaltluft flach und darüber wird es
+    wärmer. Für die Temperatur am Boden zählt dann die untere Schicht, nicht die Schichtdicke.
+  - Im Sommerhalbjahr zeigt hohes θe850 (etwa ab 320 K) feucht-warme Luft, die Gewitter nährt, wenn
+    Labilität (Vertical Totals) und ein Auslöser dazukommen.
 - **Föhn:** Isobarenbündel quer über dem Alpenhauptkamm (4–8 hPa Differenz und mehr), warme Zunge in
   T850 und trockene Luft mit Absinken im Lee, Wind auf Kammhöhe quer zum Kamm. Südföhn bringt
   Inntal und Alpenvorland Wärme, Sturmböen in den Föhntälern und Auflockerung, am Alpensüdrand
