@@ -1044,10 +1044,6 @@
    "file": "austria/rh700.json",
    "version": "2026110600"
   },
-  "t925": {
-   "file": "austria/t925.json",
-   "version": "2026110600"
-  },
   "gust10m": {
    "file": "austria/gust10m.json",
    "version": "2026110600"
