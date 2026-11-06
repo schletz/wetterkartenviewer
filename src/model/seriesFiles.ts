@@ -124,14 +124,6 @@ export interface T500File {
   ecmwf: EcmwfBlock & { t500: number[] }
 }
 
-/** ECMWF T925 in °C; no climatology. */
-export interface T925File {
-  version: string
-  box: Box
-  scale: number
-  ecmwf: EcmwfBlock & { t925: number[] }
-}
-
 /** ECMWF relative humidity at 850 hPa in % (IFS definition, mixed phase below 0 °C); no climatology. */
 export interface Rh850File {
   version: string
@@ -174,8 +166,6 @@ export interface SeriesFiles {
   rh850?: Rh850File
   /** Missing in manifests of older pipelines. */
   rh700?: Rh700File
-  /** Missing in manifests of older pipelines. */
-  t925?: T925File
   /** Missing in manifests of older pipelines. */
   gust10m?: Gust10mFile
 }

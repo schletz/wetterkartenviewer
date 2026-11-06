@@ -21,13 +21,19 @@ export class ValueAxis {
    * @param values every value the panel shows; must not be empty
    * @param top pixel row of the top of the plot
    * @param bottom pixel row of the bottom of the plot
-   * @param steps candidate label distances, ascending; the smallest that keeps the labels apart wins
+   * @param steps candidate label distances, ascending; the smallest that keeps the labels apart wins.
+   *   If none does (plot too low), the step with the fewest intervals wins, the smallest of them on a tie:
+   *   a range across 0 needs at least two intervals with any step, so −20…20 beats −50…50.
    */
   constructor(values: number[], top: number, bottom: number, steps: readonly number[]) {
     const low = Math.min(...values) - PADDING
     const high = Math.max(...values) + PADDING
     const intervals = Math.max(1, Math.floor((bottom - top) / MIN_LABEL_SPACING))
-    this.step = steps.find((s) => Math.ceil(high / s) - Math.floor(low / s) <= intervals) ?? steps[steps.length - 1]
+    const count = (step: number) => Math.ceil(high / step) - Math.floor(low / step)
+    // reduce keeps the earlier (smaller) step on a tie because steps are ascending
+    this.step =
+      steps.find((step) => count(step) <= intervals) ??
+      steps.reduce((best, step) => (count(step) < count(best) ? step : best))
     this.min = Math.floor(low / this.step) * this.step
     this.max = Math.ceil(high / this.step) * this.step
     this.top = top
