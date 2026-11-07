@@ -19,6 +19,7 @@
     },
     {
       "layers": [
+        "opencharts_europe/thetae850_mslp",
         "opencharts_europe/z850_rh700",
         "opencharts_europe/z700_t700"
       ]

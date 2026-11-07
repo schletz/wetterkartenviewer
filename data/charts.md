@@ -10,7 +10,7 @@ liest. Lies nur die Abschnitte, die du gerade brauchst.
 - [Dateien](#dateien) und [GRIB-Datei](#grib-datei): was im Ordner liegt, welche Felder es gibt
 - [Allgemeines](#allgemeines): Fenster, Legende, Zahlen, Masken, Kontaktabzüge
 - Großwetterlage (Europa): [z500_t850](#z500_t850), [t500](#t500), [z700_t700](#z700_t700), [z850_rh700](#z850_rh700),
-  [thickness_mslp](#thickness_mslp), [dt850_24h](#dt850_24h)
+  [thetae850_mslp](#thetae850_mslp), [thickness_mslp](#thickness_mslp), [dt850_24h](#dt850_24h)
 - Mitteleuropa: [t850_mslp](#t850_mslp), [t850_anomaly](#t850_anomaly), [rh700_wind700](#rh700_wind700),
   [vt_rh700](#vt_rh700), [inversion](#inversion), [t2m_wind10m](#t2m_wind10m), [wind10m](#wind10m),
   [tmax, tmin](#tmax-tmin), [weather_summary](#weather_summary)
@@ -102,7 +102,7 @@ bei den IFS-Fenstern ist `cone` 1.
 | Fenster | Bereich | km pro Pixel | Standardprodukte |
 |---|---|---|---|
 | `opencharts_europe` | Atlantik bis Westrussland, Nordafrika bis Nordkap | 7,6 (35° N) bis 9,4 (70° N) | alle Produkte |
-| `opencharts_central_europe` | 36,5–57,2° N, 22,9° W–37,4° E (Lissabon bis Kiew, Dänemark bis Neapel) | etwa 3,2 | alle außer `z500_t850`, `t500`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h` |
+| `opencharts_central_europe` | 36,5–57,2° N, 22,9° W–37,4° E (Lissabon bis Kiew, Dänemark bis Neapel) | etwa 3,2 | alle außer `z500_t850`, `t500`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h` (`thetae850_mslp` gibt es in beiden Fenstern) |
 | `icon-d2` | 45,3–49,6° N, 5,7–18,2° E (Burgund bis Bratislava, Mailand bis Würzburg) | 0,75 | `t2m_wind10m`, `wind10m`, `mountain_2000`, `weather_summary`, `tmax`, `tmin`, `orography` (ICON-D2) |
 
 Europa zeigt, was stromauf liegt und in den nächsten Tagen ankommt. Mitteleuropa zeigt Fronten
@@ -198,6 +198,21 @@ extrapoliert.
 - **Tiefs:** Ein Feuchtekomma um ein Tief in 850 hPa zeigt ein aktives System mit Warmfront und
   Kaltfront. Ein Tief in 850 hPa ohne Feuchte bringt meist nur Wind.
 - Die Isohypsen verlaufen ähnlich wie die Isobaren am Boden: 4 dam entsprechen etwa 5 hPa.
+
+## thetae850_mslp
+
+Europa und Mitteleuropa. Farben: äquivalentpotentielle Temperatur θe in 850 hPa in **K** (GRIB-Feld
+`papt`), Bänder alle 4 K von 260 bis 340 K, gelb um 300 K. Braune Linien: θe alle 4 K an den
+Bandgrenzen. Isobaren wie bei [thickness_mslp](#thickness_mslp) bzw. [t850_mslp](#t850_mslp) (Europa
+5 hPa, Mitteleuropa 2 hPa), L/H. Grau gestrichelt: Modellboden 1300 m, innerhalb davon ist θe850
+extrapoliert. Keine Zahlen, auch nicht auf Mitteleuropa.
+
+- **Luftmassen:** θe fasst Wärme und Feuchte zusammen und bleibt beim Heben und Absinken erhalten.
+  Es kennzeichnet eine Luftmasse daher besser als T850.
+- **Fronten:** liegen dort, wo sich die Linien drängen (starker θe-Gradient). Der Warmsektor zeigt
+  sich als Zunge hoher Werte zwischen Warm- und Kaltfront.
+- **Gewitter:** Warmfeuchte Luft mit hohem θe (Sommer etwa ab 320 K) ist der Brennstoff. Ob sie
+  zündet, zeigen [vt_rh700](#vt_rh700) und die Hebung in [rh700_wind700](#rh700_wind700).
 
 ## thickness_mslp
 

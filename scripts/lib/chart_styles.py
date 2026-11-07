@@ -47,6 +47,13 @@ T700 = ColourScale("700 hPa temperature (°C)", (
 # shows the range of T500 over Europe instead.
 T500 = ColourScale("500 hPa temperature (°C)", T700.bands, legend_range=(-60, 12))
 
+# 850 hPa equivalent potential temperature in K (the derived field papt), in K like the θe line of
+# the start page. The T850 palette shifted by 300 K: its core of -40...40 deg C covers θe850 over
+# Europe from Arctic winter air (about 265 K) to moist subtropical summer air (above 330 K).
+THETAE850 = ColourScale("850 hPa equivalent potential temperature θe (K)",
+                        tuple((low + 300, high + 300, rgb) for low, high, rgb in T850.bands),
+                        legend_range=(260, 340))
+
 # T850 anomaly in standard deviations of the climatology of the same calendar
 # day and time of day: from |z| = 1 a value stands out, from 2 it is unusual.
 T850_ANOMALY = ColourScale("T850 anomaly (standard deviations σ)", (
@@ -216,6 +223,8 @@ MSLP_SUMMARY = ContourStyle(interval=4, bold_every=5, bold_base=1000, label_ever
 # Isotherms at the band boundaries of the T850, T700 and T500 shading, so values can be read from the labels.
 ISOTHERM_850 = ContourStyle(interval=4, bold_every=0, bold_base=0, label_every=1, smooth_km=30,
                             colour="#5a3c28", width=0.5)
+# θe850 lines at the band boundaries of THETAE850: fronts show where they crowd.
+THETAE850_LINES = ISOTHERM_850
 # t500 has no other lines and nearly only blue bands, so its isotherms are the main
 # lines: black, labelled, bold at 0/-20/-40 deg C, solid although negative.
 ISOTHERM_500 = ContourStyle(interval=4, bold_every=5, bold_base=0, label_every=1, smooth_km=30,

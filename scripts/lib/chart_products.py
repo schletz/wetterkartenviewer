@@ -39,8 +39,8 @@ class ChartProducts:
     climatology.
     """
 
-    STEP = ("z500_t850", "t500", "z700_t700", "z850_rh700", "thickness_mslp", "t850_mslp", "t850_anomaly", "rh700_wind700", "vt_rh700",
-            "dt850_24h", "t2m_wind10m", "wind10m", "inversion", "mountain_2000", "freezing_level", "snow_line", "weather_summary")
+    STEP = ("z500_t850", "t500", "z700_t700", "z850_rh700", "thetae850_mslp", "thickness_mslp", "t850_mslp", "t850_anomaly",
+            "rh700_wind700", "vt_rh700", "dt850_24h", "t2m_wind10m", "wind10m", "inversion", "mountain_2000", "freezing_level", "snow_line", "weather_summary")
     DAY = {"tmax": "max", "tmin": "min"}
     STATIC = ("orography",)
     ALL = (*STEP, *DAY, *STATIC)
@@ -53,10 +53,12 @@ class ChartProducts:
     PRECIP_HOURS = 6
     SHEET_HOURS = (12,)
     DEFAULTS = {
-        "opencharts_europe": ("z500_t850", "t500", "z700_t700", "z850_rh700", "thickness_mslp", "dt850_24h"),
+        "opencharts_europe": ("z500_t850", "t500", "z700_t700", "z850_rh700", "thetae850_mslp", "thickness_mslp",
+                              "dt850_24h"),
         # T850 instead of the thickness under the isobars: the thickness is smooth at
         # this scale, while T850 shows the warm tongue of foehn in the lee of the Alps.
-        "opencharts_central_europe": ("t850_mslp", "t850_anomaly", "rh700_wind700", "vt_rh700", "t2m_wind10m",
+        # thetae850_mslp on both windows: air masses and fronts upstream and in detail.
+        "opencharts_central_europe": ("t850_mslp", "thetae850_mslp", "t850_anomaly", "rh700_wind700", "vt_rh700", "t2m_wind10m",
                                       "wind10m", "inversion", "mountain_2000", "freezing_level", "snow_line", "tmax", "tmin",
                                       "orography", "weather_summary"),
     }
@@ -237,6 +239,27 @@ class ChartProducts:
                         "black lines: Z850 every 4 dam, bold every 12 dam (140/152/164)")
         canvas.extrema(self.field("gh", step, 850, smooth_km=60, factor=0.1), low_window_px=121,
                        high_window_px=181, min_depth=2)
+        return canvas
+
+    def thetae850_mslp(self, step: int) -> ChartCanvas:
+        """θe850 under the isobars: air masses by heat and moisture together.
+
+        θe stays constant when air rises or sinks, so it marks an air mass
+        better than T850: fronts lie where the lines crowd, the warm sector and
+        moist warm air (fuel for thunderstorms) show as a tongue of high values.
+        """
+        canvas = ChartCanvas(self.base_map, "MSLP (hPa, black lines) + θe850 (K, colours)", self.step_label(step))
+        canvas.shade(self.field("papt", step, 850), styles.THETAE850)
+        canvas.outlines()
+        canvas.contours(self.field("papt", step, 850, smooth_km=styles.THETAE850_LINES.smooth_km),
+                        styles.THETAE850_LINES, "brown lines: θe850 every 4 K", boxed=False)
+        # Inside this line the 850 hPa level lies below the model ground and θe850 is extrapolated.
+        canvas.isolines(self.pixels.resample(self.surface.height, smooth_km=10),
+                        (styles.ABOVE_850HPA_M,), "#606060",
+                        f"grey dashed: model ground {styles.ABOVE_850HPA_M:g} m (θe850 extrapolated inside)",
+                        dashed=True, labelled=False)
+        # No printed values, not even on zoomed windows: the gradients matter, not the exact θe.
+        self.isobars(canvas, step)
         return canvas
 
     def thickness_mslp(self, step: int) -> ChartCanvas:
