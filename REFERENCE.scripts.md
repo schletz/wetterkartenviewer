@@ -1141,13 +1141,13 @@ Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L w
 | Field | Meaning |
 | --- | --- |
 | `GUST_NAMES = IFS_GUST_NAMES` | names of the 10 m gust, tried per step; ICON `("gust",)` |
-| `STEP` | `z500_t850`, `t500`, `z700_t700`, `z850_rh700`, `thetae850_mslp`, `thickness_mslp`, `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `dt850_24h`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `weather_summary` |
+| `STEP` | `z500_t850`, `t500`, `z700_t700`, `z850_rh700`, `z850_thetae850`, `thickness_mslp`, `t850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `dt850_24h`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `weather_summary` |
 | `DAY = {'tmax': 'max', 'tmin': 'min'}`, `STATIC = ('orography',)`, `ALL` | |
 | `CLIMATE = ('t850_anomaly',)` | products that need `climate` |
 | `MODEL = 'ECMWF IFS'` | legend and `geometry.json` |
 | `PRECIP_HOURS = 6` | interval of `weather_summary` (3 h at T+3) |
 | `SHEET_HOURS = (12,)` | valid hours on contact sheets |
-| `DEFAULTS` | europe: `z500_t850`, `t500`, `z700_t700`, `z850_rh700`, `thetae850_mslp`, `thickness_mslp`, `dt850_24h`; central_europe: `t850_mslp`, `thetae850_mslp`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `tmax`, `tmin`, `orography`, `weather_summary`; no `icon-d2` entry |
+| `DEFAULTS` | europe: `z500_t850`, `t500`, `z700_t700`, `z850_rh700`, `z850_thetae850`, `thickness_mslp`, `dt850_24h`; central_europe: `t850_mslp`, `z850_thetae850`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `tmax`, `tmin`, `orography`, `weather_summary`; no `icon-d2` entry |
 | `CHANGE_HOURS = 24`, `TCC_PERCENT = 100.0` | `dt850_24h`; tcc 0–1 → % |
 | `detail` (instance) | `km_per_px(50)` smaller than Europe (central_europe, icon-d2): denser isobars, printed values |
 | `height`, `land` (instance) | model height and land ≥ 0.5 on the pixels |
@@ -1168,7 +1168,8 @@ Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L w
 | `cloud_cover`, `precipitation`, `precipitation_type`, `extreme_days`, `daily_extreme_field` | hooks |
 | `orography()` | rough terrain hatched only if `surface.sdor` |
 | `wind10m(step)` | gusts of `GUST_NAMES` shaded in `GUST10M` (km/h, Beaufort bands), window from `window_hours` in the title; streamlines of the mean 10 m wind, `MSLP_SUMMARY` isobars |
-| `thetae850_mslp(step)` | `papt` 850 hPa (K) shaded in `THETAE850`, lines `THETAE850_LINES`, dashed model ground `ABOVE_850HPA_M`, isobars; no printed values on detail windows either (per user: the exact θe does not matter) |
+| `z850_lines(canvas, step, shaded)` | model ground line `ABOVE_850HPA_M`, Z850 contours, L/H; shared by `z850_rh700` and `z850_thetae850`, so switching between these layers of tile 3 keeps the lines |
+| `z850_thetae850(step)` | `papt` 850 hPa (K) shaded in `THETAE850`, lines `THETAE850_LINES`, `z850_lines` (per user: Z850 rather than MSLP, it shows the advection of θe on its own level); no printed values on detail windows either (per user: the exact θe does not matter) |
 | other products | one method each, see `STEP` |
 
 ### IconProducts (icon_products.py)
@@ -1274,7 +1275,7 @@ chart_styles.py holds every scale and threshold:
 | `T2M`, `MOUNTAIN_T` | bands of T850: one colour = one temperature on every chart |
 | `T850_ANOMALY` | σ bands; ≥ 1 notable, ≥ 2 unusual |
 | `ROUGH_TERRAIN_SDOR = 200` | real valley/summit heights differ by several 100 m |
-| `HIGH_GROUND_M = 700`, `ABOVE_850HPA_M = 1300` | inversion chart grey, T850 areas masked or dashed line in `t850_mslp`/`z850_rh700`/`thetae850_mslp`; `z500_t850`, `dt850_24h` colour T850 everywhere |
+| `HIGH_GROUND_M = 700`, `ABOVE_850HPA_M = 1300` | inversion chart grey, T850 areas masked or dashed line in `t850_mslp`/`z850_rh700`/`z850_thetae850`; `z500_t850`, `dt850_24h` colour T850 everywhere |
 | `PRECIPITATION`, `CLOUD_COVER` | after ogimet surface charts; uncoloured below 0.2 mm / 40 %; "6 h" in the title is replaced with the real interval |
 | `PRECIP_TYPES` | ptype 5 snow; 6/7 wet snow, sleet; 3/8/12 freezing rain, ice pellets; rain without symbol |
 | `OUTSIDE_RGB = (190, 190, 190)` | outside a limited area model |
