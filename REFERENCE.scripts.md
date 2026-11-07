@@ -1180,7 +1180,7 @@ One matplotlib figure: map 1200×600 plus a legend strip of 90 px → 1200×690.
 | `no_data(note)` | "No data available" chart |
 | `outlines()` | coasts and borders (0.6 px black), states dashed `#303030` 0.4 px below them, graticule labels |
 | `contours(values, style, …)`, `isolines`, `extrema`, `hatch` | |
-| `arrows`, `streamlines`, `values`, `symbols` | `arrows(…, colour='black')` below `values` (`Z_ARROW` < `Z_MARKER`); `values(…, start=None, halo=True)`: lattice from `start` (default half the spacing), white outline optional |
+| `arrows`, `streamlines`, `values`, `symbols` | `arrows(…, colour='black')` and `streamlines(…, colour='black')` (0.5 px) below `values` (`Z_ARROW` < `Z_MARKER`); `values(…, start=None, halo=True)`: lattice from `start` (default half the spacing), white outline optional |
 | `save(path)` | |
 
 ### ContactSheet (contact_sheet.py)
@@ -1248,6 +1248,7 @@ chart_styles.py holds every scale and threshold:
 | `STORM_GUST_KMH = 75`, `GUST_SPACING_PX = 60` | Bft 9, DWD "Sturmböen" |
 | `GUST10M` | gusts of wind10m in km/h, bands = Beaufort limits; also copied into gust10m.json |
 | `STREAMLINE_SMOOTH_KM = 15`, `STREAMLINE_DENSITY = 3` | streamlines only; chosen by eye |
+| `STREAMLINE_GREY = '#404040'` | streamlines of `wind10m`: visible on the mid-blue/green gust bands (per user), still apart from black borders and isobars |
 | `Z500`, `Z700`, `Z850`, `MSLP`, `MSLP_DETAIL`, `MSLP_SUMMARY` | 4 dam (bold 528/552/576); 4 dam (bold 288/300/312); 4 dam (bold 140/152/164); 5 hPa; 2 hPa (weak gradients decide inversion/foehn); 4 hPa |
 | `ISOTHERM_850`, `ISOTHERM_500` | 4 K isotherms at band borders; brown and thin under Z lines, black, solid, bold every 20 K on `t500` (no other lines there) |
 | `MOIST_LAYER_RH = 90`, `WIND925_CALM = 5` | fog/stratus layer; below 5 m/s an inversion hardly clears |
@@ -1256,7 +1257,7 @@ chart_styles.py holds every scale and threshold:
 | `MOUNTAIN_HEIGHT_M = 2000`, `SUMMIT_CLOUD_RH = 95` | chart height (defined apart from `MOUNTAIN_HEIGHTS`), IFS in cloud |
 | `ICON_SUMMIT_CLOUD_RH = 90`, `SUMMIT_CLOUD_AREA = 50` | ICON cell in cloud, hatched share |
 | `VALUE_SPACING_PX = 40`, `VALUE_START_PX = 30` | lattice of the printed values (first row/column at 30 px), detail windows only: ≈ 130 km on central Europe, ≈ 30 km on icon-d2 |
-| `ARROW_GREY = '#5a5a5a'` | arrows of `t2m_wind10m` (per user: the numbers above them stay distinguishable), the grey of the streamlines |
+| `ARROW_GREY = '#5a5a5a'` | arrows of `t2m_wind10m` (per user: the numbers above them stay distinguishable) |
 
 ## API: scripts/lib/ — shared
 

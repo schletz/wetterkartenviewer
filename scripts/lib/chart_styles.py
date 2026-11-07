@@ -195,6 +195,8 @@ GUST10M = ColourScale("10 m gusts (km/h), bands = Beaufort 0–1 … 12", (
 STREAMLINE_SMOOTH_KM = 15
 # Streamlines per chart width (matplotlib streamplot density).
 STREAMLINE_DENSITY = 3.0
+# Dark grey: the thin lines stay visible on the mid-blue and green gust bands, yet apart from the black isobars.
+STREAMLINE_GREY = "#404040"
 
 # Line contours.
 Z500 = ContourStyle(interval=4, bold_every=6, bold_base=552, label_every=2, smooth_km=25)
@@ -254,5 +256,5 @@ MOUNTAIN_T = ColourScale(f"Temperature at {MOUNTAIN_HEIGHT_M:g} m (°C)", T850.b
 # the first row and column VALUE_START_PX from the top left corner.
 VALUE_SPACING_PX = 40
 VALUE_START_PX = 30
-# Wind arrows below printed values, as grey as the streamlines of wind10m.
+# Wind arrows below printed values: grey, so the black numbers above them stay distinguishable.
 ARROW_GREY = "#5a5a5a"
