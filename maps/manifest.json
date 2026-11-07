@@ -1024,9 +1024,17 @@
    "file": "austria/t2m.json",
    "version": "2026110612-2026110706"
   },
+  "td2m": {
+   "file": "austria/td2m.json",
+   "version": "2026110612"
+  },
+  "tw2m": {
+   "file": "austria/tw2m.json",
+   "version": "2026110612"
+  },
   "heights": {
    "file": "austria/heights.json",
-   "version": "2026110618-25344"
+   "version": "2026110706-25344"
   },
   "thickness": {
    "file": "austria/thickness.json",
