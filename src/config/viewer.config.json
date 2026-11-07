@@ -52,7 +52,8 @@
           "opencharts_central_europe/wind10m"
         ],
         "opencharts_central_europe/wind10m",
-        "opencharts_central_europe/inversion"
+        "opencharts_central_europe/inversion",
+        "opencharts_central_europe/snow_line"
       ]
     }
   ]
