@@ -364,7 +364,8 @@ class ChartProducts:
         smooth = styles.STREAMLINE_SMOOTH_KM
         dx, dy = self.pixels.wind_vectors(self.pixels.resample(u, smooth), self.pixels.resample(v, smooth))
         canvas.streamlines(dx, dy, styles.STREAMLINE_DENSITY, "grey lines: streamlines of the 10 m wind",
-                           colour=styles.STREAMLINE_GREY, width=styles.STREAMLINE_WIDTH)
+                           colour=styles.STREAMLINE_GREY, width=styles.STREAMLINE_WIDTH,
+                           arrow_size=styles.STREAMLINE_ARROW_SIZE)
         self.isobars(canvas, step, styles.MSLP_SUMMARY)
         return canvas
 

@@ -199,6 +199,8 @@ STREAMLINE_DENSITY = 3.0
 # the grey keeps them apart from the black isobars and borders.
 STREAMLINE_GREY = "#5a5a5a"
 STREAMLINE_WIDTH = 0.9
+# Arrow heads on the streamlines (matplotlib arrowsize), large enough to show the direction on an HD screen.
+STREAMLINE_ARROW_SIZE = 1.0
 
 # Line contours.
 Z500 = ContourStyle(interval=4, bold_every=6, bold_base=552, label_every=2, smooth_km=25)

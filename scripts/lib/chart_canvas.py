@@ -241,7 +241,7 @@ class ChartCanvas:
         self.legend.text(x0 - 6, y0, f"{label}, arrow = {reference_ms:g} m/s", fontsize=8, ha="right", va="center")
 
     def streamlines(self, dx: np.ndarray, dy: np.ndarray, density: float, label: str,
-                    colour: str = "black", width: float = 0.5) -> None:
+                    colour: str = "black", width: float = 0.5, arrow_size: float = 0.7) -> None:
         """Streamlines of a pixel vector field (dx right, dy down): lines along the flow at the valid time.
 
         Unlike isobars or isohypses they show convergence, divergence and the
@@ -252,7 +252,7 @@ class ChartCanvas:
         xs, ys = np.arange(step // 2, IMAGE_WIDTH, step), np.arange(step // 2, IMAGE_HEIGHT, step)
         grid = np.ix_(ys, xs)
         self.ax.streamplot(xs, ys, dx[grid], dy[grid], density=density, color=colour, linewidth=width,
-                           arrowsize=0.7, zorder=Z_ARROW)
+                           arrowsize=arrow_size, zorder=Z_ARROW)
         self._notes.append(label)
 
     def values(self, values: np.ndarray, spacing: int, where: np.ndarray, fmt: str, label: str,
