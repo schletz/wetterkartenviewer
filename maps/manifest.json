@@ -290,8 +290,8 @@
    "run": "2026110700",
    "end": 240
   },
-  "opencharts_europe/thetae850_mslp": {
-   "file": "opencharts_europe/thetae850_mslp.mp4",
+  "opencharts_europe/z850_thetae850": {
+   "file": "opencharts_europe/z850_thetae850.mp4",
    "steps": [
     0,
     3,
