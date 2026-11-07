@@ -7,6 +7,7 @@ import type { GeoLocation } from '../model/GeoLocation'
 import { placePanels, type LegendEntry, type PanelSpec, type ScaledLine, type TimeAxis } from '../model/panelLayout'
 import type { ClimatePoint, DailyClimate, LocationTemperatures, ValuePoint } from '../model/TemperatureSeries'
 import { TEMPERATURE_STEPS, THICKNESS_STEPS } from '../model/ValueAxis'
+import { downloadSvg, EXPORT_SKIP } from '../services/svgExport'
 import styles from './TemperatureDiagram.module.css'
 import TemperaturePanel from './TemperaturePanel'
 
@@ -64,6 +65,12 @@ function pointLabel(point: GeoLocation, height?: number): string {
   return height === undefined ? position : `${position}, ${height} m ü. A.`
 }
 
+/** "temperaturverlauf_48.20N_16.40E_2026110700.svg": location and first valid time (the ECMWF run). */
+function exportFileName(point: GeoLocation, start: Date): string {
+  const run = start.toISOString().slice(0, 13).replace(/\D/g, '')
+  return `temperaturverlauf_${point.lat.toFixed(2)}N_${point.lon.toFixed(2)}E_${run}.svg`
+}
+
 /** "Mo 2.11. 06 UTC" */
 function timeLabel(time: Date): string {
   return `${WEEKDAYS[time.getUTCDay()]} ${time.getUTCDate()}.${time.getUTCMonth() + 1}. ${String(time.getUTCHours()).padStart(2, '0')} UTC`
@@ -79,6 +86,7 @@ function timeLabel(time: Date): string {
  */
 export default function TemperatureDiagram({ temperatures }: TemperatureDiagramProps) {
   const box = useRef<HTMLDivElement>(null)
+  const svg = useRef<SVGSVGElement>(null)
   const size = useElementSize(box)
   const {
     t850, climate850, t2mEcmwf, climate2m, t2mIcon, td2m, tw2m, thickness, t500, rh850, rh700, thetae850, gust10m,
@@ -255,11 +263,17 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
   const tooltip = (key: string, valid: Date) =>
     [timeLabel(valid), ...tooltipParts[key](+valid).filter((p) => p !== null)].join(' · ')
   const columns = t850.values.map((p) => x(p.valid))
+  const save = () => {
+    if (svg.current === null || box.current === null) return
+    // The surface colour of the cell, so the file looks like the diagram on the page.
+    const background = getComputedStyle(box.current).getPropertyValue('--surface').trim() || '#fff'
+    downloadSvg(svg.current, exportFileName(t850.point, t850.values[0].valid), background)
+  }
 
   return (
     <div ref={box} className={styles.diagram}>
       {size.width > 0 && size.height > 0 && (
-        <svg className={styles.svg} viewBox={`0 0 ${size.width} ${size.height}`} role="img"
+        <svg ref={svg} className={styles.svg} viewBox={`0 0 ${size.width} ${size.height}`} role="img"
           aria-label="T2m von ECMWF und ICON-D2, Taupunkt und Feuchtkugeltemperatur in 2 m von ECMWF, Abweichung des Tagesmittels vom Klimamittel und Böen in 10 m von ECMWF, T850 von ECMWF mit Abweichung vom Klimamittel und äquivalentpotentieller Temperatur in 850 hPa, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt, relative Feuchte in 700 hPa">
           {placed.map((p) => <TemperaturePanel key={p.panel.key} placed={p} time={time} left={PLOT_LEFT} right={plotRight} />)}
           {t850.values.map((point, i) => {
@@ -268,7 +282,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
             const right = i === columns.length - 1 ? plotRight : (columns[i] + columns[i + 1]) / 2
             return (
               // The cross shows in every panel, the tooltip is the one of the panel under the mouse.
-              <g key={+point.valid} className={styles.hit}>
+              <g key={+point.valid} className={styles.hit} {...{ [EXPORT_SKIP]: '' }}>
                 {placed.map(({ panel, plotTop, plotBottom }) => (
                   <g key={panel.key}>
                     <title>{tooltip(panel.key, point.valid)}</title>
@@ -280,6 +294,11 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
             )
           })}
         </svg>
+      )}
+      {size.width > 0 && size.height > 0 && (
+        <button type="button" className={styles.download} onClick={save} title="Diagramm als SVG herunterladen">
+          SVG ↓
+        </button>
       )}
     </div>
   )
