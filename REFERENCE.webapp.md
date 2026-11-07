@@ -12,6 +12,7 @@ The API sections follow Javadoc: intro, fields, methods per module.
 
 - Static single-page app (React 19, Vite, TypeScript) on GitHub Pages: https://schletz.github.io/wetterkartenviewer/
 - Start page: for a location in Austria a temperature diagram (T850 of ECMWF with its anomaly against ERA5, θe850 as a green line and the ECMWF 6 h precipitation as a colour bar above its time axis, T2m of ECMWF (with bars of the anomaly of its daily mean against the ERA5 daily mean) and ICON-D2, the ECMWF 2 m dew point (blue) and wet-bulb temperature (green), ECMWF 10 m gusts as a colour bar above the time axis of the T2m panel, 1000–500 hPa thickness of ECMWF with the Showalter index of a parcel lifted from 850 hPa with its dew point from RH850 as layered blue/red areas and RH700 as a grey line) from the pipeline's series files, beside it ECMWF ENS meteograms for the location, queried live by the browser; a button saves the temperature diagram as a standalone SVG; on wide screens all in one row of the window height that scrolls with the mouse at its edges; each opens in a new tab.
+- Start page header: live air temperature of a GeoSphere Austria TAWES station chosen independently of the location (current value, minimum and maximum since 00 UTC, times in local time), queried live by the browser; see diagram `station`.
 - Map page (`#/maps`): a grid of tiles with the charts of one ECMWF IFS run (to +240 h) and one ICON-D2 run (Austria, to +48 h), and a step slider 0–240 h.
   Every chart path is an AV1 video with one frame per step; the app seeks the frame with `currentTime`.
   A tile layer can be a fallback chain of paths (ICON-D2 within its 48 h, ECMWF otherwise).
@@ -38,10 +39,11 @@ package "components" {
  shows StartPage or MapViewer.
  }
  class StartPage <<component>> {
- Header with location form; row of
- temperature chart and Meteograms.
+ Header with location form and station;
+ row of temperature chart and Meteograms.
  }
  class TemperatureChart << (D,#fdebd1) temperature >>
+ class StationPanel << (D,#fdebd1) station >>
  class LocationForm <<component>> {
  Place name or lat/lon; a name wins
  and fills the coordinates.
@@ -134,6 +136,7 @@ StartPage --> LocationForm
 StartPage --> Meteogram
 StartPage --> useEdgeScroll
 StartPage --> TemperatureChart
+StartPage --> StationPanel
 StartPage ..> viewerConfig : meteograms
 LocationForm ..> placeSearch : searchPlace()
 LocationForm ..> GeoLocation : isValidLocation()
@@ -247,6 +250,62 @@ TemperaturePanel ..> colourBands : bandColour()
 @enduml
 ```
 
+### station: live temperatures of a GeoSphere station
+
+Solid arrow: renders or calls the hook, dashed: uses.
+
+![For human readers only; the PlantUML source below holds the same content](docs/station.svg)
+
+```plantuml
+@startuml station
+allowmixing
+hide empty members
+class StationPanel <<component>> {
+ Picker while no station is stored,
+ its readings afterwards.
+}
+class StationPicker <<component>> {
+ Text field with datalist over
+ the active stations.
+}
+class StationReadings <<component>> {
+ Current, min and max with local time;
+ button forgets the station.
+}
+class useStoredStation <<hook>> {
+ localStorage entry of the station;
+ null removes it.
+}
+class useStationTemperatures <<hook>> {
+ Loads on mount and every 5 min;
+ keeps values on a failed reload.
+}
+class WeatherStation <<interface>> {
+ id, name, state, altitude;
+ label unique by height.
+}
+class stationTemperatures <<module>> {
+ Current, min and max of the
+ 10 min series, nulls skipped.
+}
+class geosphereStations <<module>> {
+ GeoSphere data hub: station list,
+ series since 00 UTC.
+}
+cloud "GeoSphere data hub" as hub
+StationPanel --> useStoredStation
+StationPanel --> StationPicker
+StationPanel --> StationReadings
+StationPicker ..> geosphereStations : fetchStations()
+StationPicker ..> WeatherStation : stationLabel()
+StationReadings --> useStationTemperatures
+useStationTemperatures ..> geosphereStations : fetchDayTemperatures()
+geosphereStations ..> stationTemperatures : summarizeTemperatures()
+geosphereStations ..> hub : GET metadata,\nhistorical
+useStoredStation ..> WeatherStation : isValidStation()
+@enduml
+```
+
 ## Contracts
 
 ### maps/manifest.json as the app reads it
@@ -291,6 +350,12 @@ Every series: flat list of whole multiples of `scale` (0.1; 1 for rh850, rh700 a
 Regular grids: row j at `lat0 − j·dlat`, column i at `lon0 + i·dlon`, index `j·ni + i`. `steps` count from each block's own `run` (ECMWF and ICON differ).
 t850.json and t2m.json: `ecmwf {run, steps, grid, orog, t850|t2m}`, `climate {period, grid, first_day, days, orog}` (`orog` ERA5 m, optional; `ClimateBlock`) plus in t850.json `hours`, `term` (`TermClimateBlock`), in t2m.json `daily` (`DailyClimateBlock`), each `{mean °C, std K}`; t2m.json also `icon {run, steps, cells, t2m}`. td2m.json and tw2m.json: `ecmwf` with `td2m`/`tw2m` (°C; dew point over water, wet-bulb temperature = derived GRIB field `wbt`), no `icon` (the ICON file has both fields, the diagram shows ECMWF only per user, which keeps the files small), no `climate`. thickness.json: `ecmwf` with `thickness` (dam), t500.json `ecmwf` with `t500` (°C), rh850.json `ecmwf` with `rh850` (% as the IFS defines it, raw, may exceed 100), rh700.json `ecmwf` with `rh700` (same encoding), thetae850.json `ecmwf` with `thetae850` (K, not °C; the derived GRIB field `papt`), gust10m.json `ecmwf` with `gust10m` (maximum gust in km/h, steps from 3), `hours` (interval before each step it covers: 1 h to +90, 3 h to +144, then 6 h) and `colours` (`ColourBand[]` = `[lower, upper, "#rrggbb"]`, the bands of the wind10m chart), precip6h.json `ecmwf` with `precip6h` (mm over the 6 h before each step, 3 h at T+3, exactly the window of the weather_summary chart; overlapping windows up to T+144), `hours`, `colours` (the precipitation bands of weather_summary), `transparent_below` (0.2 mm) and `ptype` (class per window, scale 1: 0 none, 1 snow, 2 wet snow or rain and snow, 3 freezing rain or drizzle, ice pellets; the symbol groups of weather_summary in the order of `PRECIP_TYPES` in chart_styles.py; optional, files of older pipelines lack it and get no symbols), all without `climate`. Every `ecmwf` block carries `orog`; only the legends of T2m, T850 and thickness show it (ERA5 `orog` only decides whether the T2m climate is drawn). heights.json: `cells`, `lat`/`lon` (cumulative deltas × `coord_scale`), `hsurf` (m), one entry per ICON cell in the order of `icon.t2m`.
 
+### GeoSphere Austria data hub (TAWES 10 min)
+
+Public, no key, CORS `*`; docs https://dataset.api.hub.geosphere.at/v1/docs/. Base `DATASET_URL` + `DATASET = tawes-v1-10min` (geosphereStations.ts). Trusted, not validated.
+- `GET …/station/current/tawes-v1-10min/metadata` (≈ 87 KB): `stations[] {id, name, state, lat, lon, altitude, is_active, …}`, 288 stations, 286 active; names in capitals as GeoSphere spells them (e.g. „WIEN/HOHE WARTE“); two active stations named „NEUSIEDL AM SEE“ (117 and 148 m), hence `stationLabel` adds the height.
+- `GET …/station/historical/tawes-v1-10min?parameters=TL,TLMAX,TLMIN&station_ids=<id>&start=YYYY-MM-DDTHH:MM&end=…` (UTC, `end` required, else 422; unknown id → 400): `timestamps[]` (`2026-11-07T18:20+00:00`, every 10 min from `start`), `features[0].properties.parameters.<P>.data[]` aligned with them, °C. Values not yet transmitted are `null` (the last one or two slots before `end`, every slot right after 00 UTC).
+
 ### viewer.config.json
 
 `src/config/viewer.config.json`, edited by hand, read by the app (bundled) and by `tile_chart_paths`.
@@ -300,7 +365,7 @@ Currently 6 tiles (tile 3: `z850_thetae850`, `z850_rh700`, `z700_t700` on opench
 
 ## API: src/ (app)
 
-No router, no state management, no UI library, no tests. Every path goes through `import.meta.env.BASE_URL` (`base: './'` for the Pages subpath). Vite does not watch `data/` and `maps/` (vite.config.ts); the dev server serves `maps/` from the repo root, a new manifest needs a reload. StrictMode runs effects twice in dev (meteogram requests abort and restart).
+No router, no state management, no UI library, no tests. External services called by the browser: Nominatim, ECMWF epsgram, GeoSphere data hub. Every path goes through `import.meta.env.BASE_URL` (`base: './'` for the Pages subpath). Vite does not watch `data/` and `maps/` (vite.config.ts); the dev server serves `maps/` from the repo root, a new manifest needs a reload. StrictMode runs effects twice in dev (meteogram requests abort and restart).
 
 ### ChartIndex (src/model/ChartIndex.ts)
 
@@ -360,6 +425,13 @@ Totals ≥ saturated for every RH. Below 0 °C RH 100 % in the IFS partly means 
 
 `anomalyBands.ts` is a port of `AnomalyBands` (skills/synop/scripts/lib/anomaly_bands.py): crossings are inserted so areas end exactly at the threshold; a null point breaks lines and areas. `thresholdPolygons(points, above, below)` does the same for fixed thresholds (the Showalter classes).
 
+### Station temperatures (src/components/StationPanel.tsx, StationPicker.tsx, StationReadings.tsx, src/hooks/useStoredStation.ts, useStationTemperatures.ts, src/model/WeatherStation.ts, stationTemperatures.ts, src/services/geosphereStations.ts)
+
+`StationPanel` sits in the start page header between LocationForm and „Zu den Karten“ (the header wraps on narrow screens; at 1900 px one row). The station is independent of the location (per user: the nearest station may lie 400 m higher than the place). localStorage `wetterkartenviewer.station` holds `WeatherStation {id, name, state, altitude}`, enough to show the readings without the station list; `isValidStation` guards the stored value, `save(null)` removes the entry („Station wechseln“).
+`StationPicker` loads the list once on mount (input disabled while loading or after an error, which shows as text); `<datalist>` options `stationLabel` = „NAME (H m)“ with the state as label. A value equal to a label selects at once (a picked suggestion arrives as its full label); Enter takes the exact label, else the first station whose label contains the text, case-insensitive (`matchStation`).
+`useStationTemperatures(id)` asks `fetchDayTemperatures(id, new Date())` on mount and every `REFRESH_MS` 5 min (stations send every 10 min); null while the first request for the station runs; a failed reload keeps the previous values (their times show the age), an error shows only without values.
+`fetchDayTemperatures` requests from 00 UTC of the current UTC day to now (per user; between 00 and 01/02 local time this is still the previous local day's data since 00 UTC). `summarizeTemperatures(timestamps, tl, tlmin, tlmax)`: `current` = last non-null TL; `min` = lowest TLMIN (TL where TLMIN is null), `max` = highest TLMAX likewise, each with the time stamp of its 10 min slot, the earliest on a tie; all null when the series has no value. `StationReadings` formats values `de-AT` with one decimal and times `HH:MM` in the browser's local time zone; min blue #1f5fbf, max red.
+
 ### Other model, config and services
 
 | Item | Summary |
@@ -408,7 +480,7 @@ CSS that must match the image size: `aspect-ratio: 1200 / 690` in ChartImage.mod
 - **Browser memory and AV1**: every shown video stays as a blob until reload (all 14 ≈ 67 MB); without an AV1 decoder the tiles stay empty.
 - **Fallback chains switch videos**: before the first and after the last ICON frame the tile shows the ECMWF video, loaded only at that moment; `resolve` does not check that a video loads.
 - **Steps hang on the ECMWF run**: relating steps to the ICON run means changing `ChartIndex`, `currentStep` and the pipeline's `chart_frames` together.
-- **Time zones**: run, steps and file names are UTC; the slider and chart legends show UTC.
+- **Time zones**: run, steps and file names are UTC; the slider and chart legends show UTC; only the station readings show local time.
 - **Meteograms** are queried again on every location change, no cache except the browser image cache.
 - **Series format** shared with scripts/point_series.py (keys, encoding, grid convention, `NAMES` vs `SERIES_FILES`); the anomaly shading (`SIGMA_STEPS`, opacity, colours) follows the synop skill's diagram (`SIGMA_STEPS` in generate_diagram.py, `LAYER_OPACITY`).
 - **Start page loads ≈ 1.9 MB (gzip)** of series on every visit (run 2026110612; t2m.json 875 KB of it, td2m.json 105 KB, tw2m.json 120 KB), also outside Austria: availability is known only after heights.json is loaded.

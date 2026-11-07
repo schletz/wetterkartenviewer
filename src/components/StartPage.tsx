@@ -4,6 +4,7 @@ import { useEdgeScroll } from '../hooks/useEdgeScroll'
 import type { GeoLocation } from '../model/GeoLocation'
 import LocationForm from './LocationForm'
 import Meteogram from './Meteogram'
+import StationPanel from './StationPanel'
 import styles from './StartPage.module.css'
 import TemperatureChart from './TemperatureChart'
 
@@ -25,6 +26,7 @@ export default function StartPage({ location, onLocationChange, onOpenMaps }: St
       <header className={styles.header}>
         <h1 className={styles.title}>Wetterkartenviewer</h1>
         <LocationForm location={location} onSave={onLocationChange} />
+        <StationPanel />
         <button className={styles.open} onClick={onOpenMaps}>Zu den Karten</button>
       </header>
       <section ref={strip} className={styles.meteograms}>

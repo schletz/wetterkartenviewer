@@ -1,0 +1,24 @@
+.form {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.label {
+  font-weight: 600;
+}
+
+.input {
+  width: 16em;
+  margin-left: 8px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font: inherit;
+  font-weight: normal;
+}
+
+.error {
+  color: #b00020;
+  font-size: 0.9em;
+}
