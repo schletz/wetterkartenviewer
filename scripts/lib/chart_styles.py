@@ -195,8 +195,10 @@ GUST10M = ColourScale("10 m gusts (km/h), bands = Beaufort 0–1 … 12", (
 STREAMLINE_SMOOTH_KM = 15
 # Streamlines per chart width (matplotlib streamplot density).
 STREAMLINE_DENSITY = 3.0
-# Dark grey: the thin lines stay visible on the mid-blue and green gust bands, yet apart from the black isobars.
-STREAMLINE_GREY = "#404040"
+# Grey and 0.9 px: the AV1 encoding of the layer videos blurs thinner lines into the gust bands;
+# the grey keeps them apart from the black isobars and borders.
+STREAMLINE_GREY = "#5a5a5a"
+STREAMLINE_WIDTH = 0.9
 
 # Line contours.
 Z500 = ContourStyle(interval=4, bold_every=6, bold_base=552, label_every=2, smooth_km=25)
