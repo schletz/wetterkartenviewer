@@ -5,21 +5,23 @@ lib/projection.py (the Europe window holds all others) and written to one file w
 every parameter and step from T+0 to T+240, followed by the derived fields
 of lib/derived_writer.py (values at 2000/2500/3000 m, freezing level, snow
 line, inversion, boundary layer humidity, precipitation signal, free
-atmosphere wind at 1000/925 hPa, orography in m, daily 2 m extremes):
+atmosphere wind at 1000/925 hPa, theta-e at 850 hPa, 2 m wet-bulb temperature,
+orography in m, daily 2 m extremes):
 
     t, r, gh 500/600/700/850/925/1000        pressure levels; the profile gives heights such as
                                              2000 m and the freezing level
     u/v/w 700, u/v 850/925/1000              pressure levels (w: vertical velocity, Pa/s)
     thick                                    1000-500 hPa thickness (gpm), gh500 - gh1000
-    msl, 2t                                  surface, every step
+    msl, 2t, 2d, sp, 10u, 10v                surface, every step (2d: 2 m dew point, sp: surface pressure in Pa)
     mx2t3/mn2t3 (T+3..144), mx2t6/mn2t6      2 m max/min over the last 3 or 6 hours
     z, sdor, lsm (T+0 only)                  model orography (m2/s2), its sub-grid standard deviation (m),
                                              land-sea mask (0..1)
     tcc, tp, ptype                           total cloud cover, total precipitation since T+0 (m),
                                              precipitation type; only for the weather_summary chart
 
-Apart from the 2 m temperature, the derived fields use no near-surface
-parameters: the weather at the ground is derived from the pressure levels.
+Apart from the 2 m temperature and the wet-bulb temperature (from 2t, 2d
+and sp), the derived fields use no near-surface parameters: the weather at
+the ground is derived from the pressure levels.
 Cloud cover and precipitation feed only the weather_summary chart.
 The 925 and 1000 hPa levels describe the boundary layer (inversion,
 moist layer, mixing); where the ground lies above them, their values are

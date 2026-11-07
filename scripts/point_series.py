@@ -1,12 +1,14 @@
 """Write the temperature series of Austria that the start page of the viewer draws for its location.
 
-Nine JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
+Eleven JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
 
     t850.json      ECMWF T850 of every step on the 0.1 deg grid of the box, with the ERA5
                    climatology of T850 (mean, stdev) for the days of the run
     t2m.json       ECMWF and ICON-D2 T2m, with the ERA5 climatology of the daily mean T2m
                    (both ECMWF blocks and both climate blocks also hold the model
                    orography ``orog`` in m, ERA5 from lib/era5_orography.grib)
+    td2m.json      ECMWF 2 m dew point (2d; no climatology)
+    tw2m.json      ECMWF 2 m wet-bulb temperature (the derived field wbt; no climatology)
     heights.json   the ICON-D2 cells of Austria: centre and model orography (hsurf)
     thickness.json ECMWF 1000-500 hPa thickness in dam (no climatology)
     t500.json      ECMWF T500 (no climatology), for the vertical totals T850 - T500
@@ -76,6 +78,9 @@ SCALE, COORD_SCALE = 0.1, 1e-4
 RH_SCALE = 1.0
 # Gusts in whole km/h: the band limits of the wind10m chart (Beaufort) are whole km/h.
 WIND_SCALE = 1.0
+# 2 m humidity series, ECMWF only (ICON-D2 would multiply the file size), in deg C like T2m:
+# file name -> GRIB shortName of the dew point and the wet-bulb temperature.
+HUMIDITY_SERIES = {"td2m": "2d", "tw2m": "wbt"}
 
 
 def time_major_deltas(fields: np.ndarray, scale: float = SCALE) -> list[int]:
@@ -230,7 +235,8 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     icon_run = icon_grib.stem.split("_")[-1] if icon_grib else "none"
     targets = {name: maps / file for name, file in SERIES_FILES.items()}
     versions = {"t850": ecmwf_run, "t2m": f"{ecmwf_run}-{icon_run}", "thickness": ecmwf_run, "t500": ecmwf_run,
-                "rh850": ecmwf_run, "rh700": ecmwf_run, "thetae850": ecmwf_run, "gust10m": ecmwf_run}
+                "rh850": ecmwf_run, "rh700": ecmwf_run, "thetae850": ecmwf_run, "gust10m": ecmwf_run,
+                "td2m": ecmwf_run, "tw2m": ecmwf_run}
     stale = [name for name, version in versions.items() if force or read_version(targets[name]) != version]
     heights_missing = icon_grib is not None and (force or read_version(targets["heights"]) is None)
     if not stale and not heights_missing:
@@ -266,6 +272,14 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
                                                   "ecmwf": ecmwf_block(ecmwf, "papt", 850, "thetae850", 0.0)})
         else:
             print(f"{ecmwf_grib.name} has no papt at 850 hPa, {SERIES_FILES['thetae850']} not written")
+    for name, short_name in HUMIDITY_SERIES.items():
+        if name in stale:
+            # Forecast files of older pipelines lack the field; the app then draws no line of it.
+            if ecmwf.has(short_name, 0):
+                write_document(targets[name], {"version": versions[name], **common,
+                                               "ecmwf": ecmwf_block(ecmwf, short_name, None, name)})
+            else:
+                print(f"{ecmwf_grib.name} has no {short_name}, {SERIES_FILES[name]} not written")
     if "gust10m" in stale:
         write_document(targets["gust10m"], {"version": versions["gust10m"], "box": BOX, "scale": WIND_SCALE,
                                             "colours": colour_bands(chart_styles.GUST10M),

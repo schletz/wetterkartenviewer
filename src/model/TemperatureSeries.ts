@@ -41,19 +41,17 @@ export interface LocationTemperatures {
   t850: PointSeries
   /** ERA5 T850 climate at every valid time of `t850`, null where the climatology has no value. */
   climate850: (ClimatePoint | null)[]
-  /** ERA5 grid point of the climate values. */
-  climatePoint: GeoLocation
-  /** Reference period of the climatology, e.g. "1991–2020". */
-  period: string
   t2mEcmwf: PointSeries
   /** ERA5 climate of the daily mean T2m for every day of the run, from 00 UTC of its first day. */
   climate2m: DailyClimate[]
-  /** ERA5 grid point of the T2m climate values. */
-  climate2mPoint: GeoLocation
-  /** ERA5 orography of that point, m; undefined if the file has none. */
+  /** ERA5 orography of the T2m climate point, m; undefined if the file has none. */
   climate2mHeight?: number
   /** Null if the files hold no ICON-D2 run. */
   t2mIcon: PointSeries | null
+  /** ECMWF 2 m dew point in °C; null without td2m file. */
+  td2m: PointSeries | null
+  /** ECMWF 2 m wet-bulb temperature in °C; null without tw2m file. */
+  tw2m: PointSeries | null
   /** ECMWF 1000–500 hPa thickness in dam; null without thickness file. */
   thickness: PointSeries | null
   /** ECMWF T500 in °C; null without T500 file. */
@@ -86,7 +84,7 @@ export class TemperatureSeries {
 
   /** The series of the location; null outside Austria and its margin (no ICON cell near). */
   at(location: GeoLocation): LocationTemperatures | null {
-    const { t850, t2m, heights, thickness, t500, rh850, rh700, thetae850, gust10m } = this.files
+    const { t850, t2m, td2m, tw2m, heights, thickness, t500, rh850, rh700, thetae850, gust10m } = this.files
     if (!inBox(t850.box, location)) return null
     const cell = this.nearestCell(location)
     if (cell === null) return null
@@ -113,13 +111,12 @@ export class TemperatureSeries {
       height: heights.hsurf[cell],
       t850: t850Series,
       climate850: climate.values,
-      climatePoint: climate.point,
-      period: t850.climate.period,
       t2mEcmwf: t2mSeries,
       climate2m: climate2m.values,
-      climate2mPoint: climate2m.point,
       climate2mHeight: climate2m.height,
       t2mIcon,
+      td2m: td2m === undefined ? null : ecmwfSeries(td2m.ecmwf, td2m.ecmwf.td2m, td2m.scale, location),
+      tw2m: tw2m === undefined ? null : ecmwfSeries(tw2m.ecmwf, tw2m.ecmwf.tw2m, tw2m.scale, location),
       thickness: thickness === undefined
         ? null
         : ecmwfSeries(thickness.ecmwf, thickness.ecmwf.thickness, thickness.scale, location),
@@ -188,7 +185,7 @@ function climateAt(block: TermClimateBlock, scale: number, location: GeoLocation
     const i = day * block.hours.length + hour
     return { mean: mean[i], std: std[i] }
   })
-  return { point: gridPoint(block.grid, index), height: block.orog?.[index], values }
+  return { height: block.orog?.[index], values }
 }
 
 /** Mean and standard deviation of the daily mean at the nearest ERA5 point for every day of the block, and its height. */
@@ -200,5 +197,5 @@ function dailyClimateAt(block: DailyClimateBlock, scale: number, location: GeoLo
   const std = pointSeries(block.daily.std, points, index, scale)
   const firstDay = Date.parse(`${block.first_day}T00:00:00Z`)
   const values = mean.map((m, i): DailyClimate => ({ day: new Date(firstDay + i * DAY_MS), mean: m, std: std[i] }))
-  return { point: gridPoint(block.grid, index), height: block.orog?.[index], values }
+  return { height: block.orog?.[index], values }
 }

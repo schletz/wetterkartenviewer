@@ -2,17 +2,16 @@ import { WARM } from '../model/anomalyBands'
 import { bandColour } from '../model/colourBands'
 import { holidayName } from '../model/holidays'
 import {
-  COLOUR_BAR_HEIGHT, LEGEND_LINE_HEIGHT, TITLE_HEIGHT, legendRows,
-  type BandSwatchClasses, type ColourBar, type PlacedPanel, type ScaledLine, type TimeAxis,
+  COLOUR_BAR_HEIGHT, LEGEND_LINE_HEIGHT, TITLE_HEIGHT,
+  type ColourBar, type PlacedPanel, type ScaledLine, type TimeAxis,
 } from '../model/panelLayout'
-import type { ColourBand } from '../model/seriesFiles'
 import type { ValuePoint } from '../model/TemperatureSeries'
 import { ValueAxis } from '../model/ValueAxis'
 import styles from './TemperatureDiagram.module.css'
 
 const LEGEND_SWATCH_WIDTH = 22
-/** Width of one box of a colour scale in the legend; wide enough for a three-digit limit below it. */
-const SCALE_BOX_WIDTH = 20
+/** Vertical distance of the line swatches stacked in one legend row. */
+const STACKED_SWATCH_GAP = 4
 const MIN_DAY_LABEL_WIDTH = 26
 const DAY_MS = 86_400_000
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
@@ -81,13 +80,15 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
       </defs>
       <text className={styles.panelTitle} x={left} y={top + 12}>{panel.title}</text>
       {panel.legend.map((entry, i) => {
-        const rows = panel.legend.slice(0, i).reduce((sum, previous) => sum + legendRows(previous), 0)
-        const y = top + TITLE_HEIGHT + rows * LEGEND_LINE_HEIGHT + 7
-        if ('colours' in entry) return <ScaleSwatch key={entry.text} x={left} y={y} colours={entry.colours} text={entry.text} />
+        const y = top + TITLE_HEIGHT + i * LEGEND_LINE_HEIGHT + 7
         return (
           <g key={entry.text}>
             {'line' in entry && <line className={`${styles.line} ${entry.line}`} x1={left} x2={left + LEGEND_SWATCH_WIDTH - 4} y1={y} y2={y} />}
-            {'bands' in entry && <BandSwatch x={left} y={y} classes={entry.bands} />}
+            {'lines' in entry && entry.lines.map((line, k) => {
+              // Centred on the row: the first on top.
+              const offset = (k - (entry.lines.length - 1) / 2) * STACKED_SWATCH_GAP
+              return <line key={line} className={`${styles.line} ${line}`} x1={left} x2={left + LEGEND_SWATCH_WIDTH - 4} y1={y + offset} y2={y + offset} />
+            })}
             <text x={left + LEGEND_SWATCH_WIDTH} y={y + 4}>{entry.text}</text>
           </g>
         )
@@ -159,43 +160,6 @@ function ColourStrip({ bar, x, left, right, top, bottom }: {
         )
       })}
       <line className={styles.axis} x1={left} x2={right} y1={top} y2={top} />
-    </g>
-  )
-}
-
-/** Legend of a colour scale as on the charts: its boxes with the text beside them, the inner band limits below. */
-function ScaleSwatch({ x, y, colours, text }: { x: number; y: number; colours: ColourBand[]; text: string }) {
-  const width = colours.length * SCALE_BOX_WIDTH
-  return (
-    <g>
-      {colours.map(([lower, , colour], k) => (
-        <g key={lower}>
-          <rect x={x + k * SCALE_BOX_WIDTH} y={y - 5} width={SCALE_BOX_WIDTH} height={10} fill={colour} />
-          {k > 0 && (
-            <text className={styles.scaleLabel} x={x + k * SCALE_BOX_WIDTH} y={y + LEGEND_LINE_HEIGHT + 3}
-              textAnchor="middle">{lower}</text>
-          )}
-        </g>
-      ))}
-      <rect className={styles.frame} x={x} y={y - 5} width={width} height={10} />
-      <text x={x + width + 6} y={y + 4}>{text}</text>
-    </g>
-  )
-}
-
-/** Legend swatch of layered areas: one class above, one below, every layer darker to the right, the line between. */
-function BandSwatch({ x, y, classes }: { x: number; y: number; classes: BandSwatchClasses }) {
-  const width = (LEGEND_SWATCH_WIDTH - 4) / 3
-  return (
-    <g>
-      {[0, 1, 2].map((k) => (
-        // Layer k covers column k and all to the right of it, so the shade adds up to the right.
-        <g key={k}>
-          <rect className={classes.above} x={x + k * width} y={y - 6} width={(3 - k) * width} height={6} />
-          <rect className={classes.below} x={x + k * width} y={y} width={(3 - k) * width} height={6} />
-        </g>
-      ))}
-      <line className={`${styles.line} ${classes.line}`} x1={x} x2={x + LEGEND_SWATCH_WIDTH - 4} y1={y} y2={y} />
     </g>
   )
 }

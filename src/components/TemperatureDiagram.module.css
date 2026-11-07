@@ -8,6 +8,9 @@
   --rh700: #6f6e69;
   /* Neither red nor blue, so it stands apart from the anomaly areas it crosses. */
   --theta-e: #2f8a57;
+  /* Darker than the blue anomaly bars it crosses. */
+  --dew-point: #1f5fbf;
+  --wet-bulb: #2f8a57;
   --climate: #8a8984;
   --warm: #e0453a;
   --cold: #3a7be0;
@@ -37,11 +40,6 @@
   font-weight: 600;
 }
 
-/* Band limits of a colour scale legend: smaller, so three digits fit under one box. */
-.svg .scaleLabel {
-  font-size: 10px;
-}
-
 .svg .holiday {
   fill: #c62828;
 }
@@ -51,8 +49,9 @@
   stroke-width: 1;
 }
 
+/* Black, so 0 °C stands out against the grid and the grey climate line. */
 .zero {
-  stroke: var(--axis);
+  stroke: #000;
   stroke-width: 1;
   stroke-dasharray: 4 3;
 }
@@ -87,6 +86,17 @@
 .t2mIcon {
   stroke: var(--t2m-icon);
   stroke-dasharray: 6 3;
+}
+
+/* Thinner than T2m, so the T2m lines stay in front. */
+.dewPoint {
+  stroke: var(--dew-point);
+  stroke-width: 1.5;
+}
+
+.wetBulb {
+  stroke: var(--wet-bulb);
+  stroke-width: 1.5;
 }
 
 .thickness {

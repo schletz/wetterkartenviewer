@@ -108,6 +108,22 @@ export interface HeightsFile {
   hsurf: number[]
 }
 
+/** ECMWF 2 m dew point in °C (over water); no climatology. */
+export interface Td2mFile {
+  version: string
+  box: Box
+  scale: number
+  ecmwf: EcmwfBlock & { td2m: number[] }
+}
+
+/** ECMWF 2 m wet-bulb temperature in °C (the derived field wbt); no climatology. */
+export interface Tw2mFile {
+  version: string
+  box: Box
+  scale: number
+  ecmwf: EcmwfBlock & { tw2m: number[] }
+}
+
 /** ECMWF 1000–500 hPa thickness in dam; no climatology. */
 export interface ThicknessFile {
   version: string
@@ -166,6 +182,10 @@ export interface SeriesFiles {
   t850: T850File
   t2m: T2mFile
   heights: HeightsFile
+  /** Missing in manifests of older pipelines. */
+  td2m?: Td2mFile
+  /** Missing in manifests of older pipelines. */
+  tw2m?: Tw2mFile
   /** Missing in manifests of older pipelines. */
   thickness?: ThicknessFile
   /** Missing in manifests of older pipelines. */

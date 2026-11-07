@@ -53,6 +53,8 @@ demselben Code wie die Karten. Karte und Zahl am Ort passen deshalb zusammen.
 | `w` | 700 hPa | Pa/s | Vertikalbewegung ω, negativ heißt Hebung |
 | `thick` | 1000–500 hPa | gpm | Schichtdicke |
 | `msl`, `2t` | Boden | Pa, K | Luftdruck auf Meeresniveau, Temperatur in 2 m |
+| `2d` | 2 m | K | Taupunkt in 2 m (über Wasser) |
+| `sp` | Boden | Pa | Luftdruck am Modellboden |
 | `10u`, `10v` | 10 m | m/s | Wind in 10 m über dem Modellboden |
 | `10fg`, `10fg3` | 10 m | m/s | Maximale Böe seit der letzten Modellausgabe: `10fg` bis +90 h über 1 h, ab +150 h über 6 h, `10fg3` dazwischen über 3 h; nicht bei T+0 (nur `wind10m`) |
 | `mx2t3`, `mn2t3`, `mx2t6`, `mn2t6` | 2 m | K | Extreme der letzten 3 h (bis +144 h) bzw. 6 h |
@@ -71,6 +73,7 @@ demselben Code wie die Karten. Karte und Zahl am Ort passen deshalb zusammen.
 | `psig` | — | 0/1 | Niederschlagssignal: RH auf 850 oder 700 hPa ≥ 90 % und Hebung auf 700 hPa |
 | `uf`, `vf` | 1000, 925 hPa | m/s | Wind dieser Fläche, nur wo sie über dem Modellboden liegt |
 | `papt` | 850 hPa | K | Äquivalentpotentielle Temperatur θe nach Bolton (1980) aus `t` und `r`. Sie bleibt beim Heben und Senken erhalten, ein Sprung am Ort heißt also neue Luftmasse (Front). Wie `t` auf 850 hPa auch unter dem Modellboden gesetzt (extrapoliert). GRIB2 0/0/3, ecCodes nennt sie `papt`, in der Ortstabelle Spalte `papt850`. |
+| `wbt` | 2 m | K | Feuchtkugeltemperatur (psychrometrisch, über Wasser) aus `2t`, `2d` und `sp`: so weit kühlt verdunstendes Wasser die Luft ab. Liegt zwischen Taupunkt und Temperatur; fallender Niederschlag kühlt die Luft bis auf sie ab. GRIB2 0/0/27. |
 | `orog` | nur T+0 | m | Höhe des Modellbodens |
 | `mx2t`, `mn2t` | 2 m | K | Tmax 06–18 UTC und Tmin 18 UTC des Vortags bis 06 UTC. Der Endschritt fällt auf den Tag selbst. |
 
@@ -390,8 +393,8 @@ Regen), Regen ohne Symbol. Schwarze Linien: Isobaren alle 4 hPa mit Hoch und Tie
 
 Ein Lauf von ICON-D2 (DWD Open Data, etwa 2,2 km) auf dem Ikosaeder-Gitter des Modells: ein Wert
 je Zelle, kein reguläres Gitter. Die Lage der Zellen steht in `clat`/`clon`. Stündlich von T+0
-bis T+48, ohne abgeleitete Felder. Die Namen sind die von ecCodes; in Klammern der Name, unter dem
-der Viewer das Feld liest.
+bis T+48; einziges abgeleitetes Feld ist die Feuchtkugeltemperatur. Die Namen sind die von ecCodes;
+in Klammern der Name, unter dem der Viewer das Feld liest.
 
 | Name | Schritte | Einheit | Bedeutung |
 |---|---|---|---|
@@ -403,6 +406,9 @@ der Viewer das Feld liest.
 | `WW` (`ww`) | 1–48 | Code | signifikantes Wetter zum Termin, WMO-Tafel 4677 (45/48 Nebel, 5x Niesel, 6x Regen, 7x Schnee, 8x Schauer, 95/96 Gewitter, 96 mit Hagel) |
 | `max_i10fg` (`gust`) | 0–48 | m/s | stärkste Böe in 10 m während der Stunde vor dem Termin |
 | `2t` | 0–48 | K | Temperatur in 2 m |
+| `2d` | 0–48 | K | Taupunkt in 2 m (über Wasser) |
+| `sp` | 0–48 | Pa | Luftdruck am Modellboden |
+| `TW_2M` (`wbt`) | 0–48 | K | Feuchtkugeltemperatur in 2 m, vom Viewer wie bei IFS aus `2t`, `2d` und `sp` berechnet (abgeleitet, steht am Ende der Datei) |
 | `max_2t`, `min_2t` (`tmax_2m`, `tmin_2m`) | 0–48 | K | Extreme in 2 m seit dem letzten Neustart; ICON startet sie alle 6 h ab Laufbeginn neu, obwohl der Kopf „seit T+0“ angibt |
 | `10u`, `10v` | 0–48 | m/s | Wind in 10 m |
 | `ceil` (`ceiling`) | 0–48 | m über NN | Untergrenze der tiefsten Wolkenschicht mit mehr als 50 % Bedeckung; etwa 20 000, wo es keine gibt |

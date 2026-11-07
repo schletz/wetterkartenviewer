@@ -1,8 +1,9 @@
-"""Moist air on a pressure level: vapour pressure from the IFS relative humidity and the equivalent potential temperature.
+"""Moist air: vapour pressure from the IFS relative humidity, equivalent potential temperature, wet-bulb temperature.
 
-The formulas are those of src/model/moistAdiabat.ts. The app scales its θe line
-with the θe of dry and of saturated air computed there, so both sides must give
-the same value for the same temperature and humidity.
+The θe formulas are those of src/model/moistAdiabat.ts. The app scales its θe
+line with the θe of dry and of saturated air computed there, so both sides must
+give the same value for the same temperature and humidity. The wet-bulb
+temperature has no counterpart in the app, which reads the derived field.
 """
 
 import numpy as np
@@ -26,6 +27,12 @@ BOLTON_KAPPA = 0.2854
 # Constants of the LCL temperature after Bolton (1980), eq. 15, K.
 BOLTON_LCL_OFFSET, BOLTON_LCL_SCALE = 56.0, 800.0
 REFERENCE_PRESSURE = 1000.0
+# Specific heat of dry air and of water vapour at constant pressure, J/(kg K).
+CP_DRY, CP_VAPOUR = 1005.7, 1875.0
+# Latent heat of vaporisation at 0 °C, J/kg, and its decrease per K (Bolton 1980, eq. 2).
+LATENT_HEAT_0, LATENT_HEAT_SLOPE = 2.501e6, 2370.0
+# Bisection steps of the wet-bulb temperature: the interval Td…T of at most ~60 K shrinks below 1e-4 K.
+WET_BULB_ITERATIONS = 20
 
 
 def ifs_saturation_vapour_pressure(t: np.ndarray) -> np.ndarray:
@@ -39,6 +46,11 @@ def ifs_saturation_vapour_pressure(t: np.ndarray) -> np.ndarray:
 def vapour_pressure(t: np.ndarray, rh: np.ndarray) -> np.ndarray:
     """Vapour pressure (hPa) of air at T (K) with the IFS relative humidity rh (%), clamped to RH_MIN…RH_MAX."""
     return np.clip(rh, RH_MIN, RH_MAX) / 100.0 * ifs_saturation_vapour_pressure(t)
+
+
+def saturation_vapour_pressure(t: np.ndarray) -> np.ndarray:
+    """Saturation vapour pressure over water (hPa) at T (K) after Bolton (1980), eq. 10; also below 0 °C."""
+    return 6.112 * np.exp(17.67 * (t - KELVIN) / (t - KELVIN + 243.5))
 
 
 def dew_point(e: np.ndarray) -> np.ndarray:
@@ -62,3 +74,34 @@ def equivalent_potential_temperature(t: np.ndarray, rh: np.ndarray, p: float) ->
     mixing_ratio = 1000.0 * EPSILON * e / (p - e)  # g/kg
     theta = t * (REFERENCE_PRESSURE / p) ** (BOLTON_KAPPA * (1.0 - 0.28e-3 * mixing_ratio))
     return theta * np.exp((3.376 / t_lcl - 0.00254) * mixing_ratio * (1.0 + 0.81e-3 * mixing_ratio))
+
+
+def wet_bulb_temperature(t: np.ndarray, td: np.ndarray, p: np.ndarray) -> np.ndarray:
+    """Isobaric (psychrometric) wet-bulb temperature (K) of air at T (K) with dew point Td (K) and pressure p (Pa).
+
+    The temperature Tw to which evaporating water cools the air at constant
+    pressure until it is saturated: the sensible heat given off equals the
+    latent heat taken up, (c_pd + r c_pv) (T - Tw) = L(Tw) (r_s(Tw) - r), with
+    the mixing ratio r of the dew point and saturation over water (also below
+    0 °C, like the dew points of IFS and ICON). The left side minus the right
+    falls monotonically from Td to T, so a bisection between them finds the
+    root. A dew point above T (supersaturation in the model) counts as T; NaN
+    stays NaN.
+    """
+    t = np.asarray(t, dtype=np.float64)
+    td = np.minimum(np.asarray(td, dtype=np.float64), t)
+    p = np.asarray(p, dtype=np.float64) / 100.0  # hPa
+
+    def mixing_ratio(e):
+        return EPSILON * e / (p - e)
+
+    r = mixing_ratio(saturation_vapour_pressure(td))
+    heat_capacity = CP_DRY + r * CP_VAPOUR
+    lower, upper = td, t
+    for _ in range(WET_BULB_ITERATIONS):
+        tw = (lower + upper) / 2
+        latent = LATENT_HEAT_0 - LATENT_HEAT_SLOPE * (tw - KELVIN)
+        excess = heat_capacity * (t - tw) - latent * (mixing_ratio(saturation_vapour_pressure(tw)) - r)
+        # More sensible heat given off than latent heat taken up: the root lies above tw.
+        lower, upper = np.where(excess > 0, tw, lower), np.where(excess > 0, upper, tw)
+    return (lower + upper) / 2

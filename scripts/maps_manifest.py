@@ -37,7 +37,8 @@ FPS = 10
 HOURS_PER_DAY = 24
 # Temperature series of the start page (point_series.py): name -> file relative to maps/.
 SERIES_FILES = {name: f"austria/{name}.json" for name in
-                ("t850", "t2m", "heights", "thickness", "t500", "rh850", "rh700", "thetae850", "gust10m")}
+                ("t850", "t2m", "td2m", "tw2m", "heights", "thickness", "t500", "rh850", "rh700", "thetae850",
+                 "gust10m")}
 
 
 def tile_chart_paths(config: Path = CONFIG) -> list[str]:

@@ -15,4 +15,5 @@ IFS_GUST_NAMES = ("10fg", "10fg3")
 # ecCodes shortName -> name under which the viewer reads the fields of the ICON-D2 file
 # (charts.md, "ICON-D2-Datei"); with them ICON and ECMWF share tcc, msl, ...
 ICON_NAMES = {"tlat": "clat", "tlon": "clon", "HSURF": "hsurf", "CLCT": "tcc", "prmsl": "msl", "WW": "ww",
-              "max_i10fg": "gust", "max_2t": "tmax_2m", "min_2t": "tmin_2m", "ceil": "ceiling"}
+              "max_i10fg": "gust", "max_2t": "tmax_2m", "min_2t": "tmin_2m", "ceil": "ceiling",
+              "TW_2M": "wbt"}

@@ -215,6 +215,9 @@ wie dort (Listen in `charts.md`, „GRIB-Datei“ und „ICON-D2-Datei“):
   `ceiling`, `tmax_2m`, `hsurf`).
 - **Nur im ECMWF-TSV, nicht in der Tabelle:** `papt850`, die äquivalentpotentielle Temperatur θe auf
   850 hPa in K (Deutung unter „Luftmasse mit θe850“).
+- **In beiden TSV, nicht in der Tabelle:** `2d`, der Taupunkt in 2 m (K, über Wasser), `wbt`, die
+  Feuchtkugeltemperatur in 2 m (K, vom Viewer aus `2t`, `2d` und `sp` berechnet), und `sp`, der
+  Bodendruck am Modellboden (Pa). Deutung unter „Schwüle“ und „Niederschlagsart“.
 - **Einheiten:** wie im GRIB, also K, gpm, %, m/s, Pa/s, Pa, m. Bei ICON abweichend: `tcc` in %, `tp`
   in mm seit T+0 (die Stundenmenge ist die Differenz zweier Zeilen), `z850`/`z700` als Geopotential
   in m²/s² (÷ 9,81 = m).
@@ -316,6 +319,18 @@ Die Regeln geben die Richtung vor, ersetzen aber nicht den Blick auf die konkret
   - Bei kräftigem Niederschlag liegt die Grenze tiefer, bei schwachem höher.
   - Zur Gegenprobe im Flachland bis etwa 300 m: T850 ≤ −4 °C oder Dicke ≤ 528 dam heißt Schnee
     wahrscheinlich. −4…−2 °C bzw. 528–536 dam heißt Schneeregen oder nasser Schnee.
+  - Am Boden entscheidet die Feuchtkugeltemperatur `wbt`, nicht T2m: Fallender Niederschlag
+    verdunstet und kühlt die Luft bis auf sie ab. Bei `wbt` ≤ 0 °C kommt Schnee an, bis etwa +1 °C
+    nasser Schnee oder Schneeregen, darüber Regen. In trockener Luft (großer Abstand von `2t` zu `2d`)
+    schneit es daher auch bei T2m von +2 bis +4 °C, und die Temperatur fällt mit Einsetzen des
+    Niederschlags.
+  - Ob Schnee liegen bleibt: Bei `wbt` und `2d` unter 0 °C schmilzt er kaum, auch wenn T2m knapp
+    darüber liegt; bei `2d` über 0 °C kondensiert Feuchte auf dem Schnee und taut ihn rasch. Nach
+    milden Tagen ist der Boden warm, dann bleibt nasser Schnee erst bei kräftigem Fall liegen.
+- **Schwüle** (Sommerhalbjahr): Sie hängt an der Feuchte, nicht an der Temperatur. Ab einem Taupunkt
+  `2d` von etwa 16 °C empfinden die meisten die Luft als schwül, ab etwa 20 °C als drückend. Die
+  Feuchtkugeltemperatur `wbt` sagt, wie gut Schwitzen noch kühlt: Ab etwa 24 °C ist körperliche
+  Arbeit im Freien belastend. Hoher Taupunkt am Boden stützt auch die Gewittergefahr (siehe θe850).
 - **Wind am Boden:** Richtung etwa parallel zu den Isobaren, leicht zum tiefen Druck hin abgelenkt.
   Die Stärke folgt aus dem Isobarenabstand und dem Wind auf 1000 bzw. 925 hPa der Tabelle. In
   Tälern lenkt das Gelände den Wind um. ECMWF sieht das nicht, ICON-D2 in größeren Tälern schon

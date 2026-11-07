@@ -1,5 +1,8 @@
 """Download one ICON-D2 run of DWD open data (raw icosahedral grid, about 2.2 km) into a single GRIB2 file.
 
+The joined files are followed by the derived fields of lib/icon_derived_writer.py
+(the 2 m wet-bulb temperature wbt).
+
 ICON-D2 starts every 3 hours and runs hourly to T+48. The fields stay on
 the unstructured model grid; render_charts.py interpolates them straight
 onto the chart pixels (lib/triangle_grid.py). Parameters, as named by DWD
@@ -14,6 +17,8 @@ onto the chart pixels (lib/triangle_grid.py). Parameters, as named by DWD
     vmax_10m                       maximum 10 m gust of the last hour (m/s); max_i10fg -> gust
     t_2m, tmax_2m, tmin_2m         2 m temperature and its extremes (K); 2t, max_2t -> tmax_2m,
                                    min_2t -> tmin_2m (they restart every 6 h, lib/icon_extremes.py)
+    td_2m, ps                      2 m dew point (K) and surface pressure (Pa); 2d, sp; for the
+                                   wet-bulb temperature and the synop skill
     u_10m, v_10m                   10 m wind (m/s); 10u, 10v
     ceiling                        base of the lowest cloud layer above 50 % cover (m above sea level,
                                    about 20 km where there is none); ceil -> ceiling
@@ -22,7 +27,7 @@ onto the chart pixels (lib/triangle_grid.py). Parameters, as named by DWD
                                    geopotential m2/s2 (z), m/s; ICON-D2 has no 925 hPa
 
 Parameters on pressure levels are written "<folder>@<hPa>" (FORECAST_PARAMS). A run
-is about 1130 files, 610 MB to download and 820 MB as GRIB.
+is about 1228 files and 945 MB as GRIB.
 
 Without --run the newest complete run is taken: the run folders (00/ ... 21/)
 are ordered by the newest time stamp of their parameter folders, and the
@@ -31,8 +36,8 @@ between full hours (tot_prec at :15, :30, :45) are left out.
 
 If the target is an existing directory, the file is written into it as
 icon-d2_<YYYYMMDDHH>.grb2; the last line printed is the absolute path of the
-file. A target that already holds one message per file of the run is not
-downloaded again. The file is assembled as <out>.part and renamed at the end;
+file. A target that already holds one message per file of the run plus the
+derived ones is not downloaded again. The file is assembled as <out>.part and renamed at the end;
 the raw files land in <out>.raw/ and are removed after success (--keep-raw
 keeps them), so an interrupted call can simply be repeated.
 
@@ -59,6 +64,7 @@ import requests
 # Keep imports working under "python -I", which drops the script directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.forecast_writer import message_spans  # noqa: E402
+from lib.icon_derived_writer import IconDerivedWriter  # noqa: E402
 from lib.icon_downloader import IconDownloader  # noqa: E402
 from lib.icon_runs import IconRuns  # noqa: E402
 from lib.progress import Progress  # noqa: E402
@@ -66,7 +72,8 @@ from lib.progress import Progress  # noqa: E402
 # Pressure levels (hPa) of the height profile: they bracket 2000 m (mountain_2000) everywhere;
 # ICON-D2 has no 925 hPa.
 PROFILE_LEVELS = (850, 700)
-FORECAST_PARAMS = ("clct", "tot_prec", "pmsl", "ww", "vmax_10m", "t_2m", "tmax_2m", "tmin_2m", "u_10m", "v_10m", "ceiling",
+FORECAST_PARAMS = ("clct", "tot_prec", "pmsl", "ww", "vmax_10m", "t_2m", "tmax_2m", "tmin_2m", "td_2m", "ps",
+                   "u_10m", "v_10m", "ceiling",
                    "u@1000", "v@1000", *(f"{p}@{level}" for level in PROFILE_LEVELS for p in ("t", "relhum", "fi", "u", "v")))
 STATIC_PARAMS = ("clat", "clon", "hsurf", "fr_land")
 PARALLEL_REQUESTS = 8
@@ -93,7 +100,8 @@ def main(argv: list[str]) -> int:
         return 1
     print(f"run {run.run}: {len(run.urls)} files", flush=True)
     out = args.out / f"{PREFIX}{run.run}.grb2" if args.out.is_dir() else args.out
-    if out.exists() and len(message_spans(out)) == len(run.urls):
+    expected = len(run.urls) + IconDerivedWriter.expected(list(run.urls))
+    if out.exists() and len(message_spans(out)) == expected:
         print("already on disk")
         print(out.resolve())
         return 0
@@ -116,6 +124,7 @@ def main(argv: list[str]) -> int:
     if count != len(run.urls):
         print(f"{count} messages instead of one per file ({len(run.urls)})", file=sys.stderr)
         return 1
+    count += IconDerivedWriter.append(part)
     part.replace(out)
     print(f"{count} messages, {out.stat().st_size / 1e6:.0f} MB ({time.monotonic() - started:.0f}s)")
     if not args.keep_raw:

@@ -30,7 +30,7 @@ export interface ScaledLine extends PanelLine {
   range: (min: number, max: number) => readonly [bottom: number, top: number]
 }
 
-/** Classes of a layered area swatch: area above and below the line between them. */
+/** Classes of layered areas: area above and below the line between them. */
 export interface BandSwatchClasses {
   above: string
   below: string
@@ -38,11 +38,10 @@ export interface BandSwatchClasses {
 }
 
 /**
- * A legend entry: a line swatch, a swatch of layered areas, a colour scale (its boxes with the text beside them,
- * the band limits in a second row below), or a note without swatch (something the panel leaves out).
+ * A legend entry, one row each: a line swatch, or several line swatches stacked in one row (related series that
+ * share one text, so the plot keeps its height).
  */
-export type LegendEntry = { text: string }
-  & ({ line: string } | { bands: BandSwatchClasses } | { colours: ColourBand[] } | { note: true })
+export type LegendEntry = { text: string } & ({ line: string } | { lines: string[] })
 
 /**
  * A series shown as a strip of colours at the bottom of the plot, below the value axis: every value colours the
@@ -108,15 +107,9 @@ export interface PlacedPanel {
   plotBottom: number
 }
 
-/** Legend rows of an entry: a colour scale needs a second one for its band limits. */
-export function legendRows(entry: LegendEntry): number {
-  return 'colours' in entry ? 2 : 1
-}
-
 /** Pixels a panel needs besides its plot. */
 function overhead(panel: PanelSpec): number {
-  const rows = panel.legend.reduce((sum, entry) => sum + legendRows(entry), 0)
-  return TITLE_HEIGHT + rows * LEGEND_LINE_HEIGHT + HEADER_GAP + TIME_AXIS_HEIGHT
+  return TITLE_HEIGHT + panel.legend.length * LEGEND_LINE_HEIGHT + HEADER_GAP + TIME_AXIS_HEIGHT
 }
 
 /**
