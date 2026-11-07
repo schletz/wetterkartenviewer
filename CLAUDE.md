@@ -37,3 +37,10 @@ Vorgehen:
 3. Der Server führt gezielt nur die für das Deployment nötigen Pipeline-Teile aus.
 
 **Fallstrick (Server):** Der Commit des Dev-PCs löst bereits den github Workflow aus. Macht der Server kurz danach ebenfalls einen commit, wird der vorige Workflow abgebrochen. Der Server muss daher prüfen, ob gerade ein Workflow läuft.
+
+**Doppelte Deployments vermeiden:** Braucht eine Codeänderung neue Daten vom Server (z. B. ein neues Feld in einer Serien-JSON), committet der Dev-PC mit `[skip ci]` in der Commit-Nachricht. Der Push startet dann keinen Workflow, und der App-Code geht erst mit dem Deployment des Servers live, zusammen mit den passenden Daten. Der Server deployt nach seinem `publish_maps.py`:
+
+- Hat `publish_maps.py` ein geändertes Manifest gepusht, startet dieser Push den Workflow.
+- Sonst (Manifest unverändert, kein Commit) startet der Server den Workflow per Hand: `gh workflow run deploy.yml`.
+
+**Fallstrick (Serien-JSON im selben Lauf):** `point_series.py` schreibt eine Datei nur, wenn sich ihre Version (der Lauf) ändert. Für ein neues Feld im laufenden Lauf muss der Server die Datei in `maps/austria/` vorher löschen. Die Version bleibt dabei gleich, daher kann ein Browser mit der alten Datei im Cache sie bis zum nächsten Lauf weiter zeigen.
