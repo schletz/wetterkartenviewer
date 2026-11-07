@@ -1203,6 +1203,10 @@
   "gust10m": {
    "file": "austria/gust10m.json",
    "version": "2026110700"
+  },
+  "precip6h": {
+   "file": "austria/precip6h.json",
+   "version": "2026110700"
   }
  }
 }
