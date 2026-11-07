@@ -64,17 +64,6 @@ function pointLabel(point: GeoLocation, height?: number): string {
   return height === undefined ? position : `${position}, ${height} m ü. A.`
 }
 
-/** Tooltip parts of a value against its climate: "Ø 4,1 °C", "+1,2 σ"; none without climate. */
-function climateParts(value: number, climate: ClimatePoint | null): string[] {
-  if (climate === null) return []
-  const parts = [`Ø ${decimals(climate.mean, 1)} °C`]
-  if (climate.std > 0) {
-    const sigma = (value - climate.mean) / climate.std
-    parts.push(`${sigma >= 0 ? '+' : ''}${decimals(sigma, 1)} σ`)
-  }
-  return parts
-}
-
 /** "Mo 2.11. 06 UTC" */
 function timeLabel(time: Date): string {
   return `${WEEKDAYS[time.getUTCDay()]} ${time.getUTCDate()}.${time.getUTCMonth() + 1}. ${String(time.getUTCHours()).padStart(2, '0')} UTC`
@@ -136,17 +125,16 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
       // Two points per day give a rectangle; null keeps neighbouring days apart.
       return [{ x: x(c.day), ...point }, { x: x(+c.day + DAY_MS), ...point }, null]
     }), SIGMA_STEPS)
-    return { line, bands, means }
+    return { line, bands }
   }
   const anomaly850 = anomaly(t850.values, climate850)
   const { climate2mHeight } = temperatures
   const show2m = climate2mHeight !== undefined
     && Math.abs(climate2mHeight - t2mEcmwf.height) <= MAX_CLIMATE_HEIGHT_DIFFERENCE
-  // Without a comparable ERA5 point the T2m panel shows no climate at all: line, bars and tooltip would mislead alike.
+  // Without a comparable ERA5 point the T2m panel shows no climate at all: line and bars would mislead.
   // Daily means, not terms: against a climate per term the daily cycle would dominate the anomaly.
   const shownClimate2m = show2m ? climate2m : []
   const anomaly2m = dailyAnomaly(t2mEcmwf.values, shownClimate2m)
-  const climate2mByDay = new Map(shownClimate2m.map((c) => [+c.day, c]))
   // Vertical totals and the parcel reference only at valid times with T500 and RH850: either is worthless without
   // the other.
   const hasTotals = t500 !== null && rh850 !== null
@@ -201,8 +189,8 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
         ...(icon.length > 0 ? [{ values: icon, className: styles.t2mIcon }] : []),
       ],
       bands: anomaly2m.bands,
-      // The bands of the wind10m chart, so a colour means the same speed in the diagram and on the map; no legend,
-      // the tooltip gives the speed.
+      // The bands of the wind10m chart, so a colour means the same speed in the diagram and on the map; no legend or
+      // tooltip value (per user: the exact speed does not matter).
       ...(gust10m === null ? {} : { colourBar: { values: gust10m.series.values, colours: gust10m.colours } }),
       steps: TEMPERATURE_STEPS,
       weight: 1,
@@ -242,57 +230,31 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
 
   const placed = placePanels(panels, MARGIN_TOP, size.height, PANEL_GAP)
 
-  const iconByTime = new Map(icon.map((p) => [+p.valid, p.value]))
-  const ecmwfByTime = new Map(t2mEcmwf.values.map((p) => [+p.valid, p.value]))
-  const dewPointByTime = new Map(td2m?.values.map((p) => [+p.valid, p.value]) ?? [])
-  const wetBulbByTime = new Map(tw2m?.values.map((p) => [+p.valid, p.value]) ?? [])
-  // Gust and the hours before the valid time it covers.
-  const gustByTime = new Map(gust10m?.series.values.map((p, i) => [+p.valid, { value: p.value, hours: gust10m.hours[i] }]) ?? [])
-  const thicknessByTime = new Map(thickness?.values.map((p) => [+p.valid, p.value]) ?? [])
-  const rh700ByTime = new Map(rh700?.values.map((p) => [+p.valid, p.value]) ?? [])
-  const thetaEByTime = new Map(thetae850?.values.map((p) => [+p.valid, p.value]) ?? [])
-  const columns = t850.values.map((p) => x(p.valid))
-  const tooltip = (point: ValuePoint, i: number) => {
-    const parts = [timeLabel(point.valid)]
-    const ecmwf = ecmwfByTime.get(+point.valid)
-    if (ecmwf !== undefined) parts.push(`T2m ECMWF ${decimals(ecmwf, 1)} °C`)
-    const dewPoint = dewPointByTime.get(+point.valid)
-    if (dewPoint !== undefined) parts.push(`Td2m ${decimals(dewPoint, 1)} °C`)
-    const wetBulb = wetBulbByTime.get(+point.valid)
-    if (wetBulb !== undefined) parts.push(`Tw2m ${decimals(wetBulb, 1)} °C`)
-    // Daily mean of the UTC day of the step and its anomaly, the values of the bar below the column.
-    const day = Math.floor(+point.valid / DAY_MS) * DAY_MS
-    const dailyMean = anomaly2m.means.get(day)
-    if (dailyMean !== undefined) {
-      parts.push(`Tagesmittel ECMWF ${decimals(dailyMean, 1)} °C`, ...climateParts(dailyMean, climate2mByDay.get(day) ?? null))
-    }
-    const iconValue = iconByTime.get(+point.valid)
-    if (iconValue !== undefined) parts.push(`T2m ICON-D2 ${decimals(iconValue, 1)} °C`)
-    const gust = gustByTime.get(+point.valid)
-    if (gust !== undefined) parts.push(`Böe 10 m ${decimals(gust.value, 0)} km/h (${gust.hours} h)`)
-    parts.push(`T850 ${decimals(point.value, 1)} °C`, ...climateParts(point.value, climate850[i]))
-    const thetaE = thetaEByTime.get(+point.valid)
-    if (thetaE !== undefined) parts.push(`θe850 ${decimals(thetaE, 1)} K`)
-    const thicknessValue = thicknessByTime.get(+point.valid)
-    if (thicknessValue !== undefined) parts.push(`Z1000–500 ${decimals(thicknessValue, 1)} dam`)
-    const upper = t500ByTime.get(+point.valid)
-    if (upper !== undefined) parts.push(`T500 ${decimals(upper, 1)} °C`)
-    const pair = pairs[i]
-    if (pair !== null) parts.push(`VT ${decimals(pair.totals, 1)} K (Paket ${decimals(pair.parcel.totals, 1)} K)`)
-    const parcel = parcels[i]
-    const rh = rh850ByTime.get(+point.valid)
-    if (parcel !== null && rh !== undefined) {
-      parts.push(`Td850 ${decimals(parcel.dewPoint, 1)} °C (RH ${decimals(rh, 0)} %)`)
-      parts.push(`LCL ${decimals(parcel.lclPressure, 0)} hPa`)
-    }
-    const rh700Value = rh700ByTime.get(+point.valid)
-    if (rh700Value !== undefined) parts.push(`RH700 ${decimals(rh700Value, 0)} %`)
-    if (pair !== null) {
-      const index = pair.parcel.totals - pair.totals
-      parts.push(`Showalter ${index >= 0 ? '+' : ''}${decimals(index, 1)} K`)
-    }
-    return parts.join(' · ')
+  /** Value per valid time of a series, for the tooltips. */
+  const byTime = (values: ValuePoint[] | undefined) => new Map(values?.map((p) => [+p.valid, p.value]) ?? [])
+  const t2mEcmwfByTime = byTime(t2mEcmwf.values)
+  const t2mIconByTime = byTime(icon)
+  const wetBulbByTime = byTime(tw2m?.values)
+  const dewPointByTime = byTime(td2m?.values)
+  const t850ByTime = byTime(t850.values)
+  const thetaEByTime = byTime(thetae850?.values)
+  const thicknessByTime = byTime(thickness?.values)
+  const rh700ByTime = byTime(rh700?.values)
+  /** "T850 5,3 °C" of a series at a valid time; null where it has no value. */
+  const part = (series: Map<number, number>, time: number, label: string, unit: string, digits = 1) => {
+    const value = series.get(time)
+    return value === undefined ? null : `${label} ${decimals(value, digits)} ${unit}`
   }
+  // Each panel's tooltip holds only its own series, so it stays short.
+  const tooltipParts: Record<string, (time: number) => (string | null)[]> = {
+    t2m: (t) => [part(t2mEcmwfByTime, t, 'T2m ECMWF', '°C'), part(t2mIconByTime, t, 'T2m ICON-D2', '°C'),
+      part(wetBulbByTime, t, 'Feuchtkugel', '°C'), part(dewPointByTime, t, 'Taupunkt', '°C')],
+    t850: (t) => [part(t850ByTime, t, 'T850', '°C'), part(thetaEByTime, t, 'θe', 'K')],
+    thickness: (t) => [part(thicknessByTime, t, 'Z1000–500', 'dam'), part(rh700ByTime, t, 'RH700', '%', 0)],
+  }
+  const tooltip = (key: string, valid: Date) =>
+    [timeLabel(valid), ...tooltipParts[key](+valid).filter((p) => p !== null)].join(' · ')
+  const columns = t850.values.map((p) => x(p.valid))
 
   return (
     <div ref={box} className={styles.diagram}>
@@ -305,10 +267,11 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
             const left = i === 0 ? PLOT_LEFT : (columns[i - 1] + columns[i]) / 2
             const right = i === columns.length - 1 ? plotRight : (columns[i] + columns[i + 1]) / 2
             return (
+              // The cross shows in every panel, the tooltip is the one of the panel under the mouse.
               <g key={+point.valid} className={styles.hit}>
-                <title>{tooltip(point, i)}</title>
                 {placed.map(({ panel, plotTop, plotBottom }) => (
                   <g key={panel.key}>
+                    <title>{tooltip(panel.key, point.valid)}</title>
                     <rect x={left} y={plotTop} width={right - left} height={plotBottom - plotTop} />
                     <line className={styles.cross} x1={columns[i]} x2={columns[i]} y1={plotTop} y2={plotBottom} />
                   </g>
