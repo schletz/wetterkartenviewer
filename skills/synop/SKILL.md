@@ -243,7 +243,8 @@ meist 8–14 Kontaktabzüge und 10–30 Einzelkarten, verteilt nach der Wetterla
    - Mitteleuropa: `t850_mslp`, `rh700_wind700`, `weather_summary`, `tmax`, `tmin`. Dazu
      `t850_anomaly`: Wie ungewöhnlich die Luftmasse für die Jahreszeit ist, gehört in den Überblick
      des Berichts.
-   - Im Winterhalbjahr `inversion`, im Gebirge `freezing_level`.
+   - Im Winterhalbjahr `inversion`, im Sommerhalbjahr `z850_thetae850` (Mitteleuropa: wo die
+     feucht-warme Gewitterluft liegt und wie sie heranströmt), im Gebirge `freezing_level`.
    - ICON-D2 (`icon-d2/sheets/`, Ort im Fenster): `weather_summary`. Der Abzug zeigt 03, 09, 15 und
      21 UTC, also Gewitter am Nachmittag und Nebel in der Nacht und am Morgen. Dazu `tmax` und
      `tmin`.
@@ -257,7 +258,8 @@ meist 8–14 Kontaktabzüge und 10–30 Einzelkarten, verteilt nach der Wetterla
 4. **Umstellung oder Ereignis:** Trogdurchgang, Höhentief in weniger als etwa 1000 km,
    Frontdurchgang, |ΔT850/12h| ≥ 3 oder ein Sprung in θe850, Niederschlagssignal, Föhn. Dann die passenden Produkte in 3-
    bzw. 6-h-Schritten rund um das Ereignis. Nur so lässt sich sagen, ob die Front in der Nacht oder
-   am Nachmittag durchzieht.
+   am Nachmittag durchzieht. Bei einer Front oder einem Sprung in θe850 gehört `z850_thetae850`
+   dazu: Es zeigt die Luftmassengrenze als Fläche, auch stromauf, bevor sie den Ort erreicht.
 5. **Gebirge und Bergwetter:** `mountain_2000`, `freezing_level` und `snow_line` zu den Terminen
    mit Niederschlag oder Wetterwechsel. Einmal `orography.webp` und `icon-d2/orography.webp`, um zu
    sehen, wie grob bzw. fein die beiden Modelle das Gelände um den Ort abbilden.
@@ -291,9 +293,12 @@ Die Regeln geben die Richtung vor, ersetzen aber nicht den Blick auf die konkret
   der Ort unter dem Rücken oder an einer Trogflanke liegt.
 - **Frontdurchgang:** Er zeigt sich an mehreren Stellen gleichzeitig: Sprung in ΔT850/12h und
   θe850, RH700 steigt mit Hebung, Knick in den Isobaren, Wechsel der Windrichtung.
-- **Luftmasse mit θe850** (`papt850` im ECMWF-TSV): θe bleibt beim Heben und Absinken erhalten und
-  enthält die Feuchte als latente Wärme. Ändert es sich am Ort, ist eine andere Luftmasse da; Hebung
-  allein, etwa vor einem Trog, lässt es fast gleich.
+- **Luftmasse mit θe850** (`papt850` im ECMWF-TSV, als Karte `z850_thetae850`): θe bleibt beim
+  Heben und Absinken erhalten und enthält die Feuchte als latente Wärme. Ändert es sich am Ort, ist
+  eine andere Luftmasse da; Hebung allein, etwa vor einem Trog, lässt es fast gleich.
+  - Auf der Karte liegt die Front, wo sich die braunen θe-Linien drängen. Schneiden die Isohypsen
+    sie, führt die Strömung in 850 hPa andere Luft heran; daraus folgen Richtung und Tempo der
+    Luftmassengrenze. Laufen sie parallel, bleibt die Grenze liegen (quasistationäre Front).
   - Ein Sprung von etwa 4 K und mehr in 6–12 h markiert eine Front: fallend Kaltfront, steigend
     Warmfront oder Warmsektor. Er ist meist deutlicher als in T850, weil feuchte Warmluft und
     trockene Kaltluft sich in θe stärker unterscheiden als in der Temperatur.
