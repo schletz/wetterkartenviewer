@@ -10,7 +10,8 @@ is computed here once, with the same code that draws the charts:
                                      GRIB2 0/0/3, ECMWF 3014, which ecCodes calls papt
     wbt at 2 m                       wet-bulb temperature in K (moist_air.py) from 2t, 2d and sp, per step;
                                      GRIB2 0/0/27, ECMWF 261023
-    inv, rhbl, psig, snowl           local parameters (local_params.py) on the surface, per step
+    inv, rhbl, psig, snowl           local parameters (local_params.py) on the surface, per step;
+                                     snowl is the snow line below the 0 °C wet-bulb level
     uf, vf at 1000/925 hPa           local parameters: wind, missing where the level lies below the ground
     orog                             model orography in m (ECMWF 228002), T+0 only
     mx2t, mn2t                       daily 2 m maximum 06-18 UTC and minimum 18-06 UTC, per complete day

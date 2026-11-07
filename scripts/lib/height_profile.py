@@ -2,11 +2,13 @@
 
 import numpy as np
 
+from . import moist_air
 from .constants import KELVIN, PROFILE_LEVELS
 from .forecast_grib import ForecastGrib
 
 # Profile levels from the ground upwards; parameters missing on a level are skipped.
 LEVELS = tuple(sorted(PROFILE_LEVELS, reverse=True))
+PA_PER_HPA = 100.0
 
 
 class HeightProfile:
@@ -29,13 +31,34 @@ class HeightProfile:
         self.grib, self.step = grib, step
         self.height, self.height_factor = height, height_factor
 
+    def _levels(self, *names: str) -> list[int]:
+        """Profile levels, bottom to top, that hold every one of the parameters and the height field."""
+        return [level for level in LEVELS
+                if all(self.grib.has(name, self.step, level) for name in (*names, self.height))]
+
+    def _heights(self, levels: list[int]) -> np.ndarray:
+        """Heights (gpm) of the levels, stacked bottom to top."""
+        return np.stack([self.grib.field(self.height, self.step, level) * self.height_factor for level in levels])
+
     def _stack(self, name: str) -> tuple[np.ndarray, np.ndarray]:
         """(heights, values) of a parameter on every profile level that holds it and its height, bottom to top."""
-        levels = [level for level in LEVELS
-                  if self.grib.has(name, self.step, level) and self.grib.has(self.height, self.step, level)]
-        heights = np.stack([self.grib.field(self.height, self.step, level) * self.height_factor for level in levels])
+        levels = self._levels(name)
         values = np.stack([self.grib.field(name, self.step, level) for level in levels])
-        return heights, values
+        return self._heights(levels), values
+
+    def _wet_bulb_stack(self) -> tuple[np.ndarray, np.ndarray]:
+        """(heights, wet-bulb temperatures in K) on every profile level that holds t and r, bottom to top.
+
+        The dew point comes from the IFS relative humidity as in moist_air.py, the
+        wet bulb is the isobaric one at the pressure of the level.
+        """
+        levels = self._levels("t", "r")
+        tw = []
+        for level in levels:
+            t = self.grib.field("t", self.step, level)
+            td = moist_air.dew_point(moist_air.vapour_pressure(t, self.grib.field("r", self.step, level)))
+            tw.append(moist_air.wet_bulb_temperature(t, td, level * PA_PER_HPA).astype(np.float32))
+        return self._heights(levels), np.stack(tw)
 
     def at_height(self, name: str, height: float) -> np.ndarray:
         """A parameter at a fixed height; NaN where the height lies outside its levels."""
@@ -48,20 +71,36 @@ class HeightProfile:
         return result
 
     def freezing_level(self, ground: np.ndarray) -> np.ndarray:
-        """Height of the 0 deg C level in m, searched from the top downwards.
+        """Height of the 0 deg C level in m (see zero_crossing)."""
+        return self.zero_crossing(*self._stack("t"), ground)
+
+    def wet_bulb_zero(self, ground: np.ndarray) -> np.ndarray:
+        """Height of the 0 deg C wet-bulb level in m (see zero_crossing).
+
+        Falling snow is cooled by evaporation to about the wet-bulb
+        temperature and starts melting only where that exceeds 0 deg C. In
+        saturated air the level equals the freezing level, in dry air it lies
+        lower.
+        """
+        return self.zero_crossing(*self._wet_bulb_stack(), ground)
+
+    @staticmethod
+    def zero_crossing(heights: np.ndarray, temperatures: np.ndarray, ground: np.ndarray) -> np.ndarray:
+        """Height of the 0 deg C crossing of a temperature profile (K, bottom to top), searched from the top down.
 
         Searching from the top finds the upper end of a warm layer above a
-        cold pool, which is the freezing level that matters for snow and
-        skiers. Where the whole column up to 500 hPa is frozen, or the
-        crossing lies below the model ground, the result is the ground
-        height; where 500 hPa is still above 0 deg C it is NaN.
+        cold pool, which is the level that matters for snow and skiers. Where
+        the whole column up to the top level is frozen, or the crossing lies
+        below the model ground, the result is the ground height; where the
+        top level is still above 0 deg C it is NaN.
         """
-        heights, temperatures = self._stack("t")
         result = np.full(heights.shape[1:], np.nan, dtype=np.float32)
         for lo in reversed(range(len(heights) - 1)):
             t_lo, t_hi = temperatures[lo], temperatures[lo + 1]
             crossing = np.isnan(result) & (t_lo > KELVIN) & (t_hi <= KELVIN)
-            level = heights[lo] + (KELVIN - t_lo) / (t_hi - t_lo) * (heights[lo + 1] - heights[lo])
+            # Equal temperatures divide by zero, but only where there is no crossing.
+            with np.errstate(divide="ignore", invalid="ignore"):
+                level = heights[lo] + (KELVIN - t_lo) / (t_hi - t_lo) * (heights[lo + 1] - heights[lo])
             result = np.where(crossing, level, result)
         frozen = np.isnan(result) & (temperatures[0] <= KELVIN)
         result = np.where(frozen, ground, result)

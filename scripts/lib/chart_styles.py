@@ -241,9 +241,9 @@ RH700_LINES = (70.0, 90.0)
 # Precipitation signal from the upper air: relative humidity (%) at 850 or
 # 700 hPa from which the air counts as saturated, together with ascent.
 PRECIP_RH = 90.0
-# Snow line below the freezing level in m: the melting distance of falling
+# Snow line below the 0 deg C wet-bulb level in m: the melting distance of falling
 # snow (300-400 m; less in heavy precipitation, which cools the layer).
-SNOW_LINE_BELOW_FREEZING_M = 350.0
+SNOW_LINE_BELOW_WET_BULB_ZERO_M = 350.0
 
 # Mountain weather: height in m (2000 m: ski areas and huts of the Alps) and the
 # relative humidity from which the summits are in cloud.

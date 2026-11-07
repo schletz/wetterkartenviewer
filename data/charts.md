@@ -67,7 +67,7 @@ demselben Code wie die Karten. Karte und Zahl am Ort passen deshalb zusammen.
 |---|---|---|---|
 | `t`, `r`, `u`, `v` | 2000, 2500, 3000 m über NN | K, %, m/s | linear zwischen den beiden Druckflächen um die Höhe |
 | `deg0l` | — | m | Nullgradgrenze. Gesucht wird von oben, über einem Kaltluftsee zählt also die Obergrenze der warmen Schicht. Ist die ganze Säule gefroren, steht dort die Höhe des Modellbodens. |
-| `snowl` | — | m | Schneefallgrenze = Nullgradgrenze − 350 m, mindestens der Modellboden |
+| `snowl` | — | m | Schneefallgrenze = Feuchtkugel-Nullgradgrenze − 350 m, mindestens der Modellboden. In gesättigter Luft gleich Nullgradgrenze − 350 m, in trockener Luft tiefer. |
 | `inv` | — | K | stärkste Temperaturzunahme über 1000–925 oder 925–850 hPa. Über 0 heißt Inversion. |
 | `rhbl` | — | % | höchste Feuchte auf 925 oder 1000 hPa, also die Feuchte der Grenzschicht |
 | `psig` | — | 0/1 | Niederschlagssignal: RH auf 850 oder 700 hPa ≥ 90 % und Hebung auf 700 hPa |
@@ -353,8 +353,10 @@ die ganze Säule gefroren, steht dort die Höhe des Modellbodens.
 
 ## snow_line
 
-Mitteleuropa. Farben und Zahlen: Schneefallgrenze = Nullgradgrenze − 350 m, mindestens der
-Modellboden. Eingefärbt ist sie nur dort, wo die Höhe ein Niederschlagssignal zeigt: RH auf 850 oder
+Mitteleuropa. Farben und Zahlen: Schneefallgrenze = Feuchtkugel-Nullgradgrenze − 350 m, mindestens
+der Modellboden. Die Feuchtkugeltemperatur kommt aus T und RH jeder Druckfläche: Fallender Schnee
+kühlt sich durch Verdunstung auf sie ab und schmilzt erst, wo sie über 0 °C liegt. In gesättigter
+Luft ist das die Nullgradgrenze, in trockener Luft unter der Wolke liegt die Grenze tiefer. Eingefärbt ist sie nur dort, wo die Höhe ein Niederschlagssignal zeigt: RH auf 850 oder
 700 hPa ≥ 90 % und Hebung auf 700 hPa. Sonst ist die Fläche grau.
 
 - Das Signal sagt, dass Niederschlag wahrscheinlich ist, nicht wie viel.

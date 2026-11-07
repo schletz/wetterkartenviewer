@@ -74,6 +74,15 @@ class Diagnostics:
         """Freezing level in m (see HeightProfile.freezing_level)."""
         return self.profile.freezing_level(self.ground)
 
+    def wet_bulb_zero(self) -> np.ndarray:
+        """Height of the 0 deg C wet-bulb level in m (see HeightProfile.wet_bulb_zero)."""
+        return self.profile.wet_bulb_zero(self.ground)
+
     def snow_line(self) -> np.ndarray:
-        """Snow line in m: below the freezing level by the melting distance, at least the model ground."""
-        return np.maximum(self.freezing_level() - styles.SNOW_LINE_BELOW_FREEZING_M, self.ground)
+        """Snow line in m: below the 0 deg C wet-bulb level by the melting distance, at least the model ground.
+
+        The wet bulb takes the evaporative cooling of falling snow into
+        account, so the snow line drops in dry air below the cloud; in
+        saturated air it equals the freezing level minus the same distance.
+        """
+        return np.maximum(self.wet_bulb_zero() - styles.SNOW_LINE_BELOW_WET_BULB_ZERO_M, self.ground)

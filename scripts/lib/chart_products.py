@@ -434,7 +434,7 @@ class ChartProducts:
                      mask_label=f"grey: no precipitation signal (RH850/700 < {styles.PRECIP_RH:g} % or no ascent)")
         canvas.outlines()
         self.print_values(canvas, np.round(line, -2), "{:.0f}",
-                          f"numbers: snow line in m (freezing level − {styles.SNOW_LINE_BELOW_FREEZING_M:g} m)",
+                          f"numbers: snow line in m (wet-bulb 0 °C level − {styles.SNOW_LINE_BELOW_WET_BULB_ZERO_M:g} m)",
                           where=self.land & ~dry & ~np.isnan(line))
         return canvas
 

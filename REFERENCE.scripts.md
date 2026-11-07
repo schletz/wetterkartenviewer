@@ -358,8 +358,8 @@ package "meteorology" {
  lat, lon, height, land, valid.
  }
  class HeightProfile {
- Pressure level profile: value at a
- fixed height, freezing level.
+ Pressure level profile: value at a fixed
+ height, freezing and wet-bulb zero level.
  }
  class Diagnostics {
  Inversion, moist layer, precipitation
@@ -402,6 +402,7 @@ missing_values .. MissingFieldError : placeholder\nis read back as
 ModelSurface --> ForecastGrib : grib
 IconSurface --> ForecastGrib : grib
 HeightProfile --> ForecastGrib : grib
+HeightProfile ..> moist_air : wet_bulb_temperature
 Diagnostics --> HeightProfile : profile
 Diagnostics --> ModelSurface : surface
 Diagnostics ..> chart_styles : thresholds
@@ -628,7 +629,7 @@ Steps `STEPS`: 0…141 every 3 h (48) + 144…240 every 6 h (17) = 65.
 
 `RequestPlan.expected_total` computes this total; `output_complete` compares it with the target file.
 Local parameters (`LOCAL_NAMES`): discipline 0, category 192, number 0 `inv`, 1 `rhbl`, 2 `psig`, 3 `snowl`, 4 `uf`, 5 `vf`; ecCodes reads them as `unknown`, `ForecastGrib._name` renames them.
-Missing values: NaN is written as bitmap missing; it occurs for `inv`/`rhbl`/`uf`/`vf` below the model ground, for heights outside the profile levels (wind at 3000 m where gh700 < 3000 m) and for `deg0l`/`snowl` where 500 hPa is above 0 °C. `snowl` is set everywhere, not only where `psig`.
+Missing values: NaN is written as bitmap missing; it occurs for `inv`/`rhbl`/`uf`/`vf` below the model ground, for heights outside the profile levels (wind at 3000 m where gh700 < 3000 m), for `deg0l` where 500 hPa is above 0 °C and for `snowl` where its wet bulb is. `snowl` is set everywhere, not only where `psig`.
 Gusts (`IFS_GUST_NAMES`): Open Data publishes the maximum since the previous model output, so `10fg` covers the last hour to T+90 (hourly output; stepRange 2-3), `10fg3` the last 3 h from T+93 to T+144, `10fg` again the last 6 h from T+150 (checked run 2026110500). The 0.1° files have no `10fg` at T+93…144 and only a constant field at T+0, which is not requested. Readers pick the name per step (`ForecastGrib.pick`) and the window from the start step (`window_hours`).
 `tp` accumulates from T+0 in m. `tcc`, `tp`, `ptype` (`WEATHER_PARAMS`) only feed `weather_summary`: a 9 km global model gets fog and its precipitation wrong.
 Fields lost on the server get a placeholder: a copy of the same field at another step with every value missing (`missing_message`). The file then has the full message count and counts as complete; `ForecastGrib.field` raises `MissingFieldError`, `has()` stays true.
@@ -1069,11 +1070,13 @@ Lost static fields raise `MissingFieldError` while the products are built: rende
 | `__init__(grib, step, height='gh', height_factor=1.0)` | IFS `gh` in gpm; ICON `z` × 1/g |
 | `_stack(name)` | levels holding the parameter **and** the height field |
 | `at_height(name, height) -> ndarray` | linear in height between neighbour levels; NaN outside |
-| `freezing_level(ground) -> ndarray` | 0 °C crossing searched from the top (top of a warm layer above a cold pool); all frozen or crossing below ground → ground height; 500 hPa > 0 °C → NaN |
+| `_levels(*names)`, `_wet_bulb_stack()` | levels holding all names and the height; Tw per level from `t`, `r` via `vapour_pressure` → `dew_point` → `wet_bulb_temperature` at the level pressure |
+| `freezing_level(ground)`, `wet_bulb_zero(ground) -> ndarray` | `zero_crossing` of the T or Tw profile; Tw ≤ T, so the wet-bulb zero never lies above the freezing level (equal in saturated air). At the crossing T ≥ 0 °C, where IFS RH refers to water like `dew_point` |
+| `zero_crossing(heights, temperatures, ground)` (static) | 0 °C crossing searched from the top (top of a warm layer above a cold pool); all frozen or crossing below ground → ground height; top level (500 hPa) > 0 °C → NaN. Below-ground levels are used unmasked: they can only give a crossing below ground, which is clamped |
 
 ### Diagnostics (diagnostics.py)
 
-Pressure levels only; a level counts where its geopotential is more than `ABOVE_GROUND_MARGIN = 20` gpm above the model ground, else NaN. `OMEGA_SIGMA = 4` grid points smoothing of w700 (noisy over mountains). Thresholds `PRECIP_RH`, `SNOW_LINE_BELOW_FREEZING_M` live in chart_styles.py and act on charts and GRIB at once.
+Pressure levels only; a level counts where its geopotential is more than `ABOVE_GROUND_MARGIN = 20` gpm above the model ground, else NaN. `OMEGA_SIGMA = 4` grid points smoothing of w700 (noisy over mountains). Thresholds `PRECIP_RH`, `SNOW_LINE_BELOW_WET_BULB_ZERO_M` live in chart_styles.py and act on charts and GRIB at once.
 
 | Method | Definition |
 | --- | --- |
@@ -1082,7 +1085,8 @@ Pressure levels only; a level counts where its geopotential is more than `ABOVE_
 | `moist_boundary_layer()` | `fmax(r925, r1000)`, masked (`rhbl`) |
 | `precipitation_signal()` | `max(r850, r700) ≥ PRECIP_RH` (90) and smoothed `w700 < 0`; unmasked (`psig`) |
 | `freezing_level()` | `HeightProfile.freezing_level` (`deg0l`) |
-| `snow_line()` | `max(freezing_level − 350 m, ground)` (`snowl`) |
+| `wet_bulb_zero()` | `HeightProfile.wet_bulb_zero` (not written to GRIB) |
+| `snow_line()` | `max(wet_bulb_zero − 350 m, ground)` (`snowl`). Run 2026110612: never above the old freezing level − 350 m; where `psig`, 100–150 m lower on average, 200–450 m at the 10th percentile (dry air under the cloud, edges of precipitation areas) |
 | `equivalent_potential_temperature(level)` | `moist_air.equivalent_potential_temperature(t, r, level)`, unmasked like `t` of the level (`papt`) |
 
 ### moist_air.py
@@ -1282,7 +1286,7 @@ chart_styles.py holds every scale and threshold:
 | `ISOTHERM_850`, `ISOTHERM_500` | 4 K isotherms at band borders; brown and thin under Z lines, black, solid, bold every 20 K on `t500` (no other lines there) |
 | `MOIST_LAYER_RH = 90`, `WIND925_CALM = 5` | fog/stratus layer; below 5 m/s an inversion hardly clears |
 | `ASCENT_LINES`, `SUBSIDENCE_LINES` | ω700 −0.6/−0.2 and +0.2 Pa/s |
-| `PRECIP_RH = 90`, `SNOW_LINE_BELOW_FREEZING_M = 350` | also Diagnostics (`psig`, `snowl`) |
+| `PRECIP_RH = 90`, `SNOW_LINE_BELOW_WET_BULB_ZERO_M = 350` | also Diagnostics (`psig`, `snowl`) |
 | `MOUNTAIN_HEIGHT_M = 2000`, `SUMMIT_CLOUD_RH = 95` | chart height (defined apart from `MOUNTAIN_HEIGHTS`), IFS in cloud |
 | `ICON_SUMMIT_CLOUD_RH = 90`, `SUMMIT_CLOUD_AREA = 50` | ICON cell in cloud, hatched share |
 | `VALUE_SPACING_PX = 40`, `VALUE_START_PX = 30` | lattice of the printed values (first row/column at 30 px), detail windows only: ≈ 130 km on central Europe, ≈ 30 km on icon-d2 |
