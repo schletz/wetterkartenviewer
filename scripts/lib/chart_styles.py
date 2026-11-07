@@ -158,6 +158,7 @@ CLOUD_COVER = ColourScale("Total cloud cover (%)", (
 SUMMARY_LAND_RGB = (245, 205, 180)
 SUMMARY_SEA_RGB = (170, 200, 235)
 # Precipitation type at the valid time by ECMWF ptype code; rain (1) gets no symbol.
+# precip6h.json numbers the groups from 1 in this order (point_series.py), the app draws them alike.
 ASTERISK = (6, 2, 0)
 PRECIP_TYPES = (
     ((5,), SymbolStyle("snow", ASTERISK, 7, "white", width=1.6, halo="#1a1a60")),

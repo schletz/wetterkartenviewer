@@ -4,7 +4,7 @@ import { anomalyPolygons, thresholdPolygons } from '../model/anomalyBands'
 import { dailyMeans } from '../model/dailyMeans'
 import { equivalentPotentialTemperature850, parcelLift, potentialTemperature850 } from '../model/moistAdiabat'
 import type { GeoLocation } from '../model/GeoLocation'
-import { placePanels, type LegendEntry, type PanelSpec, type ScaledLine, type TimeAxis } from '../model/panelLayout'
+import { placePanels, type BarMark, type LegendEntry, type PanelSpec, type ScaledLine, type TimeAxis } from '../model/panelLayout'
 import type { ClimatePoint, DailyClimate, LocationTemperatures, ValuePoint } from '../model/TemperatureSeries'
 import { TEMPERATURE_STEPS, THICKNESS_STEPS } from '../model/ValueAxis'
 import { downloadSvg, EXPORT_SKIP } from '../services/svgExport'
@@ -51,6 +51,16 @@ const PERCENT_RANGE = () => [0, 100] as const
  */
 const THETA_E_RANGE = (min: number, max: number) =>
   [potentialTemperature850(min), equivalentPotentialTemperature850(max, 100)] as const
+
+/**
+ * Symbols of the precipitation classes of precip6h.json (1 snow, 2 wet snow or rain and snow, 3 freezing), those of
+ * the weather_summary chart: white and orange asterisks with a dark halo, a red diamond.
+ */
+const PRECIP_TYPE_MARKS: Record<number, Omit<BarMark, 'valid'>> = {
+  1: { shape: 'asterisk', className: styles.snow, haloClassName: styles.snowHalo },
+  2: { shape: 'asterisk', className: styles.wetSnow, haloClassName: styles.wetSnowHalo },
+  3: { shape: 'diamond', className: styles.freezing },
+}
 
 interface TemperatureDiagramProps {
   temperatures: LocationTemperatures
@@ -218,11 +228,15 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
       ],
       bands: anomaly850.bands,
       scaledLines: thetaELines,
-      // The bands and the 6 h window of the weather_summary chart, so a colour means the same amount in the diagram
-      // and on the map; like the gusts no legend or tooltip value.
+      // The bands, the 6 h window and the type symbols of the weather_summary chart, so a colour means the same
+      // amount in the diagram and on the map; like the gusts no legend or tooltip value.
       ...(precip6h === null ? {} : {
         colourBar: {
           values: precip6h.series.values, colours: precip6h.colours, transparentBelow: precip6h.transparentBelow,
+          marks: precip6h.types.flatMap((p) => {
+            const mark = PRECIP_TYPE_MARKS[p.value]
+            return mark === undefined ? [] : [{ valid: p.valid, ...mark }]
+          }),
         },
       }),
       steps: TEMPERATURE_STEPS,
@@ -283,7 +297,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     <div ref={box} className={styles.diagram}>
       {size.width > 0 && size.height > 0 && (
         <svg ref={svg} className={styles.svg} viewBox={`0 0 ${size.width} ${size.height}`} role="img"
-          aria-label="T2m von ECMWF und ICON-D2, Taupunkt und Feuchtkugeltemperatur in 2 m von ECMWF, Abweichung des Tagesmittels vom Klimamittel und Böen in 10 m von ECMWF, T850 von ECMWF mit Abweichung vom Klimamittel und äquivalentpotentieller Temperatur in 850 hPa und Niederschlag über 6 Stunden von ECMWF, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt, relative Feuchte in 700 hPa">
+          aria-label="T2m von ECMWF und ICON-D2, Taupunkt und Feuchtkugeltemperatur in 2 m von ECMWF, Abweichung des Tagesmittels vom Klimamittel und Böen in 10 m von ECMWF, T850 von ECMWF mit Abweichung vom Klimamittel und äquivalentpotentieller Temperatur in 850 hPa und Niederschlag über 6 Stunden mit Schnee und gefrierendem Niederschlag von ECMWF, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt, relative Feuchte in 700 hPa">
           {placed.map((p) => <TemperaturePanel key={p.panel.key} placed={p} time={time} left={PLOT_LEFT} right={plotRight} />)}
           {t850.values.map((point, i) => {
             // Each hover column reaches halfway to its neighbours, so the 3 h and 6 h steps cover the plots without gaps.

@@ -52,6 +52,16 @@ export interface ColourBar {
   colours: ColourBand[]
   /** Values below stay uncoloured; undefined colours every value. */
   transparentBelow?: number
+  /** Symbols in the plot just above the bar, each over the block of the value with the same valid time. */
+  marks?: BarMark[]
+}
+
+/** A symbol over one block of a colour bar: its shape, the class of its colour and of an optional halo below it. */
+export interface BarMark {
+  valid: Date
+  shape: 'asterisk' | 'diamond'
+  className: string
+  haloClassName?: string
 }
 
 /**

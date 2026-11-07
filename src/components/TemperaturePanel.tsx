@@ -3,7 +3,7 @@ import { bandColour } from '../model/colourBands'
 import { holidayName } from '../model/holidays'
 import {
   COLOUR_BAR_HEIGHT, LEGEND_LINE_HEIGHT, TITLE_HEIGHT,
-  type ColourBar, type PlacedPanel, type ScaledLine, type TimeAxis,
+  type BarMark, type ColourBar, type PlacedPanel, type ScaledLine, type TimeAxis,
 } from '../model/panelLayout'
 import type { ValuePoint } from '../model/TemperatureSeries'
 import { ValueAxis } from '../model/ValueAxis'
@@ -17,6 +17,11 @@ const DAY_MS = 86_400_000
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
 /** Share of the half plot height the largest centred area may fill. */
 const CENTRED_FILL = 0.9
+/** Radius of a symbol over a colour bar, px: a 3 h block is about 6 px wide on a desktop. */
+const MARK_RADIUS = 3.5
+/** Gap between a symbol and the top of the colour bar, px. */
+const MARK_GAP = 2
+const COS_30 = Math.cos(Math.PI / 6)
 
 interface TemperaturePanelProps {
   placed: PlacedPanel
@@ -139,6 +144,10 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
         ))}
         {panel.lines.map((line) => <path key={line.className} className={`${styles.line} ${line.className}`} d={path(line.values)} />)}
       </g>
+      {/* On top of the lines, which seldom reach the bottom of the axis. */}
+      {panel.colourBar?.marks !== undefined && (
+        <BarMarks bar={panel.colourBar} x={x} left={left} right={right} y={axisBottom - MARK_GAP - MARK_RADIUS} />
+      )}
     </g>
   )
 }
@@ -150,14 +159,11 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
 function ColourStrip({ bar, x, left, right, top, bottom }: {
   bar: ColourBar; x: TimeAxis['x']; left: number; right: number; top: number; bottom: number
 }) {
-  const columns = bar.values.map((p) => Math.min(right, Math.max(left, x(p.valid))))
+  const blocks = barBlocks(bar, x, left, right)
   return (
     <g>
       {bar.values.map((point, i) => {
-        // The values cover the interval before their step (gust maximum, precipitation sum), so a block ends at its
-        // step. The first reaches back to the start of the axis, the run (T+0), where its interval begins.
-        const from = i === 0 ? left : columns[i - 1]
-        const to = columns[i]
+        const [from, to] = blocks[i]
         // Steps outside the time axis collapse to zero width at its ends.
         const shown = bar.transparentBelow === undefined || point.value >= bar.transparentBelow
         return to > from && shown && (
@@ -168,4 +174,51 @@ function ColourStrip({ bar, x, left, right, top, bottom }: {
       <line className={styles.axis} x1={left} x2={right} y1={top} y2={top} />
     </g>
   )
+}
+
+/**
+ * Horizontal extent of every block of a colour bar. The values cover the interval before their step (gust maximum,
+ * precipitation sum), so a block ends at its step and reaches back to the previous one; the first reaches back to the
+ * start of the axis, the run (T+0), where its interval begins.
+ */
+function barBlocks(bar: ColourBar, x: TimeAxis['x'], left: number, right: number): [from: number, to: number][] {
+  const columns = bar.values.map((p) => Math.min(right, Math.max(left, x(p.valid))))
+  return columns.map((to, i) => [i === 0 ? left : columns[i - 1], to])
+}
+
+/** The symbols of a colour bar, centred over their blocks at height `y`. */
+function BarMarks({ bar, x, left, right, y }: {
+  bar: ColourBar; x: TimeAxis['x']; left: number; right: number; y: number
+}) {
+  const blocks = barBlocks(bar, x, left, right)
+  const index = new Map(bar.values.map((p, i) => [+p.valid, i]))
+  return (
+    <g>
+      {bar.marks?.map((mark) => {
+        const i = index.get(+mark.valid)
+        if (i === undefined || blocks[i][1] <= blocks[i][0]) return null
+        const cx = (blocks[i][0] + blocks[i][1]) / 2
+        const shape = markShape(mark, cx, y)
+        return (
+          <g key={+mark.valid}>
+            {mark.haloClassName !== undefined && shape(mark.haloClassName)}
+            {shape(mark.className)}
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
+/** Draws the shape of a mark centred at (cx, cy) with a class: an asterisk of three spokes, one upright, or a diamond. */
+function markShape(mark: BarMark, cx: number, cy: number) {
+  const r = MARK_RADIUS
+  if (mark.shape === 'diamond') {
+    const points = `${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}`
+    return (className: string) => <polygon className={className} points={points} />
+  }
+  const dx = r * COS_30
+  const dy = r / 2
+  const d = `M${cx},${cy - r}L${cx},${cy + r}M${cx - dx},${cy - dy}L${cx + dx},${cy + dy}M${cx - dx},${cy + dy}L${cx + dx},${cy - dy}`
+  return (className: string) => <path className={className} d={d} />
 }

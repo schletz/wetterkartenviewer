@@ -19,7 +19,8 @@ Twelve JSON files in maps/austria/ (published like the videos, listed in the man
     gust10m.json   ECMWF 10 m gust in km/h (no climatology) with the hours it covers and the colour
                    bands of the wind10m chart, drawn as a colour bar in the T2m panel
     precip6h.json  ECMWF precipitation in mm over the 6 h before each step (3 h at T+3), as on the
-                   weather_summary chart, with its bands, drawn as a colour bar in the T850 panel
+                   weather_summary chart, with its bands, drawn as a colour bar in the T850 panel, and
+                   the class of its type (snow, wet snow, freezing) from ptype, drawn as symbols above it
 
 Every series is stored as whole tenths of a degree (of a dam for the
 thickness; rh850 and rh700 as whole percent, gust10m as whole km/h,
@@ -84,6 +85,10 @@ RH_SCALE = 1.0
 WIND_SCALE = 1.0
 # Precipitation in tenths of a mm: the lowest band of the weather_summary chart starts at 0.2 mm.
 PRECIP_SCALE = 0.1
+# Precipitation classes of precip6h.json (1-based index into chart_styles.PRECIP_TYPES: 1 snow, 2 wet snow or rain
+# and snow, 3 freezing rain or drizzle, ice pellets), strongest first: freezing precipitation decides on black ice,
+# and a window with snow and wet snow has snow.
+PTYPE_PRECEDENCE = (3, 1, 2)
 # 2 m humidity series, ECMWF only (ICON-D2 would multiply the file size), in deg C like T2m:
 # file name -> GRIB shortName of the dew point and the wet-bulb temperature.
 HUMIDITY_SERIES = {"td2m": "2d", "tw2m": "wbt"}
@@ -162,7 +167,33 @@ def precipitation_block(grib: ForecastGrib) -> dict:
 
     block = derived_block(grib, [step for step in grib.steps("tp") if step > 0], "precip6h", field_of, PRECIP_SCALE)
     block["hours"] = [min(ChartProducts.PRECIP_HOURS, step) for step in block["steps"]]
+    block["ptype"] = derived_block(grib, block["steps"], "ptype", lambda step: precipitation_class(grib, step),
+                                   1.0)["ptype"]
     return block
+
+
+def precipitation_class(grib: ForecastGrib, step: int) -> np.ndarray:
+    """Precipitation class of the window before ``step``: 0 none, k the k-th group of ``PRECIP_TYPES``.
+
+    ptype is the type at an output step, not over the window, so every output step inside the window counts (two up
+    to T+144, one after); of several classes the first in ``PTYPE_PRECEDENCE`` wins. Windows below the threshold of
+    the shading get 0: the chart draws no symbol outside its shaded precipitation either.
+    """
+    start = step - min(ChartProducts.PRECIP_HOURS, step)
+    found = []
+    for sample in (t for t in grib.steps("ptype") if start < t <= step):
+        try:
+            ptype = np.rint(grib.field("ptype", sample))
+        except MissingFieldError:
+            continue
+        found.append([np.isin(ptype, codes) for codes, _ in chart_styles.PRECIP_TYPES])
+    classes = np.zeros(grib.field("tp", step).shape, np.int64)
+    for k in reversed(PTYPE_PRECEDENCE):
+        # Later assignments win, so the loop runs from the weakest to the strongest class.
+        classes[np.any([sample[k - 1] for sample in found], axis=0)] = k
+    precip = (grib.field("tp", step) - grib.field("tp", start)) * 1000
+    classes[precip < chart_styles.PRECIPITATION.transparent_below] = 0
+    return classes
 
 
 def colour_bands(scale) -> list[list]:

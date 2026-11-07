@@ -190,8 +190,13 @@ export interface Precip6hFile {
   colours: ColourBand[]
   /** Values below stay uncoloured, as on the chart. */
   transparent_below: number
-  /** `hours`: length of the window before each step. */
-  ecmwf: EcmwfBlock & { precip6h: number[]; hours: number[] }
+  /**
+   * `hours`: length of the window before each step. `ptype`: class of the precipitation in the window, 0 none (or
+   * below `transparent_below`), 1 snow, 2 wet snow or rain and snow, 3 freezing rain or drizzle, ice pellets
+   * (the symbol groups of the weather_summary chart), from the ECMWF ptype at every output step inside the window;
+   * missing in files of older pipelines.
+   */
+  ecmwf: EcmwfBlock & { precip6h: number[]; hours: number[]; ptype?: number[] }
 }
 
 export interface SeriesFiles {

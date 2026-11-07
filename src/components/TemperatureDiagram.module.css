@@ -174,3 +174,45 @@
 .hit:hover .cross {
   opacity: 1;
 }
+
+/* Precipitation type symbols over the precipitation bar, coloured like those of the weather_summary chart. */
+.snow,
+.wetSnow,
+.snowHalo,
+.wetSnowHalo {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.snow,
+.wetSnow {
+  stroke-width: 1.4;
+}
+
+/* Below the asterisk, so it stays visible on the light bar colours and on the white plot. */
+.snowHalo,
+.wetSnowHalo {
+  stroke-width: 3.2;
+}
+
+.snow {
+  stroke: #fff;
+}
+
+.snowHalo {
+  stroke: #1a1a60;
+}
+
+.wetSnow {
+  stroke: #ff9a00;
+}
+
+.wetSnowHalo {
+  stroke: #402000;
+}
+
+.freezing {
+  fill: #e00000;
+  stroke: #fff;
+  stroke-width: 0.8;
+}

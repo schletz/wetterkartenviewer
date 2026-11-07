@@ -574,7 +574,7 @@ Regular grids (`grid`: `lat0` northernmost row, `lon0`, `dlat` step southwards, 
 | `rh700.json`, ECMWF run | `ecmwf` with `rh700` (`r` at 700 hPa, %), encoded like rh850; the app draws it as a line over the thickness axis (0–100 %) | 422 KB, gzip 98 KB (run 2026110400) |
 | `thetae850.json`, ECMWF run | `ecmwf` with `thetae850` (`papt` at 850 hPa, **K**, not °C), scale 0.1; no climate; written only if the IFS file has `papt` (else a message and no file, the app draws no line); the app draws it as a line in the T850 panel without an axis of its own | 449 KB, gzip 118 KB (run 2026110600) |
 | `gust10m.json`, ECMWF run | `ecmwf` with `gust10m` (km/h, `10fg`/`10fg3` × `KMH_PER_MS`, steps 3…240, none at T+0) and `hours` (per step the interval it covers: 1, 3 or 6), `scale` 1 (`WIND_SCALE`; the band limits are whole km/h); `colours`: the bands of `chart_styles.GUST10M` as `[lower, upper, "#rrggbb"]` (last upper 300), so the app colours its bar like the wind10m chart without a copy of the scale; no climate | ≈ 0.4 MB, gzip ≈ 80 KB |
-| `precip6h.json`, ECMWF run | `ecmwf` with `precip6h` (mm over the window before each step, exactly as `weather_summary`: `tp(step) − tp(step − min(PRECIP_HOURS, step))`, ≥ 0; steps 3…240, `hours` 3 at T+3, else 6; up to T+144 the 6 h windows of neighbouring 3-hourly steps overlap), `scale` 0.1 (`PRECIP_SCALE`); `colours`: the bands of `chart_styles.PRECIPITATION` (0.2…1000 mm), `transparent_below` 0.2 (drier stays uncoloured); no climate. Open Data packs `tp` with 12 bits over the whole cropped box, so accumulated values step by 2⁻¹³…2⁻¹² m (0.12–0.24 mm): a single quantum already reaches the first band | 0.3 MB, gzip 46 KB (run 2026110700) |
+| `precip6h.json`, ECMWF run | `ecmwf` with `precip6h` (mm over the window before each step, exactly as `weather_summary`: `tp(step) − tp(step − min(PRECIP_HOURS, step))`, ≥ 0; steps 3…240, `hours` 3 at T+3, else 6; up to T+144 the 6 h windows of neighbouring 3-hourly steps overlap), `scale` 0.1 (`PRECIP_SCALE`); `colours`: the bands of `chart_styles.PRECIPITATION` (0.2…1000 mm), `transparent_below` 0.2 (drier stays uncoloured); `ptype` (scale 1, encoded like the values): class of the precipitation type per window, 0 none, k ≥ 1 the k-th group of `chart_styles.PRECIP_TYPES` (1 snow `5`, 2 wet snow or rain and snow `6`/`7`, 3 freezing `3`/`8`/`12`). ptype is instantaneous, so every output step inside the window counts (two up to T+144, one after), several classes resolved by `PTYPE_PRECEDENCE`; windows below 0.2 mm get 0, as the chart draws no symbol outside its shading. Run 2026110700, box points × steps: 1 snow 4476, 2 wet 2863, 3 freezing 604 of 144 768; no climate. Open Data packs `tp` with 12 bits over the whole cropped box, so accumulated values step by 2⁻¹³…2⁻¹² m (0.12–0.24 mm): a single quantum already reaches the first band | 0.6 MB, gzip 53 KB (run 2026110700) |
 | `heights.json`, `<icon run>-<cells>` | ICON cells within `BORDER_MARGIN` of Austria in file order (25 344): `lat`, `lon` as deltas of `coord_scale` 1e-4°, `hsurf` (m) | 316 KB, gzip 78 KB |
 
 `climate` (both levels): `period`, `grid` (0.25°, 12×32), `first_day` (00 UTC of the ECMWF run), `days` (to the last step, 11), `orog` (ERA5 orography per point, whole m, from `era5_orography`; ≈ 1.5 KB raw), then only the kind the app draws (`climate_block(…, kind)`): t850.json `hours` (00…21) and `term` (per day and hour, day-major), t2m.json `daily` (per day; its `std` is that of the daily means, ≈ 0.3 K below the mean term std, so it is the right σ for a daily mean anomaly); each `{mean (°C), std (K)}`. The ERA5 daily mean differs from the mean of the eight term means by < 0.09 K. The `monthly` kind is not written.
@@ -718,7 +718,7 @@ Without a new run a call takes ≈ 3.5 s.
 
 ### point_series.py
 
-Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 850 and 500, `r` 850 and 700, `2t`, `2d`, `wbt`, `10fg`, `10fg3`, `tp`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours` for T850, `daily` for T2m) with its orography through `era5_orography`.
+Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 850 and 500, `r` 850 and 700, `2t`, `2d`, `wbt`, `10fg`, `10fg3`, `tp`, `ptype`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours` for T850, `daily` for T2m) with its orography through `era5_orography`.
 A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness, t500, rh850, rh700, thetae850, gust10m, precip6h, td2m and tw2m per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
 A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. ICON cells with NaN `hsurf` (boundary zone) are dropped. Without any ICON file t2m.json has no `icon` and heights.json is not written; the app then shows nothing (it needs heights).
 
@@ -730,6 +730,7 @@ A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. IC
 | `RH_SCALE = 1.0` | unit of rh850.json and rh700.json (%); its `scale` is set apart from `common`, since the document's `scale` must equal the encoding scale |
 | `WIND_SCALE = 1.0` | unit of gust10m.json (km/h), set apart like `RH_SCALE` |
 | `PRECIP_SCALE = 0.1` | unit of precip6h.json (mm); the lowest band starts at 0.2 mm |
+| `PTYPE_PRECEDENCE = (3, 1, 2)` | of several ptype classes in one window the first wins: freezing (black ice), then snow, then wet snow |
 | `HUMIDITY_SERIES = {"td2m": "2d", "tw2m": "wbt"}` | file → shortName of the 2 m humidity series (°C, ECMWF only) |
 
 | Function | Summary |
@@ -739,7 +740,8 @@ A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. IC
 | `box_window(grid, margin) -> (rows, cols, grid)` | part of a regular grid inside `BOX` ± margin |
 | `derived_block(grib, steps, key, field_of, scale=SCALE)` | `field_of(step)` at each of `steps`, cut to the box; a `MissingFieldError` inside drops the step |
 | `gust_block(grib)` | gusts of both names in km/h plus `hours` per kept step |
-| `precipitation_block(grib)` | precipitation over `ChartProducts.PRECIP_HOURS` before each `tp` step > 0 in mm plus `hours`; the window follows the chart's constant |
+| `precipitation_block(grib)` | precipitation over `ChartProducts.PRECIP_HOURS` before each `tp` step > 0 in mm plus `hours` and `ptype`; the window follows the chart's constant |
+| `precipitation_class(grib, step) -> ndarray` | ptype class of the window before `step` (see precip6h.json); a lost ptype sample is skipped |
 | `colour_bands(scale) -> list` | `ColourScale.bands` as `[lower, upper, "#rrggbb"]` |
 | `ecmwf_block(grib, name, level, key, offset=-KELVIN, factor=1, scale=SCALE)` (via `derived_block`), `icon_block(grib, cells)`, `climate_block(archive, level, run, last_step, kind)` (`kind` "term" or "daily"), `heights_document(grib, cells)` | the parts of the files |
 | `austria_cells(lat, lon)`, `icon_cells(grib)` | cell indices in file order |
@@ -1281,7 +1283,7 @@ chart_styles.py holds every scale and threshold:
 | `ROUGH_TERRAIN_SDOR = 200` | real valley/summit heights differ by several 100 m |
 | `HIGH_GROUND_M = 700`, `ABOVE_850HPA_M = 1300` | inversion chart grey, T850 areas masked or dashed line in `t850_mslp`/`z850_rh700`/`z850_thetae850`; `z500_t850`, `dt850_24h` colour T850 everywhere |
 | `PRECIPITATION`, `CLOUD_COVER` | after ogimet surface charts; uncoloured below 0.2 mm / 40 %; "6 h" in the title is replaced with the real interval; `PRECIPITATION` also copied into precip6h.json |
-| `PRECIP_TYPES` | ptype 5 snow; 6/7 wet snow, sleet; 3/8/12 freezing rain, ice pellets; rain without symbol |
+| `PRECIP_TYPES` | ptype 5 snow; 6/7 wet snow, sleet; 3/8/12 freezing rain, ice pellets; rain without symbol; the order numbers the `ptype` classes of precip6h.json (app: `PRECIP_TYPE_MARKS`) |
 | `OUTSIDE_RGB = (190, 190, 190)` | outside a limited area model |
 | `WW_PTYPE` | 5 ← 70–75, 77, 85, 86; 7 ← 68, 69, 83, 84; 3 ← 56, 57, 66, 67; 8 ← 79 |
 | `WW_SYMBOLS`, `WW_SYMBOL_SPACING_PX = 20` | lightning (yellow, dark red edge), hail triangle, fog three lines with halo |

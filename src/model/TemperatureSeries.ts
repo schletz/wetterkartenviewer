@@ -69,9 +69,10 @@ export interface LocationTemperatures {
   gust10m: { series: PointSeries; hours: number[]; colours: ColourBand[] } | null
   /**
    * ECMWF precipitation in mm over the 6 h before each step (3 h at T+3), the colour bands of the weather_summary
-   * chart and the value below which it stays uncoloured; null without precip6h file.
+   * chart, the value below which it stays uncoloured and the class of its type per step (`Precip6hFile`); null
+   * without precip6h file.
    */
-  precip6h: { series: PointSeries; colours: ColourBand[]; transparentBelow: number } | null
+  precip6h: { series: PointSeries; types: ValuePoint[]; colours: ColourBand[]; transparentBelow: number } | null
 }
 
 /** Picks the series of one location out of the files of the Austria box. */
@@ -142,6 +143,10 @@ export class TemperatureSeries {
         ? null
         : {
             series: ecmwfSeries(precip6h.ecmwf, precip6h.ecmwf.precip6h, precip6h.scale, location),
+            // Whole class numbers, not in units of the precipitation scale; older files have none.
+            types: precip6h.ecmwf.ptype === undefined
+              ? []
+              : ecmwfSeries(precip6h.ecmwf, precip6h.ecmwf.ptype, 1, location).values,
             colours: precip6h.colours,
             transparentBelow: precip6h.transparent_below,
           },
