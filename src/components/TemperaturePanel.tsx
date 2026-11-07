@@ -144,8 +144,8 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
 }
 
 /**
- * The colour bar between `top` and `bottom`: each value fills the time halfway to its neighbours, values below
- * `transparentBelow` leave it empty.
+ * The colour bar between `top` and `bottom`: each value ends at its valid time and fills the time back to the previous
+ * value, values below `transparentBelow` leave it empty.
  */
 function ColourStrip({ bar, x, left, right, top, bottom }: {
   bar: ColourBar; x: TimeAxis['x']; left: number; right: number; top: number; bottom: number
@@ -154,8 +154,10 @@ function ColourStrip({ bar, x, left, right, top, bottom }: {
   return (
     <g>
       {bar.values.map((point, i) => {
-        const from = i === 0 ? left : (columns[i - 1] + columns[i]) / 2
-        const to = i === columns.length - 1 ? right : (columns[i] + columns[i + 1]) / 2
+        // The values cover the interval before their step (gust maximum, precipitation sum), so a block ends at its
+        // step. The first reaches back to the start of the axis, the run (T+0), where its interval begins.
+        const from = i === 0 ? left : columns[i - 1]
+        const to = columns[i]
         // Steps outside the time axis collapse to zero width at its ends.
         const shown = bar.transparentBelow === undefined || point.value >= bar.transparentBelow
         return to > from && shown && (

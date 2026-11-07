@@ -44,8 +44,8 @@ export interface BandSwatchClasses {
 export type LegendEntry = { text: string } & ({ line: string } | { lines: string[] })
 
 /**
- * A series shown as a strip of colours at the bottom of the plot, below the value axis: every value colours the
- * time halfway to its neighbours with its band.
+ * A series shown as a strip of colours at the bottom of the plot, below the value axis: every value covers an interval
+ * before its valid time (a maximum or a sum) and colours the time from the previous value to its own with its band.
  */
 export interface ColourBar {
   values: ValuePoint[]
