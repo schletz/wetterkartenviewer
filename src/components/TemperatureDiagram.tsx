@@ -6,7 +6,7 @@ import { equivalentPotentialTemperature850, parcelLift, potentialTemperature850 
 import type { GeoLocation } from '../model/GeoLocation'
 import { placePanels, type BarMark, type LegendEntry, type PanelSpec, type ScaledLine, type TimeAxis } from '../model/panelLayout'
 import type { ClimatePoint, DailyClimate, LocationTemperatures, ValuePoint } from '../model/TemperatureSeries'
-import { TEMPERATURE_STEPS, THICKNESS_STEPS } from '../model/ValueAxis'
+import { TEMPERATURE_SCALE, THICKNESS_SCALE } from '../model/ValueAxis'
 import { downloadSvg, EXPORT_SKIP } from '../services/svgExport'
 import styles from './TemperatureDiagram.module.css'
 import TemperaturePanel from './TemperaturePanel'
@@ -211,7 +211,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
       // The bands of the wind10m chart, so a colour means the same speed in the diagram and on the map; no legend or
       // tooltip value (per user: the exact speed does not matter).
       ...(gust10m === null ? {} : { colourBar: { values: gust10m.series.values, colours: gust10m.colours } }),
-      steps: TEMPERATURE_STEPS,
+      axis: TEMPERATURE_SCALE,
       weight: 1,
     },
     {
@@ -239,7 +239,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
           }),
         },
       }),
-      steps: TEMPERATURE_STEPS,
+      axis: TEMPERATURE_SCALE,
       weight: 1,
     },
     ...(thickness === null ? [] : [{
@@ -254,7 +254,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
       ...(!hasTotals ? {} : {
         centred: { polygons: showalterBands, extent, maxScale: THICKNESS_PER_KELVIN, classes: showalterClasses },
       }),
-      steps: THICKNESS_STEPS,
+      axis: THICKNESS_SCALE,
       weight: 1,
     }]),
   ]

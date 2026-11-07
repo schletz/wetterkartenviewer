@@ -7,6 +7,18 @@
   border: 1px solid var(--border);
 }
 
+/*
+ * One column (below 844 px, see StartPage.module.css): the cell keeps this height once the aspect ratio would
+ * make it lower and only gets narrower, so the plots stay readable on a phone. The page scrolls there anyway.
+ */
+@media not all and (min-width: 844px) {
+  /* A definite width, else the aspect ratio would turn the minimum height into a minimum width. */
+  .frame {
+    width: 100%;
+    min-height: 600px;
+  }
+}
+
 .status {
   color: var(--muted);
 }

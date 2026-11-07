@@ -45,7 +45,7 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
   const values = panel.lines.flatMap((line) => line.values.flatMap((p) => (p === null ? [] : [p.value])))
   // A colour bar takes the bottom rows of the plot, so no line runs across it.
   const axisBottom = panel.colourBar === undefined ? plotBottom : plotBottom - COLOUR_BAR_HEIGHT
-  const axis = new ValueAxis(values, plotTop, axisBottom, panel.steps)
+  const axis = new ValueAxis(values, plotTop, axisBottom, panel.axis)
   const clipId = `temperature-${panel.key}`
   // Centred areas: zero in the middle of the axis, shrunk below maxScale only if the largest would leave the plot.
   const centre = (axis.min + axis.max) / 2
@@ -101,7 +101,7 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
       {axis.ticks().map((value) => (
         <g key={value}>
           <line className={value === 0 ? styles.zero : styles.grid} x1={left} x2={right} y1={axis.y(value)} y2={axis.y(value)} />
-          <text x={left - 6} y={axis.y(value) + 4} textAnchor="end">{value}</text>
+          {axis.labelled(value) && <text x={left - 6} y={axis.y(value) + 4} textAnchor="end">{value}</text>}
         </g>
       ))}
       {time.days.map((day) => {

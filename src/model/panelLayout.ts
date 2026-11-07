@@ -5,6 +5,7 @@
 import type { BandPolygon } from './anomalyBands'
 import type { ColourBand } from './seriesFiles'
 import type { ValuePoint } from './TemperatureSeries'
+import type { AxisScale } from './ValueAxis'
 
 export const TITLE_HEIGHT = 16
 export const LEGEND_LINE_HEIGHT = 14
@@ -93,8 +94,8 @@ export interface PanelSpec {
   centred?: CentredBands
   /** Strip of colours at the bottom of the plot; the value axis ends above it. */
   colourBar?: ColourBar
-  /** Label distances of the value axis. */
-  steps: readonly number[]
+  /** How the value axis chooses its range and grid. */
+  axis: AxisScale
   /** Share of the height the plots split among themselves. */
   weight: number
 }

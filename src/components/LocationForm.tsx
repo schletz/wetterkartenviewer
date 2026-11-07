@@ -8,8 +8,8 @@ interface LocationFormProps {
   onSave: (location: GeoLocation) => void
 }
 
-/** Decimal places kept from a search hit: about 10 m, far finer than any model grid. */
-const DECIMALS = 4
+/** Decimal places kept from a search hit: about 1 km, finer than the 0.1° ECMWF grid, and fits the narrow fields. */
+const DECIMALS = 2
 
 /**
  * Place name or latitude and longitude; saving reloads the meteograms and moves the chart marker.
@@ -51,24 +51,27 @@ export default function LocationForm({ location, onSave }: LocationFormProps) {
 
   return (
     <form className={styles.form} onSubmit={submit}>
-      <label>
-        Ort
-        <input className={styles.place} type="search" placeholder="z. B. Innsbruck"
-          value={place} onChange={(e) => setPlace(e.target.value)} />
-      </label>
-      <label>
-        Breite °N
-        <input className={styles.input} type="number" step="any" min="-90" max="90"
-          value={lat} onChange={(e) => setLat(e.target.value)} />
-      </label>
-      <label>
-        Länge °E
-        <input className={styles.input} type="number" step="any" min="-180" max="180"
-          value={lon} onChange={(e) => setLon(e.target.value)} />
-      </label>
-      <button type="submit" disabled={searching || (!query && (!valid || !changed))}>
-        {searching ? 'Suche …' : 'Ort übernehmen'}
-      </button>
+      {/* One row, also on a phone: the place field gives way, the coordinates keep their width. */}
+      <div className={styles.row}>
+        <label className={styles.placeLabel}>
+          Ort
+          <input className={styles.place} type="search" placeholder="z. B. Innsbruck"
+            value={place} onChange={(e) => setPlace(e.target.value)} />
+        </label>
+        <label className={styles.coordinate}>
+          <input className={styles.input} type="number" step="any" min="-90" max="90" aria-label="Breite"
+            value={lat} onChange={(e) => setLat(e.target.value)} />
+          °N
+        </label>
+        <label className={styles.coordinate}>
+          <input className={styles.input} type="number" step="any" min="-180" max="180" aria-label="Länge"
+            value={lon} onChange={(e) => setLon(e.target.value)} />
+          °E
+        </label>
+        <button type="submit" disabled={searching || (!query && (!valid || !changed))}>
+          {searching ? '…' : 'OK'}
+        </button>
+      </div>
       {message && (
         <span className={message.error ? styles.error : styles.found} title={message.text}>{message.text}</span>
       )}
