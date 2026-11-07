@@ -67,6 +67,11 @@ export interface LocationTemperatures {
    * chart; null without gust10m file.
    */
   gust10m: { series: PointSeries; hours: number[]; colours: ColourBand[] } | null
+  /**
+   * ECMWF precipitation in mm over the 6 h before each step (3 h at T+3), the colour bands of the weather_summary
+   * chart and the value below which it stays uncoloured; null without precip6h file.
+   */
+  precip6h: { series: PointSeries; colours: ColourBand[]; transparentBelow: number } | null
 }
 
 /** Picks the series of one location out of the files of the Austria box. */
@@ -84,7 +89,7 @@ export class TemperatureSeries {
 
   /** The series of the location; null outside Austria and its margin (no ICON cell near). */
   at(location: GeoLocation): LocationTemperatures | null {
-    const { t850, t2m, td2m, tw2m, heights, thickness, t500, rh850, rh700, thetae850, gust10m } = this.files
+    const { t850, t2m, td2m, tw2m, heights, thickness, t500, rh850, rh700, thetae850, gust10m, precip6h } = this.files
     if (!inBox(t850.box, location)) return null
     const cell = this.nearestCell(location)
     if (cell === null) return null
@@ -132,6 +137,13 @@ export class TemperatureSeries {
             series: ecmwfSeries(gust10m.ecmwf, gust10m.ecmwf.gust10m, gust10m.scale, location),
             hours: gust10m.ecmwf.hours,
             colours: gust10m.colours,
+          },
+      precip6h: precip6h === undefined
+        ? null
+        : {
+            series: ecmwfSeries(precip6h.ecmwf, precip6h.ecmwf.precip6h, precip6h.scale, location),
+            colours: precip6h.colours,
+            transparentBelow: precip6h.transparent_below,
           },
     }
   }

@@ -50,6 +50,8 @@ export type LegendEntry = { text: string } & ({ line: string } | { lines: string
 export interface ColourBar {
   values: ValuePoint[]
   colours: ColourBand[]
+  /** Values below stay uncoloured; undefined colours every value. */
+  transparentBelow?: number
 }
 
 /**

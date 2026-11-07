@@ -178,6 +178,22 @@ export interface Gust10mFile {
   ecmwf: EcmwfBlock & { gust10m: number[]; hours: number[] }
 }
 
+/**
+ * ECMWF precipitation in mm over the window before each step, as on the weather_summary chart (6 h, 3 h at T+3; up to
+ * T+144 the windows of neighbouring steps overlap), with that chart's colour bands; no climatology.
+ */
+export interface Precip6hFile {
+  version: string
+  box: Box
+  scale: number
+  /** Ascending and contiguous; values outside get the nearest band. */
+  colours: ColourBand[]
+  /** Values below stay uncoloured, as on the chart. */
+  transparent_below: number
+  /** `hours`: length of the window before each step. */
+  ecmwf: EcmwfBlock & { precip6h: number[]; hours: number[] }
+}
+
 export interface SeriesFiles {
   t850: T850File
   t2m: T2mFile
@@ -198,6 +214,8 @@ export interface SeriesFiles {
   thetae850?: ThetaE850File
   /** Missing in manifests of older pipelines. */
   gust10m?: Gust10mFile
+  /** Missing in manifests of older pipelines. */
+  precip6h?: Precip6hFile
 }
 
 /** Values of one point over time, in units of the file (°C or K). */

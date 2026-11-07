@@ -1,6 +1,6 @@
 """Write the temperature series of Austria that the start page of the viewer draws for its location.
 
-Eleven JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
+Twelve JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
 
     t850.json      ECMWF T850 of every step on the 0.1 deg grid of the box, with the ERA5
                    climatology of T850 (mean, stdev) for the days of the run
@@ -18,9 +18,12 @@ Eleven JSON files in maps/austria/ (published like the videos, listed in the man
                    no climatology), drawn as a line in the T850 panel
     gust10m.json   ECMWF 10 m gust in km/h (no climatology) with the hours it covers and the colour
                    bands of the wind10m chart, drawn as a colour bar in the T2m panel
+    precip6h.json  ECMWF precipitation in mm over the 6 h before each step (3 h at T+3), as on the
+                   weather_summary chart, with its bands, drawn as a colour bar in the T850 panel
 
 Every series is stored as whole tenths of a degree (of a dam for the
-thickness; rh850 and rh700 as whole percent, gust10m as whole km/h), as deltas along time and
+thickness; rh850 and rh700 as whole percent, gust10m as whole km/h,
+precip6h as tenths of a mm), as deltas along time and
 time-major (all points of the first time, then all of the second ...): the
 first time holds absolute values, every further one the change since the
 previous time. Neighbouring points change alike, which gzip packs to about a
@@ -60,6 +63,7 @@ from matplotlib.path import Path as Polygon
 from scipy.spatial import cKDTree
 
 from lib import chart_styles
+from lib.chart_products import ChartProducts
 from lib.climate_archive import DIRECTORY as CLIMATE_DIRECTORY, ClimateArchive
 from lib.constants import ICON_NAMES, IFS_GUST_NAMES, KELVIN, KMH_PER_MS
 from lib.era5_orography import era5_orography
@@ -78,6 +82,8 @@ SCALE, COORD_SCALE = 0.1, 1e-4
 RH_SCALE = 1.0
 # Gusts in whole km/h: the band limits of the wind10m chart (Beaufort) are whole km/h.
 WIND_SCALE = 1.0
+# Precipitation in tenths of a mm: the lowest band of the weather_summary chart starts at 0.2 mm.
+PRECIP_SCALE = 0.1
 # 2 m humidity series, ECMWF only (ICON-D2 would multiply the file size), in deg C like T2m:
 # file name -> GRIB shortName of the dew point and the wet-bulb temperature.
 HUMIDITY_SERIES = {"td2m": "2d", "tw2m": "wbt"}
@@ -140,6 +146,22 @@ def gust_block(grib: ForecastGrib) -> dict:
     block = derived_block(grib, steps, "gust10m",
                           lambda step: grib.field(grib.pick(IFS_GUST_NAMES, step), step) * KMH_PER_MS, WIND_SCALE)
     block["hours"] = [grib.window_hours(grib.pick(IFS_GUST_NAMES, step), step) for step in block["steps"]]
+    return block
+
+
+def precipitation_block(grib: ForecastGrib) -> dict:
+    """Precipitation in mm over the PRECIP_HOURS before every step after T+0, as on the weather_summary chart.
+
+    The window is that of ``ChartProducts.weather_summary``: 6 h, 3 h at T+3. Up to T+144 the steps are 3 h apart,
+    so neighbouring windows overlap by 3 h; ``hours`` holds the window of each kept step.
+    """
+    def field_of(step: int) -> np.ndarray:
+        # tp accumulates from T+0 in m; packing noise can make the difference slightly negative.
+        start = step - min(ChartProducts.PRECIP_HOURS, step)
+        return np.maximum(grib.field("tp", step) - grib.field("tp", start), 0) * 1000
+
+    block = derived_block(grib, [step for step in grib.steps("tp") if step > 0], "precip6h", field_of, PRECIP_SCALE)
+    block["hours"] = [min(ChartProducts.PRECIP_HOURS, step) for step in block["steps"]]
     return block
 
 
@@ -236,7 +258,7 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     targets = {name: maps / file for name, file in SERIES_FILES.items()}
     versions = {"t850": ecmwf_run, "t2m": f"{ecmwf_run}-{icon_run}", "thickness": ecmwf_run, "t500": ecmwf_run,
                 "rh850": ecmwf_run, "rh700": ecmwf_run, "thetae850": ecmwf_run, "gust10m": ecmwf_run,
-                "td2m": ecmwf_run, "tw2m": ecmwf_run}
+                "precip6h": ecmwf_run, "td2m": ecmwf_run, "tw2m": ecmwf_run}
     stale = [name for name, version in versions.items() if force or read_version(targets[name]) != version]
     heights_missing = icon_grib is not None and (force or read_version(targets["heights"]) is None)
     if not stale and not heights_missing:
@@ -284,6 +306,12 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
         write_document(targets["gust10m"], {"version": versions["gust10m"], "box": BOX, "scale": WIND_SCALE,
                                             "colours": colour_bands(chart_styles.GUST10M),
                                             "ecmwf": gust_block(ecmwf)})
+    if "precip6h" in stale:
+        # transparent_below: drier windows stay uncoloured, as on the chart.
+        write_document(targets["precip6h"], {"version": versions["precip6h"], "box": BOX, "scale": PRECIP_SCALE,
+                                             "colours": colour_bands(chart_styles.PRECIPITATION),
+                                             "transparent_below": chart_styles.PRECIPITATION.transparent_below,
+                                             "ecmwf": precipitation_block(ecmwf)})
     icon = cells = None
     if icon_grib is not None and ("t2m" in stale or heights_missing):
         icon = ForecastGrib(icon_grib, ICON_NAMES)
