@@ -10,6 +10,12 @@ export interface WeatherStation {
   altitude: number
 }
 
+/** A station with its position, as the station list of the data hub provides it. */
+export interface LocatedStation extends WeatherStation {
+  lat: number
+  lon: number
+}
+
 /** True for an object that has every field of a station; guards values read from localStorage. */
 export function isValidStation(value: unknown): value is WeatherStation {
   const station = value as Partial<WeatherStation> | null

@@ -1,0 +1,25 @@
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+/* Doubled class: has to win over .leaflet-tooltip whatever the order of the two stylesheets. */
+.label.label {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: #000000;
+  font-size: 12px;
+  font-weight: 700;
+  text-shadow: -1px -1px 0 #ffffff, 1px -1px 0 #ffffff, -1px 1px 0 #ffffff, 1px 1px 0 #ffffff;
+}
+
+/* No arrow from the label to its point. */
+.label.label::before {
+  display: none;
+}
+
+.selected.selected {
+  color: #e00000;
+}

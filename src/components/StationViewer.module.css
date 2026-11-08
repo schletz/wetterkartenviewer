@@ -1,0 +1,105 @@
+/* The Leaflet panes have z-indices up to 1000, but stay inside the stacking context of the window. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+/* Made for a wide screen, up to about full HD. */
+.window {
+  display: flex;
+  flex-direction: column;
+  width: min(1560px, 100%);
+  height: min(900px, 100%);
+  border: 1px solid #5f6b78;
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+.titleBar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  background: #2d3640;
+  color: #ffffff;
+  font-size: 13px;
+}
+
+.close {
+  width: 26px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.close:hover {
+  background: #c42b1c;
+}
+
+/* The 1 px gaps show the border colour as separator lines between the three areas. */
+.body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-rows: minmax(0, 7fr) minmax(0, 3fr);
+  gap: 1px;
+  background: var(--border);
+}
+
+.chart,
+.map,
+.side {
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface);
+}
+
+.side {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+}
+
+.grow {
+  flex: 1;
+}
+
+.status,
+.error {
+  padding: 16px;
+  font-size: 0.9em;
+}
+
+.status {
+  color: var(--muted);
+}
+
+.error {
+  color: #b00020;
+}
+
+/* A phone gets the same arrangement, squeezed. */
+@media (max-width: 700px) {
+  .backdrop {
+    padding: 0;
+  }
+
+  .body {
+    grid-template-columns: minmax(0, 1fr) 150px;
+    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+    font-size: 13px;
+  }
+}

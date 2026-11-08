@@ -1,14 +1,11 @@
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
+import { useStationList } from '../hooks/useStationList'
 import { stationLabel, type WeatherStation } from '../model/WeatherStation'
-import { fetchStations } from '../services/geosphereStations'
 import styles from './StationPicker.module.css'
 
 interface StationPickerProps {
   onSelect: (station: WeatherStation) => void
 }
-
-/** Station list request: the stations, or the German error text. */
-type StationList = { stations: WeatherStation[] } | { error: string }
 
 /**
  * The station whose label equals the text, else the only one (or, on Enter, the first one) whose label contains it.
@@ -29,19 +26,9 @@ function matchStation(stations: WeatherStation[], text: string, takeFirst: boole
  */
 export default function StationPicker({ onSelect }: StationPickerProps) {
   const listId = useId()
-  const [list, setList] = useState<StationList | null>(null)
+  const list = useStationList()
   const [text, setText] = useState('')
   const stations = list && 'stations' in list ? list.stations : []
-
-  useEffect(() => {
-    const controller = new AbortController()
-    fetchStations(controller.signal)
-      .then((loaded) => setList({ stations: loaded }))
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) setList({ error: error instanceof Error ? error.message : String(error) })
-      })
-    return () => controller.abort()
-  }, [])
 
   const change = (value: string) => {
     setText(value)

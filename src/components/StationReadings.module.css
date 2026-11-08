@@ -5,8 +5,17 @@
   gap: 6px 18px;
 }
 
+/* A button that looks like a link, the entry to the station viewer. */
 .station {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
   font-weight: 600;
+}
+
+.station:hover {
+  text-decoration: underline;
 }
 
 .reading {

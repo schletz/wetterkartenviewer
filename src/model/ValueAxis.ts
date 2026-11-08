@@ -20,6 +20,8 @@ export type AxisScale =
 
 /** Temperature panels: 5 K grid, at least 20 K range. */
 export const TEMPERATURE_SCALE: AxisScale = { kind: 'fixed', step: 5, minSpan: 20 }
+/** Measured air temperature of a station: 2 K grid, at least 20 K range. */
+export const STATION_TEMPERATURE_SCALE: AxisScale = { kind: 'fixed', step: 2, minSpan: 20 }
 /** Thickness panel: fitted to its values. */
 export const THICKNESS_SCALE: AxisScale = { kind: 'fitted', steps: THICKNESS_STEPS }
 

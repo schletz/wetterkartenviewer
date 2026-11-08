@@ -11,11 +11,14 @@ const MAX_SPEED = 1600
  * faster the closer to the edge; a vertical wheel turn scrolls it horizontally.
  * The zones reach beyond the element up to the window border, so a mouse pushed against the screen edge keeps scrolling.
  * Touch and pen keep the native scrolling; nothing happens while the element does not overflow.
+ *
+ * @param ref the scrolling element
+ * @param enabled false stops the scrolling, e.g. while a window covers the element
  */
-export function useEdgeScroll(ref: RefObject<HTMLElement | null>): void {
+export function useEdgeScroll(ref: RefObject<HTMLElement | null>, enabled = true): void {
   useEffect(() => {
     const element = ref.current
-    if (element === null) return
+    if (element === null || !enabled) return
     const overflows = () => element.scrollWidth > element.clientWidth
 
     let speed = 0
@@ -83,5 +86,5 @@ export function useEdgeScroll(ref: RefObject<HTMLElement | null>): void {
       window.removeEventListener('blur', stop)
       element.removeEventListener('wheel', onWheel)
     }
-  }, [ref])
+  }, [ref, enabled])
 }

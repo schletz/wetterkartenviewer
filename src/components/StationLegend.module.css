@@ -1,0 +1,46 @@
+.legend {
+  flex: none;
+  padding: 10px 8px;
+  border-top: 1px solid var(--border);
+}
+
+.list {
+  width: fit-content;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 3px 0;
+}
+
+.swatch {
+  flex: none;
+  width: 30px;
+  height: 14px;
+  border: 1px solid #1d2228;
+  border-radius: 3px;
+}
+
+.note {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.85em;
+  text-align: center;
+}
+
+/* The phone column is only wide enough for a narrow swatch. */
+@media (max-width: 700px) {
+  .entry {
+    gap: 6px;
+    padding: 1px 0;
+  }
+
+  .swatch {
+    width: 16px;
+  }
+}

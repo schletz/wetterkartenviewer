@@ -1,10 +1,13 @@
-import { useStationTemperatures } from '../hooks/useStationTemperatures'
+import { useStationData } from '../hooks/useStationData'
 import type { TemperatureReading } from '../model/stationTemperatures'
 import { stationLabel, type WeatherStation } from '../model/WeatherStation'
+import { fetchDayTemperatures } from '../services/geosphereStations'
 import styles from './StationReadings.module.css'
 
 interface StationReadingsProps {
   station: WeatherStation
+  /** Opens the station viewer for this station. */
+  onOpen: () => void
   /** Forgets the station, so the picker shows again. */
   onClear: () => void
 }
@@ -27,15 +30,18 @@ function Reading({ label, reading, className }: { label: string, reading: Temper
 
 /**
  * Current, lowest and highest air temperature of the chosen station since 00 UTC, refreshed every few minutes,
- * and a button that forgets the station.
+ * its name as the entry to the station viewer, and a button that forgets the station.
  */
-export default function StationReadings({ station, onClear }: StationReadingsProps) {
-  const state = useStationTemperatures(station.id)
-  const temperatures = state && 'temperatures' in state ? state.temperatures : null
+export default function StationReadings({ station, onOpen, onClear }: StationReadingsProps) {
+  const state = useStationData(station.id, fetchDayTemperatures)
+  const temperatures = state && 'data' in state ? state.data : null
 
   return (
     <div className={styles.panel}>
-      <span className={styles.station} title={`${station.state}, Station ${station.id}`}>{stationLabel(station)}</span>
+      <button className={styles.station} onClick={onOpen}
+        title={`${station.state}, Station ${station.id}: Verlauf und Stationen in der Umgebung anzeigen`}>
+        {stationLabel(station)}
+      </button>
       {state === null && <span className={styles.status}>wird geladen …</span>}
       {state && 'error' in state && <span className={styles.error}>{state.error}</span>}
       {temperatures && (

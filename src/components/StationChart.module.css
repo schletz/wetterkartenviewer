@@ -1,0 +1,64 @@
+/* The SVG is positioned absolutely so that it never sizes the box it measures. */
+.box {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.svg {
+  position: absolute;
+  inset: 0;
+}
+
+.title {
+  fill: #5f6b78;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.label {
+  fill: var(--muted);
+  font-size: 12px;
+}
+
+.grid {
+  stroke: #e2e5e9;
+  stroke-width: 1;
+}
+
+.zero,
+.axis {
+  stroke: #8b949e;
+  stroke-width: 1;
+}
+
+.area {
+  fill: #b2d6ea;
+}
+
+.line {
+  fill: none;
+  stroke: #123a84;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+.now {
+  stroke: #000000;
+  stroke-width: 1.5;
+}
+
+.nowLabel {
+  fill: #000000;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.hit {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.hit:hover {
+  fill: rgba(95, 107, 120, 0.45);
+}
