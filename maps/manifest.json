@@ -1207,6 +1207,10 @@
   "precip6h": {
    "file": "austria/precip6h.json",
    "version": "2026110800"
+  },
+  "tcc": {
+   "file": "austria/tcc.json",
+   "version": "2026110800"
   }
  }
 }
