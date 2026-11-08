@@ -199,6 +199,18 @@ export interface Precip6hFile {
   ecmwf: EcmwfBlock & { precip6h: number[]; hours: number[]; ptype?: number[] }
 }
 
+/** ECMWF total cloud cover in % at each step, with the colour bands of the weather_summary chart; no climatology. */
+export interface TccFile {
+  version: string
+  box: Box
+  scale: number
+  /** Ascending and contiguous; values outside get the nearest band. */
+  colours: ColourBand[]
+  /** Values below stay uncoloured, as on the chart. */
+  transparent_below: number
+  ecmwf: EcmwfBlock & { tcc: number[] }
+}
+
 export interface SeriesFiles {
   t850: T850File
   t2m: T2mFile
@@ -221,6 +233,8 @@ export interface SeriesFiles {
   gust10m?: Gust10mFile
   /** Missing in manifests of older pipelines. */
   precip6h?: Precip6hFile
+  /** Missing in manifests of older pipelines. */
+  tcc?: TccFile
 }
 
 /** Values of one point over time, in units of the file (°C or K). */

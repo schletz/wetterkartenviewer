@@ -12,7 +12,7 @@ The API sections follow Javadoc: intro, fields, methods per module or class.
 
 - Download one ECMWF IFS HRES run (0.1°, cropped to Europe, derived fields appended) and one DWD ICON-D2 run (icosahedral grid ≈ 2.2 km, unchanged, the 2 m wet-bulb temperature appended) into `data/`.
 - Render WebP charts for three windows into `data/`, encode each tile layer of the viewer as `maps/<window>/<product>.mp4` (one frame per step), write `maps/manifest.json`.
-- Cut T850, T500, RH850, RH700, θe850, the 10 m gusts, the 6 h precipitation, the 1000–500 hPa thickness, the 2 m dew point and wet-bulb temperature (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to an Austria box as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
+- Cut T850, T500, RH850, RH700, θe850, the 10 m gusts, the 6 h precipitation, the total cloud cover, the 1000–500 hPa thickness, the 2 m dew point and wet-bulb temperature (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to an Austria box as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
 - Upload the videos and series files to a GitHub release, push a manifest commit; GitHub Actions builds and deploys the app with them.
 - IFS updates every 12 h, ICON-D2 every 3 h; `download_loop.sh` runs the whole chain every 10 min on an always-on machine.
 - `data/` is also the data directory of the skill synop (source in `skills/synop`, installed to `~/.claude/skills/synop`), see *Contract with the skill synop*; `blob_mirror.py` mirrors it into a public Azure blob container so the skill works without this repository.
@@ -98,7 +98,7 @@ folder "data/<window>/" as window_dir {
 }
 folder "maps/" {
  artifact "<window>/<product>.mp4" as videos
- artifact "austria/t850, t2m, td2m, tw2m,\nheights, thickness, t500, rh850,\nrh700, thetae850, gust10m,\nprecip6h.json" as series
+ artifact "austria/t850, t2m, td2m, tw2m,\nheights, thickness, t500, rh850,\nrh700, thetae850, gust10m,\nprecip6h, tcc.json" as series
  artifact "manifest.json" as manifest
 }
 artifact "src/config/viewer.config.json" as config
@@ -131,7 +131,7 @@ render_charts --> charts
 render_charts --> geometry
 charts --> tile_videos
 tile_videos --> videos
-ecmwf_grib --> point_series : t850, t500,\nr850, r700, papt850, 2t, 2d, wbt,\n10fg, 10fg3, thick, orog
+ecmwf_grib --> point_series : t850, t500,\nr850, r700, papt850, 2t, 2d, wbt,\n10fg, 10fg3, tcc, thick, orog
 icon_grib --> point_series : 2t, hsurf
 era5 --> point_series
 era5_orog --> point_series : z
@@ -542,7 +542,8 @@ Written by `build_manifest` (scripts/maps_manifest.py), typed as `Manifest` (src
  "rh700": { "file": "austria/rh700.json", "version": "2026110112" },
  "thetae850": { "file": "austria/thetae850.json", "version": "2026110112" },
  "gust10m": { "file": "austria/gust10m.json", "version": "2026110112" },
- "precip6h": { "file": "austria/precip6h.json", "version": "2026110112" } } }
+ "precip6h": { "file": "austria/precip6h.json", "version": "2026110112" },
+ "tcc": { "file": "austria/tcc.json", "version": "2026110112" } } }
 ```
 
 - `run` (top): the ECMWF run. The slider and all `steps`, ICON ones included, count from it.
@@ -559,7 +560,7 @@ Written by `build_manifest` (scripts/maps_manifest.py), typed as `Manifest` (src
 
 Written by `write_series` (scripts/point_series.py), typed in src/model/seriesFiles.ts, read by `TemperatureSeries` (REFERENCE.webapp.md). Compact JSON; GitHub Pages serves it gzip'd.
 
-Encoding of every series: whole multiples of `scale` (0.1 K, 0.1 dam for the thickness, 1 % for rh850 and rh700, 1 km/h for gust10m, 0.1 mm for precip6h), **time-major** (all points of time 0, then all of time 1 …), **deltas along time** (time 0 absolute). Measured: about a fifth of the raw size after gzip; time-major packs ≈ 20 % better than one series per point, binary Int16 is no smaller after gzip, 0.2 K would save another quarter of ICON. One file with all series gzips no smaller than the separate files (1 294 259 vs 1 293 013 B, run 2026110400), and separate files keep the browser cache of those whose version did not change (t2m changes with every ICON run).
+Encoding of every series: whole multiples of `scale` (0.1 K, 0.1 dam for the thickness, 1 % for rh850, rh700 and tcc, 1 km/h for gust10m, 0.1 mm for precip6h), **time-major** (all points of time 0, then all of time 1 …), **deltas along time** (time 0 absolute). Measured: about a fifth of the raw size after gzip; time-major packs ≈ 20 % better than one series per point, binary Int16 is no smaller after gzip, 0.2 K would save another quarter of ICON. One file with all series gzips no smaller than the separate files (1 294 259 vs 1 293 013 B, run 2026110400), and separate files keep the browser cache of those whose version did not change (t2m changes with every ICON run).
 Regular grids (`grid`: `lat0` northernmost row, `lon0`, `dlat` step southwards, `dlon`, `nj`, `ni`; index = row × ni + col) cover `BOX` (46.3–49.1° N, 9.5–17.2° E); the ERA5 window is wider by half a grid step so the nearest point of every box location is in it.
 
 | File, version | Content | Size (run 2026110112) |
@@ -575,6 +576,7 @@ Regular grids (`grid`: `lat0` northernmost row, `lon0`, `dlat` step southwards, 
 | `thetae850.json`, ECMWF run | `ecmwf` with `thetae850` (`papt` at 850 hPa, **K**, not °C), scale 0.1; no climate; written only if the IFS file has `papt` (else a message and no file, the app draws no line); the app draws it as a line in the T850 panel without an axis of its own | 449 KB, gzip 118 KB (run 2026110600) |
 | `gust10m.json`, ECMWF run | `ecmwf` with `gust10m` (km/h, `10fg`/`10fg3` × `KMH_PER_MS`, steps 3…240, none at T+0) and `hours` (per step the interval it covers: 1, 3 or 6), `scale` 1 (`WIND_SCALE`; the band limits are whole km/h); `colours`: the bands of `chart_styles.GUST10M` as `[lower, upper, "#rrggbb"]` (last upper 300), so the app colours its bar like the wind10m chart without a copy of the scale; no climate | ≈ 0.4 MB, gzip ≈ 80 KB |
 | `precip6h.json`, ECMWF run | `ecmwf` with `precip6h` (mm over the window before each step, exactly as `weather_summary`: `tp(step) − tp(step − min(PRECIP_HOURS, step))`, ≥ 0; steps 3…240, `hours` 3 at T+3, else 6; up to T+144 the 6 h windows of neighbouring 3-hourly steps overlap), `scale` 0.1 (`PRECIP_SCALE`); `colours`: the bands of `chart_styles.PRECIPITATION` (0.2…1000 mm), `transparent_below` 0.2 (drier stays uncoloured); `ptype` (scale 1, encoded like the values): class of the precipitation type per window, 0 none, k ≥ 1 the k-th group of `chart_styles.PRECIP_TYPES` (1 snow `5`, 2 wet snow or rain and snow `6`/`7`, 3 freezing `3`/`8`/`12`). ptype is instantaneous, so every output step inside the window counts (two up to T+144, one after), several classes resolved by `PTYPE_PRECEDENCE`; windows below 0.2 mm get 0, as the chart draws no symbol outside its shading. Run 2026110700, box points × steps: 1 snow 4476, 2 wet 2863, 3 freezing 604 of 144 768; no climate. Open Data packs `tp` with 12 bits over the whole cropped box, so accumulated values step by 2⁻¹³…2⁻¹² m (0.12–0.24 mm): a single quantum already reaches the first band | 0.6 MB, gzip 53 KB (run 2026110700) |
+| `tcc.json`, ECMWF run | `ecmwf` with `tcc` (total cloud cover in %, GRIB fraction × `TCC_PERCENT`, instantaneous at each step 0…240, the field `weather_summary` shades), `scale` 1 (`CLOUD_SCALE`; the bands are 10 % wide); `colours`: the bands of `chart_styles.CLOUD_COVER` (40…101 %), `transparent_below` 40 (clearer stays uncoloured); ECMWF only (per user), no climate | 403 KB, gzip 99 KB (run 2026110712) |
 | `heights.json`, `<icon run>-<cells>` | ICON cells within `BORDER_MARGIN` of Austria in file order (25 344): `lat`, `lon` as deltas of `coord_scale` 1e-4°, `hsurf` (m) | 316 KB, gzip 78 KB |
 
 `climate` (both levels): `period`, `grid` (0.25°, 12×32), `first_day` (00 UTC of the ECMWF run), `days` (to the last step, 11), `orog` (ERA5 orography per point, whole m, from `era5_orography`; ≈ 1.5 KB raw), then only the kind the app draws (`climate_block(…, kind)`): t850.json `hours` (00…21) and `term` (per day and hour, day-major), t2m.json `daily` (per day; its `std` is that of the daily means, ≈ 0.3 K below the mean term std, so it is the right σ for a daily mean anomaly); each `{mean (°C), std (K)}`. The ERA5 daily mean differs from the mean of the eight term means by < 0.09 K. The `monthly` kind is not written.
@@ -718,8 +720,8 @@ Without a new run a call takes ≈ 3.5 s.
 
 ### point_series.py
 
-Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 850 and 500, `r` 850 and 700, `2t`, `2d`, `wbt`, `10fg`, `10fg3`, `tp`, `ptype`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours` for T850, `daily` for T2m) with its orography through `era5_orography`.
-A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness, t500, rh850, rh700, thetae850, gust10m, precip6h, td2m and tw2m per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
+Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 850 and 500, `r` 850 and 700, `2t`, `2d`, `wbt`, `10fg`, `10fg3`, `tp`, `ptype`, `tcc`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours` for T850, `daily` for T2m) with its orography through `era5_orography`.
+A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness, t500, rh850, rh700, thetae850, gust10m, precip6h, tcc, td2m and tw2m per ECMWF run, t2m per ECMWF or ICON run, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
 A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. ICON cells with NaN `hsurf` (boundary zone) are dropped. Without any ICON file t2m.json has no `icon` and heights.json is not written; the app then shows nothing (it needs heights).
 
 | Field | Meaning |
@@ -730,6 +732,7 @@ A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. IC
 | `RH_SCALE = 1.0` | unit of rh850.json and rh700.json (%); its `scale` is set apart from `common`, since the document's `scale` must equal the encoding scale |
 | `WIND_SCALE = 1.0` | unit of gust10m.json (km/h), set apart like `RH_SCALE` |
 | `PRECIP_SCALE = 0.1` | unit of precip6h.json (mm); the lowest band starts at 0.2 mm |
+| `CLOUD_SCALE = 1.0` | unit of tcc.json (%), set apart like `RH_SCALE` |
 | `PTYPE_PRECEDENCE = (3, 1, 2)` | of several ptype classes in one window the first wins: freezing (black ice), then snow, then wet snow |
 | `HUMIDITY_SERIES = {"td2m": "2d", "tw2m": "wbt"}` | file → shortName of the 2 m humidity series (°C, ECMWF only) |
 
@@ -831,7 +834,7 @@ Aborts before any upload without manifest, without videos in it, or if one is mi
 
 ### fetch_maps.py and maps_release.py
 
-`fetch_maps.main` runs in the deploy workflow: copies `maps/manifest.json` to `<target>`, downloads every listed video and series file anonymously (repo must be public) from `https://github.com/<repo>/releases/download/tile-videos/<asset>`, `TIMEOUT_S = 60`; any failure → `sys.exit` with the URL, the old site stays.
+`fetch_maps.main` runs in the deploy workflow: copies `maps/manifest.json` to `<target>`, downloads every listed video and series file anonymously (repo must be public) from `https://github.com/<repo>/releases/download/tile-videos/<asset>`, `TIMEOUT_S = 60`. `download` makes `ATTEMPTS = 3` tries, `RETRY_PAUSE_S = 10` apart, on 5xx and network failures, including a body shorter than `Content-Length` (`read` returns short without an error); a 4xx or the last failed try → `sys.exit` with the URL, the old site stays. GitHub can repeat a 504 of `github.com/.../releases/download/...` for at least 10 s (measured 2026-11-08: first answer after ≈ 11 s, repeats within 0.1 s), and such an outage can outlast the attempts.
 maps_release.py: `TAG = 'tile-videos'`; `asset_name(file)` replaces `/` with `.`; `download_url(repository, file)`.
 Workflow `.github/workflows/deploy.yml`: on push to `main` or manually; Node 24, `npm ci`, `npm run build`, `fetch_maps.py maps dist/maps`, deploy Pages; `concurrency: pages`, `cancel-in-progress`.
 
@@ -1282,7 +1285,7 @@ chart_styles.py holds every scale and threshold:
 | `T850_ANOMALY` | σ bands; ≥ 1 notable, ≥ 2 unusual |
 | `ROUGH_TERRAIN_SDOR = 200` | real valley/summit heights differ by several 100 m |
 | `HIGH_GROUND_M = 700`, `ABOVE_850HPA_M = 1300` | inversion chart grey, T850 areas masked or dashed line in `t850_mslp`/`z850_rh700`/`z850_thetae850`; `z500_t850`, `dt850_24h` colour T850 everywhere |
-| `PRECIPITATION`, `CLOUD_COVER` | after ogimet surface charts; uncoloured below 0.2 mm / 40 %; "6 h" in the title is replaced with the real interval; `PRECIPITATION` also copied into precip6h.json |
+| `PRECIPITATION`, `CLOUD_COVER` | after ogimet surface charts; uncoloured below 0.2 mm / 40 %; "6 h" in the title is replaced with the real interval; `PRECIPITATION` also copied into precip6h.json, `CLOUD_COVER` into tcc.json |
 | `PRECIP_TYPES` | ptype 5 snow; 6/7 wet snow, sleet; 3/8/12 freezing rain, ice pellets; rain without symbol; the order numbers the `ptype` classes of precip6h.json (app: `PRECIP_TYPE_MARKS`) |
 | `OUTSIDE_RGB = (190, 190, 190)` | outside a limited area model |
 | `WW_PTYPE` | 5 ← 70–75, 77, 85, 86; 7 ← 68, 69, 83, 84; 3 ← 56, 57, 66, 67; 8 ← 79 |

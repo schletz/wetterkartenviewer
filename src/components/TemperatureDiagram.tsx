@@ -90,7 +90,7 @@ function timeLabel(time: Date): string {
  * Meteogram of T2m (ECMWF and ICON-D2) with the ECMWF 2 m dew point and wet-bulb temperature, the anomaly of the
  * ECMWF daily mean against the ERA5 climate of the daily mean as bars per day and the ECMWF 10 m gusts as a colour bar, T850 (ECMWF) with its anomaly against the
  * ERA5 climate, θe850 as a line spanning the axis from the θe of dry air at its lowest to that of saturated air at
- * its highest temperature and the ECMWF 6 h precipitation as a colour bar, the ECMWF 1000–500 hPa thickness with the Showalter index of a parcel lifted from 850 hPa with its dew point from
+ * its highest temperature and the ECMWF 6 h precipitation as a colour bar with the ECMWF cloud cover in its dry blocks, the ECMWF 1000–500 hPa thickness with the Showalter index of a parcel lifted from 850 hPa with its dew point from
  * RH850 as layered areas around the middle of its axis, blue above (stable), red below (unstable), and RH700 as a
  * line spanning the axis from 0 to 100 %, in panels one below the other like the ENS meteograms. Fills its parent.
  */
@@ -100,7 +100,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
   const size = useElementSize(box)
   const {
     t850, climate850, t2mEcmwf, climate2m, t2mIcon, td2m, tw2m, thickness, t500, rh850, rh700, thetae850, gust10m,
-    precip6h,
+    precip6h, tcc,
   } = temperatures
 
   const plotRight = size.width - MARGIN_RIGHT
@@ -217,7 +217,8 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     {
       key: 't850',
       title: ['Temperatur in 850 hPa (°C)', ...(thetae850 === null ? [] : ['θe']),
-        ...(precip6h === null ? [] : ['Niederschlag 6 h'])].join(', '),
+        ...(precip6h === null ? [] : ['Niederschlag 6 h']),
+        ...(precip6h === null || tcc === null ? [] : ['Bewölkung'])].join(', '),
       legend: [
         { line: styles.t850, text: `ECMWF ${pointLabel(t850.point, t850.height)}` },
         ...(thetae850 === null ? [] : [{ line: styles.thetaE, text: 'ECMWF θe 850 hPa, Achse unten mit 0 %, oben mit 100 % RH' }]),
@@ -229,10 +230,14 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
       bands: anomaly850.bands,
       scaledLines: thetaELines,
       // The bands, the 6 h window and the type symbols of the weather_summary chart, so a colour means the same
-      // amount in the diagram and on the map; like the gusts no legend or tooltip value.
+      // amount in the diagram and on the map; like the gusts no legend or tooltip value. Dry blocks show the cloud
+      // cover at their step in the greys of the chart, which also draws the precipitation over the clouds.
       ...(precip6h === null ? {} : {
         colourBar: {
           values: precip6h.series.values, colours: precip6h.colours, transparentBelow: precip6h.transparentBelow,
+          ...(tcc === null ? {} : {
+            fallback: { values: tcc.series.values, colours: tcc.colours, transparentBelow: tcc.transparentBelow },
+          }),
           marks: precip6h.types.flatMap((p) => {
             const mark = PRECIP_TYPE_MARKS[p.value]
             return mark === undefined ? [] : [{ valid: p.valid, ...mark }]
@@ -297,7 +302,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     <div ref={box} className={styles.diagram}>
       {size.width > 0 && size.height > 0 && (
         <svg ref={svg} className={styles.svg} viewBox={`0 0 ${size.width} ${size.height}`} role="img"
-          aria-label="T2m von ECMWF und ICON-D2, Taupunkt und Feuchtkugeltemperatur in 2 m von ECMWF, Abweichung des Tagesmittels vom Klimamittel und Böen in 10 m von ECMWF, T850 von ECMWF mit Abweichung vom Klimamittel und äquivalentpotentieller Temperatur in 850 hPa und Niederschlag über 6 Stunden mit Schnee und gefrierendem Niederschlag von ECMWF, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt, relative Feuchte in 700 hPa">
+          aria-label="T2m von ECMWF und ICON-D2, Taupunkt und Feuchtkugeltemperatur in 2 m von ECMWF, Abweichung des Tagesmittels vom Klimamittel und Böen in 10 m von ECMWF, T850 von ECMWF mit Abweichung vom Klimamittel und äquivalentpotentieller Temperatur in 850 hPa und Niederschlag über 6 Stunden mit Schnee und gefrierendem Niederschlag sowie Bewölkung von ECMWF, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt, relative Feuchte in 700 hPa">
           {placed.map((p) => <TemperaturePanel key={p.panel.key} placed={p} time={time} left={PLOT_LEFT} right={plotRight} />)}
           {t850.values.map((point, i) => {
             // Each hover column reaches halfway to its neighbours, so the 3 h and 6 h steps cover the plots without gaps.

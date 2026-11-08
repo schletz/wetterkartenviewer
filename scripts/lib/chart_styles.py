@@ -144,7 +144,8 @@ MASK_RGB = (190, 190, 190)
 
 # weather_summary, the chart for people: legends after the ogimet surface charts
 # (precipitation in mm over 6 h, cloud amount in %), which many readers know.
-# point_series.py copies the precipitation bands into precip6h.json for the bar of the start page diagram.
+# point_series.py copies the precipitation and cloud bands into precip6h.json and tcc.json for the bar of the start
+# page diagram.
 PRECIPITATION = ColourScale("Precipitation over the last 6 h (mm)", (
     (0.2, 1, (190, 255, 140)), (1, 2, (120, 225, 70)), (2, 5, (50, 175, 40)), (5, 10, (30, 175, 175)),
     (10, 20, (70, 150, 235)), (20, 30, (40, 80, 215)), (30, 50, (125, 90, 235)), (50, 70, (180, 80, 230)),

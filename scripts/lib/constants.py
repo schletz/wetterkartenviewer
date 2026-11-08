@@ -5,8 +5,8 @@ KMH_PER_MS = 3.6    # m/s to km/h
 GRAVITY = 9.80665   # m/s2, geopotential to geopotential height
 
 # Near-surface weather of the model (total cloud cover, total precipitation, precipitation type).
-# They feed only the weather_summary chart; the derived fields leave them out, because a 9 km
-# global model gets fog, low stratus and their precipitation wrong.
+# They feed only the weather_summary chart and the colour bar of the start page diagram that repeats it; the derived
+# fields leave them out, because a 9 km global model gets fog, low stratus and their precipitation wrong.
 WEATHER_PARAMS = ("tcc", "tp", "ptype")
 
 # Maximum 10 m gust of IFS Open Data, over the time since the previous model output: 10fg over the

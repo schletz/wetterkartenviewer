@@ -44,15 +44,21 @@ export interface BandSwatchClasses {
  */
 export type LegendEntry = { text: string } & ({ line: string } | { lines: string[] })
 
-/**
- * A series shown as a strip of colours at the bottom of the plot, below the value axis: every value covers an interval
- * before its valid time (a maximum or a sum) and colours the time from the previous value to its own with its band.
- */
-export interface ColourBar {
+/** A series with the colour bands that show it. */
+export interface ColourLayer {
   values: ValuePoint[]
   colours: ColourBand[]
   /** Values below stay uncoloured; undefined colours every value. */
   transparentBelow?: number
+}
+
+/**
+ * A series shown as a strip of colours at the bottom of the plot, below the value axis: every value covers an interval
+ * before its valid time (a maximum or a sum) and colours the time from the previous value to its own with its band.
+ */
+export interface ColourBar extends ColourLayer {
+  /** Colours the blocks the bar's own value leaves uncoloured, with its value of the same valid time. */
+  fallback?: ColourLayer
   /** Symbols in the plot just above the bar, each over the block of the value with the same valid time. */
   marks?: BarMark[]
 }

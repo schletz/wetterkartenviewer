@@ -1,6 +1,6 @@
 """Write the temperature series of Austria that the start page of the viewer draws for its location.
 
-Twelve JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
+Thirteen JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
 
     t850.json      ECMWF T850 of every step on the 0.1 deg grid of the box, with the ERA5
                    climatology of T850 (mean, stdev) for the days of the run
@@ -21,9 +21,11 @@ Twelve JSON files in maps/austria/ (published like the videos, listed in the man
     precip6h.json  ECMWF precipitation in mm over the 6 h before each step (3 h at T+3), as on the
                    weather_summary chart, with its bands, drawn as a colour bar in the T850 panel, and
                    the class of its type (snow, wet snow, freezing) from ptype, drawn as symbols above it
+    tcc.json       ECMWF total cloud cover in % at each step with the bands of the weather_summary chart,
+                   fills the blocks of the precipitation bar that stay dry
 
 Every series is stored as whole tenths of a degree (of a dam for the
-thickness; rh850 and rh700 as whole percent, gust10m as whole km/h,
+thickness; rh850, rh700 and tcc as whole percent, gust10m as whole km/h,
 precip6h as tenths of a mm), as deltas along time and
 time-major (all points of the first time, then all of the second ...): the
 first time holds absolute values, every further one the change since the
@@ -64,7 +66,7 @@ from matplotlib.path import Path as Polygon
 from scipy.spatial import cKDTree
 
 from lib import chart_styles
-from lib.chart_products import ChartProducts
+from lib.chart_products import TCC_PERCENT, ChartProducts
 from lib.climate_archive import DIRECTORY as CLIMATE_DIRECTORY, ClimateArchive
 from lib.constants import ICON_NAMES, IFS_GUST_NAMES, KELVIN, KMH_PER_MS
 from lib.era5_orography import era5_orography
@@ -85,6 +87,8 @@ RH_SCALE = 1.0
 WIND_SCALE = 1.0
 # Precipitation in tenths of a mm: the lowest band of the weather_summary chart starts at 0.2 mm.
 PRECIP_SCALE = 0.1
+# Cloud cover in whole percent: the bands of the weather_summary chart are 10 % wide.
+CLOUD_SCALE = 1.0
 # Precipitation classes of precip6h.json (1-based index into chart_styles.PRECIP_TYPES: 1 snow, 2 wet snow or rain
 # and snow, 3 freezing rain or drizzle, ice pellets), strongest first: freezing precipitation decides on black ice,
 # and a window with snow and wet snow has snow.
@@ -289,7 +293,7 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     targets = {name: maps / file for name, file in SERIES_FILES.items()}
     versions = {"t850": ecmwf_run, "t2m": f"{ecmwf_run}-{icon_run}", "thickness": ecmwf_run, "t500": ecmwf_run,
                 "rh850": ecmwf_run, "rh700": ecmwf_run, "thetae850": ecmwf_run, "gust10m": ecmwf_run,
-                "precip6h": ecmwf_run, "td2m": ecmwf_run, "tw2m": ecmwf_run}
+                "precip6h": ecmwf_run, "td2m": ecmwf_run, "tw2m": ecmwf_run, "tcc": ecmwf_run}
     stale = [name for name, version in versions.items() if force or read_version(targets[name]) != version]
     heights_missing = icon_grib is not None and (force or read_version(targets["heights"]) is None)
     if not stale and not heights_missing:
@@ -343,6 +347,12 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
                                              "colours": colour_bands(chart_styles.PRECIPITATION),
                                              "transparent_below": chart_styles.PRECIPITATION.transparent_below,
                                              "ecmwf": precipitation_block(ecmwf)})
+    if "tcc" in stale:
+        # The GRIB value is a fraction; transparent_below: clearer skies stay uncoloured, as on the chart.
+        write_document(targets["tcc"], {"version": versions["tcc"], "box": BOX, "scale": CLOUD_SCALE,
+                                        "colours": colour_bands(chart_styles.CLOUD_COVER),
+                                        "transparent_below": chart_styles.CLOUD_COVER.transparent_below,
+                                        "ecmwf": ecmwf_block(ecmwf, "tcc", None, "tcc", 0.0, TCC_PERCENT, CLOUD_SCALE)})
     icon = cells = None
     if icon_grib is not None and ("t2m" in stale or heights_missing):
         icon = ForecastGrib(icon_grib, ICON_NAMES)

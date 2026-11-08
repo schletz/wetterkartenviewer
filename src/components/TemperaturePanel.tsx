@@ -3,7 +3,7 @@ import { bandColour } from '../model/colourBands'
 import { holidayName } from '../model/holidays'
 import {
   COLOUR_BAR_HEIGHT, LEGEND_LINE_HEIGHT, TITLE_HEIGHT,
-  type BarMark, type ColourBar, type PlacedPanel, type ScaledLine, type TimeAxis,
+  type BarMark, type ColourBar, type ColourLayer, type PlacedPanel, type ScaledLine, type TimeAxis,
 } from '../model/panelLayout'
 import type { ValuePoint } from '../model/TemperatureSeries'
 import { ValueAxis } from '../model/ValueAxis'
@@ -152,23 +152,36 @@ export default function TemperaturePanel({ placed, time, left, right }: Temperat
   )
 }
 
+/** Colour of a value in a layer; undefined below `transparentBelow`. */
+function layerColour(layer: ColourLayer, value: number): string | undefined {
+  return layer.transparentBelow !== undefined && value < layer.transparentBelow
+    ? undefined
+    : bandColour(layer.colours, value)
+}
+
 /**
  * The colour bar between `top` and `bottom`: each value ends at its valid time and fills the time back to the previous
- * value, values below `transparentBelow` leave it empty.
+ * value. A value below `transparentBelow` leaves it to the fallback layer, or empty.
  */
 function ColourStrip({ bar, x, left, right, top, bottom }: {
   bar: ColourBar; x: TimeAxis['x']; left: number; right: number; top: number; bottom: number
 }) {
   const blocks = barBlocks(bar, x, left, right)
+  const { fallback } = bar
+  const fallbackByTime = new Map(fallback?.values.map((p) => [+p.valid, p.value]))
+  const blockColour = (point: ValuePoint) => {
+    const other = fallbackByTime.get(+point.valid)
+    return layerColour(bar, point.value)
+      ?? (fallback === undefined || other === undefined ? undefined : layerColour(fallback, other))
+  }
   return (
     <g>
       {bar.values.map((point, i) => {
         const [from, to] = blocks[i]
+        const fill = blockColour(point)
         // Steps outside the time axis collapse to zero width at its ends.
-        const shown = bar.transparentBelow === undefined || point.value >= bar.transparentBelow
-        return to > from && shown && (
-          <rect key={+point.valid} x={from} y={top} width={to - from} height={bottom - top}
-            fill={bandColour(bar.colours, point.value)} />
+        return to > from && fill !== undefined && (
+          <rect key={+point.valid} x={from} y={top} width={to - from} height={bottom - top} fill={fill} />
         )
       })}
       <line className={styles.axis} x1={left} x2={right} y1={top} y2={top} />
