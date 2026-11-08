@@ -1162,19 +1162,19 @@
  "series": {
   "t850": {
    "file": "austria/t850.json",
-   "version": "2026110800"
+   "version": "2026110800-at-hu"
   },
   "t2m": {
    "file": "austria/t2m.json",
-   "version": "2026110800-2026110818"
+   "version": "2026110800-2026110818-at-hu"
   },
   "td2m": {
    "file": "austria/td2m.json",
-   "version": "2026110800"
+   "version": "2026110800-at-hu"
   },
   "tw2m": {
    "file": "austria/tw2m.json",
-   "version": "2026110800"
+   "version": "2026110800-at-hu"
   },
   "heights": {
    "file": "austria/heights.json",
@@ -1182,35 +1182,35 @@
   },
   "thickness": {
    "file": "austria/thickness.json",
-   "version": "2026110800"
+   "version": "2026110800-at-hu"
   },
   "t500": {
    "file": "austria/t500.json",
-   "version": "2026110800"
+   "version": "2026110800-at-hu"
   },
   "rh850": {
    "file": "austria/rh850.json",
-   "version": "2026110800"
+   "version": "2026110800-at-hu"
   },
   "rh700": {
    "file": "austria/rh700.json",
-   "version": "2026110800"
+   "version": "2026110800-at-hu"
   },
   "thetae850": {
    "file": "austria/thetae850.json",
-   "version": "2026110800"
+   "version": "2026110800-at-hu"
   },
   "gust10m": {
    "file": "austria/gust10m.json",
-   "version": "2026110800"
+   "version": "2026110800-at-hu"
   },
   "precip6h": {
    "file": "austria/precip6h.json",
-   "version": "2026110800"
+   "version": "2026110800-at-hu"
   },
   "tcc": {
    "file": "austria/tcc.json",
-   "version": "2026110800"
+   "version": "2026110800-at-hu"
   }
  }
 }
