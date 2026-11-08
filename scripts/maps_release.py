@@ -3,8 +3,9 @@
 Release assets have flat names, so a video maps/<window>/<product>.mp4 is
 stored as the asset <window>.<product>.mp4 (window and product names
 contain no dots). publish_maps.py uploads with the gh CLI; fetch_maps.py
-downloads in the deploy workflow without a token, which works because the
-repository is public.
+downloads in the deploy workflow through the REST API, authenticated with the
+workflow token. The anonymous github.com/.../releases/download/ URLs answer
+with HTTP 504 for unauthenticated clients at times.
 """
 
 TAG = "tile-videos"
@@ -15,6 +16,6 @@ def asset_name(file: str) -> str:
     return file.replace("/", ".")
 
 
-def download_url(repository: str, file: str) -> str:
-    """Public download URL of the asset of a video path; repository is "owner/name"."""
-    return f"https://github.com/{repository}/releases/download/{TAG}/{asset_name(file)}"
+def release_api_url(repository: str) -> str:
+    """REST API URL of the release with the assets; repository is "owner/name"."""
+    return f"https://api.github.com/repos/{repository}/releases/tags/{TAG}"
