@@ -24,6 +24,16 @@ export interface RegularGrid {
   dlon: number
   nj: number
   ni: number
+  /**
+   * Per row the columns that hold data, as [start, length, start, length, ...]; the points of a file are numbered
+   * row by row. Missing in files of older pipelines, which hold every point.
+   */
+  runs?: number[][]
+}
+
+/** A grid point that holds data: its number in the series of the file and its position. */
+export interface GridPoint extends GeoLocation {
+  index: number
 }
 
 export interface ClimateStatistics {
@@ -96,7 +106,7 @@ export interface T2mFile {
   icon?: IconBlock
 }
 
-/** The ICON-D2 cells of Austria: centre (deltas along the list, in coord_scale degrees) and model orography. */
+/** The ICON-D2 cells of Austria and its margin: centre (deltas along the list, in coord_scale degrees) and model orography. */
 export interface HeightsFile {
   version: string
   box: Box
@@ -214,7 +224,8 @@ export interface TccFile {
 export interface SeriesFiles {
   t850: T850File
   t2m: T2mFile
-  heights: HeightsFile
+  /** Without it the diagram has no ICON-D2 line. */
+  heights?: HeightsFile
   /** Missing in manifests of older pipelines. */
   td2m?: Td2mFile
   /** Missing in manifests of older pipelines. */
@@ -260,16 +271,39 @@ export function cumulative(deltas: number[], scale: number): Float64Array {
   return values
 }
 
-/** Index of the grid point nearest to a location, null outside the grid. */
-export function gridIndex(grid: RegularGrid, location: GeoLocation): number | null {
+/** Columns of a row that hold data, as [start, length, ...]. */
+function rowRuns(grid: RegularGrid, row: number): number[] {
+  return grid.runs?.[row] ?? [0, grid.ni]
+}
+
+/** Number of points a grid holds data for: the length of one time in its series. */
+export function pointCount(grid: RegularGrid): number {
+  let points = 0
+  for (let row = 0; row < grid.nj; row++) {
+    const runs = rowRuns(grid, row)
+    for (let k = 1; k < runs.length; k += 2) points += runs[k]
+  }
+  return points
+}
+
+/** The grid point nearest to a location, null if that point lies outside the grid or holds no data. */
+export function nearestGridPoint(grid: RegularGrid, location: GeoLocation): GridPoint | null {
   const row = Math.round((grid.lat0 - location.lat) / grid.dlat)
   const col = Math.round((location.lon - grid.lon0) / grid.dlon)
   if (row < 0 || row >= grid.nj || col < 0 || col >= grid.ni) return null
-  return row * grid.ni + col
-}
-
-export function inBox(box: Box, location: GeoLocation): boolean {
-  return location.lat <= box.north && location.lat >= box.south && location.lon >= box.west && location.lon <= box.east
+  // A file numbers only the points it holds, so the number is what the runs before this point add up to.
+  let index = 0
+  for (let j = 0; j <= row; j++) {
+    const runs = rowRuns(grid, j)
+    for (let k = 0; k < runs.length; k += 2) {
+      const [start, length] = [runs[k], runs[k + 1]]
+      if (j === row && col >= start && col < start + length) {
+        return { index: index + col - start, lat: grid.lat0 - row * grid.dlat, lon: grid.lon0 + col * grid.dlon }
+      }
+      index += length
+    }
+  }
+  return null
 }
 
 /** Date of a run name YYYYMMDDHH (UTC). */

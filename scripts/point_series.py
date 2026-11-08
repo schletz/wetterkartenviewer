@@ -1,8 +1,8 @@
-"""Write the temperature series of Austria that the start page of the viewer draws for its location.
+"""Write the temperature series of Austria and Hungary that the start page of the viewer draws for its location.
 
 Thirteen JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
 
-    t850.json      ECMWF T850 of every step on the 0.1 deg grid of the box, with the ERA5
+    t850.json      ECMWF T850 of every step on the 0.1 deg grid of the region, with the ERA5
                    climatology of T850 (mean, stdev) for the days of the run
     t2m.json       ECMWF and ICON-D2 T2m, with the ERA5 climatology of the daily mean T2m
                    (both ECMWF blocks and both climate blocks also hold the model
@@ -33,13 +33,18 @@ previous time. Neighbouring points change alike, which gzip packs to about a
 fifth; GitHub Pages serves JSON compressed, so the files need no packing of
 their own. A field of n points and t times is one flat list of n * t numbers.
 
-The regular grids (ECMWF 0.1 deg, ERA5 0.25 deg) cover the box ``BOX``; their
-``grid`` gives lat0 (northernmost row), lon0, dlat (step southwards), dlon,
-nj, ni, rows north to south. The ERA5 window is wider by half a grid step, so
-the grid point nearest to every location of the box is in it. ICON-D2 keeps
-its cells, only those within ``BORDER_MARGIN`` of Austria, in file order; the
-cell coordinates are in heights.json (deltas of 1e-4 deg along the cell
-list), t2m.json only repeats their number.
+The regular grids (ECMWF 0.1 deg, ERA5 0.25 deg) lie in the box ``ECMWF_BOX``
+around Austria and Hungary, of which only the points are stored that are the
+nearest point of a place in one of the two countries (lib/country_mask.py);
+the ERA5 window is wider by half a grid step and its points reach a little
+further (``ERA5_BORDER_MARGIN``), so every place the ECMWF points serve has its
+ERA5 point. ``grid`` gives lat0 (northernmost row), lon0, dlat (step
+southwards), dlon, nj, ni, rows north to south, and ``runs``, per row the kept
+columns as [start, length, start, length, ...]; the kept points are numbered
+row by row. ICON-D2 stays in Austria: it keeps its cells, only those within
+``BORDER_MARGIN`` of Austria in ``ICON_BOX``, in file order; the cell
+coordinates are in heights.json (deltas of 1e-4 deg along the cell list),
+t2m.json only repeats their number.
 
 The climatology covers every day from 00 UTC of the ECMWF run to its last
 step, each file only with what the app draws: t850.json ``term``, each analysis
@@ -47,8 +52,8 @@ hour of each day (day-major, then hour); t2m.json ``daily``, the daily means and
 the standard deviation of the daily means (the daily cycle of T2m makes the
 term values a poor reference).
 
-A file is written only if its ``version`` changed (the runs it comes from),
-so publish_maps.py uploads it once per run. heights.json depends only on the
+A file is written only if its ``version`` changed (the runs it comes from and
+``REGION``), so publish_maps.py uploads it once per run. heights.json depends only on the
 ICON grid and is written when it is missing or its cells differ.
 
 Usage: python scripts/point_series.py data maps [--force]
@@ -69,14 +74,22 @@ from lib import chart_styles
 from lib.chart_products import TCC_PERCENT, ChartProducts
 from lib.climate_archive import DIRECTORY as CLIMATE_DIRECTORY, ClimateArchive
 from lib.constants import ICON_NAMES, IFS_GUST_NAMES, KELVIN, KMH_PER_MS
+from lib.country_mask import austria_rings, mask_runs, nearest_point_mask
 from lib.era5_orography import era5_orography
 from lib.forecast_grib import ForecastGrib
 from lib.missing_field_error import MissingFieldError
-from lib.projection import AUSTRIA_BORDERS
 from maps_manifest import SERIES_FILES, read_version
 
-# Austria with a margin of about 10 km on every side, in degrees.
-BOX = {"north": 49.1, "south": 46.3, "west": 9.5, "east": 17.2}
+# Austria with a margin of about 10 km on every side, in degrees; the ICON-D2 cells are searched in it.
+ICON_BOX = {"north": 49.1, "south": 46.3, "west": 9.5, "east": 17.2}
+# Around Austria and Hungary, in degrees; the ECMWF and ERA5 points are searched in it.
+ECMWF_BOX = {"north": 49.1, "south": 45.7, "west": 9.5, "east": 22.9}
+# Part of every version of a file with ECMWF data: another region needs new files, and new URLs for them, even within
+# a run, since browsers keep a file by its version.
+REGION = "at-hu"
+# A place served by an ECMWF point lies at most one ECMWF grid step (degrees) beyond the border: the point lies within
+# half a step of the border, the place within half a step of the point. Its ERA5 point has to be in the files too.
+ERA5_BORDER_MARGIN = 0.1
 # ICON cells farther from Austria than this (degrees of latitude) are left out.
 BORDER_MARGIN = 0.15
 # Values are stored as multiples of SCALE (0.1 K), coordinates of COORD_SCALE degrees.
@@ -105,15 +118,28 @@ def time_major_deltas(fields: np.ndarray, scale: float = SCALE) -> list[int]:
 
 
 def box_window(grid: dict, margin: float = 0.0) -> tuple[slice, slice, dict]:
-    """Rows, columns and grid of the part of a regular grid that lies in ``BOX`` widened by ``margin`` degrees."""
+    """Rows, columns and grid of the part of a regular grid in ``ECMWF_BOX`` widened by ``margin`` degrees."""
     lats = grid["lat0"] - grid["dlat"] * np.arange(grid["nj"])
     lons = grid["lon0"] + grid["dlon"] * np.arange(grid["ni"])
     tolerance = 1e-6  # grid coordinates come with rounding errors
-    rows = np.flatnonzero((lats <= BOX["north"] + margin + tolerance) & (lats >= BOX["south"] - margin - tolerance))
-    cols = np.flatnonzero((lons >= BOX["west"] - margin - tolerance) & (lons <= BOX["east"] + margin + tolerance))
+    rows = np.flatnonzero((lats <= ECMWF_BOX["north"] + margin + tolerance)
+                          & (lats >= ECMWF_BOX["south"] - margin - tolerance))
+    cols = np.flatnonzero((lons >= ECMWF_BOX["west"] - margin - tolerance)
+                          & (lons <= ECMWF_BOX["east"] + margin + tolerance))
     window = {"lat0": round(float(lats[rows[0]]), 4), "lon0": round(float(lons[cols[0]]), 4),
               "dlat": grid["dlat"], "dlon": grid["dlon"], "nj": len(rows), "ni": len(cols)}
     return slice(rows[0], rows[-1] + 1), slice(cols[0], cols[-1] + 1), window
+
+
+def region_window(grid: dict, box_margin: float = 0.0,
+                  border_margin: float = 0.0) -> tuple[Callable[[np.ndarray], np.ndarray], dict]:
+    """The points of a regular grid the series keep: a function that cuts them out of a field, and their grid.
+
+    The function returns a flat array, row by row, in the numbering of the ``runs`` of the returned grid.
+    """
+    rows, cols, window = box_window(grid, box_margin)
+    keep = nearest_point_mask(window, border_margin)
+    return lambda field: field[rows, cols][keep], {**window, "runs": mask_runs(keep)}
 
 
 def run_of(grib: ForecastGrib) -> str:
@@ -136,16 +162,16 @@ def derived_block(grib: ForecastGrib, all_steps: list[int], key: str, field_of: 
 
     A step at which ``field_of`` misses a field on the server is left out.
     """
-    rows, cols, window = box_window(grib.grid)
+    select, window = region_window(grib.grid)
     steps, fields = [], []
     for step in all_steps:
         try:
-            fields.append(field_of(step)[rows, cols])
+            fields.append(select(field_of(step)))
         except MissingFieldError:
             continue
         steps.append(step)
     # Model orography (m) of the grid points, for the height the series belongs to.
-    orog = np.rint(grib.field("orog", 0)[rows, cols]).astype(np.int64).ravel().tolist()
+    orog = np.rint(select(grib.field("orog", 0))).astype(np.int64).tolist()
     return {"run": run_of(grib), "steps": steps, "grid": window, "orog": orog, key: time_major_deltas(fields, scale)}
 
 
@@ -207,18 +233,15 @@ def colour_bands(scale) -> list[list]:
 
 def austria_cells(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
     """Indices of the ICON cells within ``BORDER_MARGIN`` of Austria, in file order."""
-    features = json.loads(AUSTRIA_BORDERS.read_text(encoding="utf-8"))["features"]
-    country = next(f["geometry"] for f in features if f["properties"].get("ISO") == "AT"
-                   and f["properties"].get("LEVEL") == "country")
-    polygons = country["coordinates"] if country["type"] == "MultiPolygon" else [country["coordinates"]]
-    in_box = np.flatnonzero((lat <= BOX["north"]) & (lat >= BOX["south"]) & (lon >= BOX["west"]) & (lon <= BOX["east"]))
+    in_box = np.flatnonzero((lat <= ICON_BOX["north"]) & (lat >= ICON_BOX["south"])
+                            & (lon >= ICON_BOX["west"]) & (lon <= ICON_BOX["east"]))
     # Distances in degrees of latitude: longitudes shrink with the cosine of the latitude.
-    shrink = np.cos(np.radians((BOX["north"] + BOX["south"]) / 2))
+    shrink = np.cos(np.radians((ICON_BOX["north"] + ICON_BOX["south"]) / 2))
     points = np.column_stack([lat[in_box], lon[in_box] * shrink])
     inside = np.zeros(len(in_box), bool)
-    for polygon in polygons:
+    for ring in austria_rings():
         # Only the outer ring: Austria has no holes that matter at 2 km.
-        inside |= Polygon(np.array(polygon[0])[:, ::-1] * [1, shrink]).contains_points(points)
+        inside |= Polygon(ring[:, ::-1] * [1, shrink]).contains_points(points)
     distance, _ = cKDTree(points[inside]).query(points, distance_upper_bound=BORDER_MARGIN)
     return in_box[np.isfinite(distance)]
 
@@ -240,7 +263,7 @@ def heights_document(grib: ForecastGrib, cells: np.ndarray) -> dict:
     """Centre and model orography of the ICON cells; coordinates as deltas along the cell list."""
     coordinate = lambda name: np.diff(np.rint(grib.field(name, 0)[cells] / COORD_SCALE).astype(np.int64),  # noqa: E731
                                       prepend=0).tolist()
-    return {"version": f"{run_of(grib)}-{len(cells)}", "box": BOX, "coord_scale": COORD_SCALE, "cells": len(cells),
+    return {"version": f"{run_of(grib)}-{len(cells)}", "box": ICON_BOX, "coord_scale": COORD_SCALE, "cells": len(cells),
             "lat": coordinate("clat"), "lon": coordinate("clon"),
             "hsurf": np.rint(grib.field("hsurf", 0)[cells]).astype(np.int64).tolist()}
 
@@ -254,11 +277,12 @@ def climate_block(archive: ClimateArchive, level: int, run: datetime, last_step:
     """
     first_day = run.replace(hour=0)
     days = [first_day + timedelta(days=i) for i in range((run + timedelta(hours=last_step) - first_day).days + 1)]
-    rows, cols, window = box_window(archive.grid, max(archive.grid["dlat"], archive.grid["dlon"]) / 2)
+    select, window = region_window(archive.grid, max(archive.grid["dlat"], archive.grid["dlon"]) / 2,
+                                   ERA5_BORDER_MARGIN)
     shape = archive.grid["nj"], archive.grid["ni"]
 
     def fields(kind_dates: list[tuple[str, int, int]], statistic: str) -> list[int]:
-        values = [archive.field(field_kind, statistic, level, month, day).reshape(shape)[rows, cols]
+        values = [select(archive.field(field_kind, statistic, level, month, day).reshape(shape))
                   for field_kind, month, day in kind_dates]
         return time_major_deltas(np.array(values) - (KELVIN if statistic == "mean" else 0))
 
@@ -271,9 +295,9 @@ def climate_block(archive: ClimateArchive, level: int, run: datetime, last_step:
         extra = {}
     else:
         raise ValueError(f"unknown climate kind {kind}")
-    orography = era5_orography(archive.grid)[rows, cols]
+    orography = select(era5_orography(archive.grid))
     return {"period": archive.period, "grid": window, "first_day": f"{first_day:%Y-%m-%d}", "days": len(days),
-            **extra, "orog": np.rint(orography).astype(np.int64).ravel().tolist(),
+            **extra, "orog": np.rint(orography).astype(np.int64).tolist(),
             kind: {statistic: fields(dates, statistic) for statistic in ("mean", "std")}}
 
 
@@ -291,9 +315,11 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     ecmwf_run = ecmwf_grib.stem.split("_")[-1]
     icon_run = icon_grib.stem.split("_")[-1] if icon_grib else "none"
     targets = {name: maps / file for name, file in SERIES_FILES.items()}
-    versions = {"t850": ecmwf_run, "t2m": f"{ecmwf_run}-{icon_run}", "thickness": ecmwf_run, "t500": ecmwf_run,
-                "rh850": ecmwf_run, "rh700": ecmwf_run, "thetae850": ecmwf_run, "gust10m": ecmwf_run,
-                "precip6h": ecmwf_run, "td2m": ecmwf_run, "tw2m": ecmwf_run, "tcc": ecmwf_run}
+    ecmwf_version = f"{ecmwf_run}-{REGION}"
+    versions = {"t850": ecmwf_version, "t2m": f"{ecmwf_run}-{icon_run}-{REGION}", "thickness": ecmwf_version,
+                "t500": ecmwf_version, "rh850": ecmwf_version, "rh700": ecmwf_version, "thetae850": ecmwf_version,
+                "gust10m": ecmwf_version, "precip6h": ecmwf_version, "td2m": ecmwf_version, "tw2m": ecmwf_version,
+                "tcc": ecmwf_version}
     stale = [name for name, version in versions.items() if force or read_version(targets[name]) != version]
     heights_missing = icon_grib is not None and (force or read_version(targets["heights"]) is None)
     if not stale and not heights_missing:
@@ -303,7 +329,7 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     archive = ClimateArchive(data / CLIMATE_DIRECTORY)
     ecmwf = ForecastGrib(ecmwf_grib)
     last_step = max(ecmwf.steps("2t"))
-    common = {"box": BOX, "scale": SCALE}
+    common = {"box": ECMWF_BOX, "scale": SCALE}
     if "t850" in stale:
         write_document(targets["t850"], {"version": versions["t850"], **common,
                                          "ecmwf": ecmwf_block(ecmwf, "t", 850, "t850"),
@@ -320,7 +346,7 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
     # the document's scale must be the encoding scale.
     for name, level in (("rh850", 850), ("rh700", 700)):
         if name in stale:
-            write_document(targets[name], {"version": versions[name], "box": BOX, "scale": RH_SCALE,
+            write_document(targets[name], {"version": versions[name], "box": ECMWF_BOX, "scale": RH_SCALE,
                                            "ecmwf": ecmwf_block(ecmwf, "r", level, name, 0.0, scale=RH_SCALE)})
     if "thetae850" in stale:
         # Forecast files of older pipelines lack the derived field; the app then draws no theta-e line.
@@ -338,18 +364,18 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
             else:
                 print(f"{ecmwf_grib.name} has no {short_name}, {SERIES_FILES[name]} not written")
     if "gust10m" in stale:
-        write_document(targets["gust10m"], {"version": versions["gust10m"], "box": BOX, "scale": WIND_SCALE,
+        write_document(targets["gust10m"], {"version": versions["gust10m"], "box": ECMWF_BOX, "scale": WIND_SCALE,
                                             "colours": colour_bands(chart_styles.GUST10M),
                                             "ecmwf": gust_block(ecmwf)})
     if "precip6h" in stale:
         # transparent_below: drier windows stay uncoloured, as on the chart.
-        write_document(targets["precip6h"], {"version": versions["precip6h"], "box": BOX, "scale": PRECIP_SCALE,
+        write_document(targets["precip6h"], {"version": versions["precip6h"], "box": ECMWF_BOX, "scale": PRECIP_SCALE,
                                              "colours": colour_bands(chart_styles.PRECIPITATION),
                                              "transparent_below": chart_styles.PRECIPITATION.transparent_below,
                                              "ecmwf": precipitation_block(ecmwf)})
     if "tcc" in stale:
         # The GRIB value is a fraction; transparent_below: clearer skies stay uncoloured, as on the chart.
-        write_document(targets["tcc"], {"version": versions["tcc"], "box": BOX, "scale": CLOUD_SCALE,
+        write_document(targets["tcc"], {"version": versions["tcc"], "box": ECMWF_BOX, "scale": CLOUD_SCALE,
                                         "colours": colour_bands(chart_styles.CLOUD_COVER),
                                         "transparent_below": chart_styles.CLOUD_COVER.transparent_below,
                                         "ecmwf": ecmwf_block(ecmwf, "tcc", None, "tcc", 0.0, TCC_PERCENT, CLOUD_SCALE)})

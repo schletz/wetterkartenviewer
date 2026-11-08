@@ -1,7 +1,7 @@
 import type { GeoLocation } from './GeoLocation'
 import {
-  cumulative, gridIndex, inBox, pointSeries, runTime,
-  type ColourBand, type DailyClimateBlock, type EcmwfBlock, type RegularGrid, type SeriesFiles, type TermClimateBlock,
+  cumulative, nearestGridPoint, pointCount, pointSeries, runTime,
+  type ColourBand, type DailyClimateBlock, type EcmwfBlock, type GridPoint, type SeriesFiles, type TermClimateBlock,
 } from './seriesFiles'
 
 /** An ICON cell centre is never farther from a location inside its cells than this (degrees of latitude). */
@@ -36,8 +36,6 @@ export interface PointSeries {
 
 /** Every series the start page draws for one location. */
 export interface LocationTemperatures {
-  /** ICON-D2 model orography of the nearest cell, m. */
-  height: number
   t850: PointSeries
   /** ERA5 T850 climate at every valid time of `t850`, null where the climatology has no value. */
   climate850: (ClimatePoint | null)[]
@@ -46,7 +44,7 @@ export interface LocationTemperatures {
   climate2m: DailyClimate[]
   /** ERA5 orography of the T2m climate point, m; undefined if the file has none. */
   climate2mHeight?: number
-  /** Null if the files hold no ICON-D2 run. */
+  /** Null if the files hold no ICON-D2 run or no ICON-D2 cell lies near the location. */
   t2mIcon: PointSeries | null
   /** ECMWF 2 m dew point in °C; null without td2m file. */
   td2m: PointSeries | null
@@ -80,7 +78,7 @@ export interface LocationTemperatures {
   tcc: { series: PointSeries; colours: ColourBand[]; transparentBelow: number } | null
 }
 
-/** Picks the series of one location out of the files of the Austria box. */
+/** Picks the series of one location out of the files of the region (Austria and Hungary, ICON-D2 only Austria). */
 export class TemperatureSeries {
   private readonly files: SeriesFiles
   private readonly cellLat: Float64Array
@@ -88,80 +86,83 @@ export class TemperatureSeries {
 
   constructor(files: SeriesFiles) {
     this.files = files
-    const { lat, lon, coord_scale: scale } = files.heights
-    this.cellLat = cumulative(lat, scale)
-    this.cellLon = cumulative(lon, scale)
+    const { heights } = files
+    this.cellLat = heights === undefined ? new Float64Array(0) : cumulative(heights.lat, heights.coord_scale)
+    this.cellLon = heights === undefined ? new Float64Array(0) : cumulative(heights.lon, heights.coord_scale)
   }
 
-  /** The series of the location; null outside Austria and its margin (no ICON cell near). */
+  /** The series of the location; null where the ECMWF files hold no point for it. */
   at(location: GeoLocation): LocationTemperatures | null {
-    const { t850, t2m, td2m, tw2m, heights, thickness, t500, rh850, rh700, thetae850, gust10m, precip6h, tcc } = this.files
-    if (!inBox(t850.box, location)) return null
-    const cell = this.nearestCell(location)
-    if (cell === null) return null
+    const { t850, t2m, td2m, tw2m, thickness, t500, rh850, rh700, thetae850, gust10m, precip6h, tcc } = this.files
+    // All ECMWF files come from one grid and one selection of points.
+    const point = nearestGridPoint(t850.ecmwf.grid, location)
+    if (point === null) return null
 
-    const t850Series = ecmwfSeries(t850.ecmwf, t850.ecmwf.t850, t850.scale, location)
-    const t2mSeries = ecmwfSeries(t2m.ecmwf, t2m.ecmwf.t2m, t2m.scale, location)
+    const t850Series = ecmwfSeries(t850.ecmwf, t850.ecmwf.t850, t850.scale, point)
+    const t2mSeries = ecmwfSeries(t2m.ecmwf, t2m.ecmwf.t2m, t2m.scale, point)
     const climate = climateAt(t850.climate, t850.scale, location, t850Series.values.map((p) => p.valid))
     const climate2m = dailyClimateAt(t2m.climate, t2m.scale, location)
     if (climate === null || climate2m === null) return null
 
-    let t2mIcon: PointSeries | null = null
-    const icon = t2m.icon
-    // A heights.json of another cell selection does not fit the ICON series.
-    if (icon !== undefined && icon.cells === heights.cells) {
-      const start = runTime(icon.run).getTime()
-      const values = pointSeries(icon.t2m, icon.cells, cell, t2m.scale)
-      t2mIcon = {
-        point: { lat: this.cellLat[cell], lon: this.cellLon[cell] },
-        height: heights.hsurf[cell],
-        values: values.map((value, i) => ({ valid: new Date(start + icon.steps[i] * HOUR_MS), value })),
-      }
-    }
     return {
-      height: heights.hsurf[cell],
       t850: t850Series,
       climate850: climate.values,
       t2mEcmwf: t2mSeries,
       climate2m: climate2m.values,
       climate2mHeight: climate2m.height,
-      t2mIcon,
-      td2m: td2m === undefined ? null : ecmwfSeries(td2m.ecmwf, td2m.ecmwf.td2m, td2m.scale, location),
-      tw2m: tw2m === undefined ? null : ecmwfSeries(tw2m.ecmwf, tw2m.ecmwf.tw2m, tw2m.scale, location),
+      t2mIcon: this.iconSeries(location),
+      td2m: td2m === undefined ? null : ecmwfSeries(td2m.ecmwf, td2m.ecmwf.td2m, td2m.scale, point),
+      tw2m: tw2m === undefined ? null : ecmwfSeries(tw2m.ecmwf, tw2m.ecmwf.tw2m, tw2m.scale, point),
       thickness: thickness === undefined
         ? null
-        : ecmwfSeries(thickness.ecmwf, thickness.ecmwf.thickness, thickness.scale, location),
-      t500: t500 === undefined ? null : ecmwfSeries(t500.ecmwf, t500.ecmwf.t500, t500.scale, location),
-      rh850: rh850 === undefined ? null : ecmwfSeries(rh850.ecmwf, rh850.ecmwf.rh850, rh850.scale, location),
-      rh700: rh700 === undefined ? null : ecmwfSeries(rh700.ecmwf, rh700.ecmwf.rh700, rh700.scale, location),
+        : ecmwfSeries(thickness.ecmwf, thickness.ecmwf.thickness, thickness.scale, point),
+      t500: t500 === undefined ? null : ecmwfSeries(t500.ecmwf, t500.ecmwf.t500, t500.scale, point),
+      rh850: rh850 === undefined ? null : ecmwfSeries(rh850.ecmwf, rh850.ecmwf.rh850, rh850.scale, point),
+      rh700: rh700 === undefined ? null : ecmwfSeries(rh700.ecmwf, rh700.ecmwf.rh700, rh700.scale, point),
       thetae850: thetae850 === undefined
         ? null
-        : ecmwfSeries(thetae850.ecmwf, thetae850.ecmwf.thetae850, thetae850.scale, location),
+        : ecmwfSeries(thetae850.ecmwf, thetae850.ecmwf.thetae850, thetae850.scale, point),
       gust10m: gust10m === undefined
         ? null
         : {
-            series: ecmwfSeries(gust10m.ecmwf, gust10m.ecmwf.gust10m, gust10m.scale, location),
+            series: ecmwfSeries(gust10m.ecmwf, gust10m.ecmwf.gust10m, gust10m.scale, point),
             hours: gust10m.ecmwf.hours,
             colours: gust10m.colours,
           },
       precip6h: precip6h === undefined
         ? null
         : {
-            series: ecmwfSeries(precip6h.ecmwf, precip6h.ecmwf.precip6h, precip6h.scale, location),
+            series: ecmwfSeries(precip6h.ecmwf, precip6h.ecmwf.precip6h, precip6h.scale, point),
             // Whole class numbers, not in units of the precipitation scale; older files have none.
             types: precip6h.ecmwf.ptype === undefined
               ? []
-              : ecmwfSeries(precip6h.ecmwf, precip6h.ecmwf.ptype, 1, location).values,
+              : ecmwfSeries(precip6h.ecmwf, precip6h.ecmwf.ptype, 1, point).values,
             colours: precip6h.colours,
             transparentBelow: precip6h.transparent_below,
           },
       tcc: tcc === undefined
         ? null
         : {
-            series: ecmwfSeries(tcc.ecmwf, tcc.ecmwf.tcc, tcc.scale, location),
+            series: ecmwfSeries(tcc.ecmwf, tcc.ecmwf.tcc, tcc.scale, point),
             colours: tcc.colours,
             transparentBelow: tcc.transparent_below,
           },
+    }
+  }
+
+  /** ICON-D2 T2m of the nearest cell; null without an ICON-D2 run or a cell within MAX_CELL_DISTANCE. */
+  private iconSeries(location: GeoLocation): PointSeries | null {
+    const { t2m: { icon, scale }, heights } = this.files
+    // A heights.json of another cell selection does not fit the ICON series.
+    if (icon === undefined || heights === undefined || icon.cells !== heights.cells) return null
+    const cell = this.nearestCell(location)
+    if (cell === null) return null
+    const start = runTime(icon.run).getTime()
+    return {
+      point: { lat: this.cellLat[cell], lon: this.cellLon[cell] },
+      height: heights.hsurf[cell],
+      values: pointSeries(icon.t2m, icon.cells, cell, scale)
+        .map((value, i) => ({ valid: new Date(start + icon.steps[i] * HOUR_MS), value })),
     }
   }
 
@@ -181,31 +182,24 @@ export class TemperatureSeries {
   }
 }
 
-/** Latitude and longitude of a grid point index. */
-function gridPoint(grid: RegularGrid, index: number): GeoLocation {
-  const row = Math.floor(index / grid.ni)
-  return { lat: grid.lat0 - row * grid.dlat, lon: grid.lon0 + (index % grid.ni) * grid.dlon }
-}
-
-/** The series of the ECMWF grid point nearest to the location (the location lies in the box). */
-function ecmwfSeries(block: EcmwfBlock, deltas: number[], scale: number, location: GeoLocation): PointSeries {
-  const index = gridIndex(block.grid, location) ?? 0
+/** The series of an ECMWF grid point. */
+function ecmwfSeries(block: EcmwfBlock, deltas: number[], scale: number, point: GridPoint): PointSeries {
   const start = runTime(block.run).getTime()
-  const values = pointSeries(deltas, block.grid.ni * block.grid.nj, index, scale)
+  const values = pointSeries(deltas, pointCount(block.grid), point.index, scale)
   return {
-    point: gridPoint(block.grid, index),
-    height: block.orog[index],
+    point: { lat: point.lat, lon: point.lon },
+    height: block.orog[point.index],
     values: values.map((value, i) => ({ valid: new Date(start + block.steps[i] * HOUR_MS), value })),
   }
 }
 
 /** Mean and standard deviation per analysis hour at the nearest ERA5 point, for each valid time, and its height. */
 function climateAt(block: TermClimateBlock, scale: number, location: GeoLocation, valid: Date[]) {
-  const index = gridIndex(block.grid, location)
-  if (index === null) return null
-  const points = block.grid.ni * block.grid.nj
-  const mean = pointSeries(block.term.mean, points, index, scale)
-  const std = pointSeries(block.term.std, points, index, scale)
+  const point = nearestGridPoint(block.grid, location)
+  if (point === null) return null
+  const points = pointCount(block.grid)
+  const mean = pointSeries(block.term.mean, points, point.index, scale)
+  const std = pointSeries(block.term.std, points, point.index, scale)
   const firstDay = Date.parse(`${block.first_day}T00:00:00Z`)
   const values = valid.map((time): ClimatePoint | null => {
     const day = Math.floor((time.getTime() - firstDay) / DAY_MS)
@@ -214,17 +208,17 @@ function climateAt(block: TermClimateBlock, scale: number, location: GeoLocation
     const i = day * block.hours.length + hour
     return { mean: mean[i], std: std[i] }
   })
-  return { height: block.orog?.[index], values }
+  return { height: block.orog?.[point.index], values }
 }
 
 /** Mean and standard deviation of the daily mean at the nearest ERA5 point for every day of the block, and its height. */
 function dailyClimateAt(block: DailyClimateBlock, scale: number, location: GeoLocation) {
-  const index = gridIndex(block.grid, location)
-  if (index === null) return null
-  const points = block.grid.ni * block.grid.nj
-  const mean = pointSeries(block.daily.mean, points, index, scale)
-  const std = pointSeries(block.daily.std, points, index, scale)
+  const point = nearestGridPoint(block.grid, location)
+  if (point === null) return null
+  const points = pointCount(block.grid)
+  const mean = pointSeries(block.daily.mean, points, point.index, scale)
+  const std = pointSeries(block.daily.std, points, point.index, scale)
   const firstDay = Date.parse(`${block.first_day}T00:00:00Z`)
   const values = mean.map((m, i): DailyClimate => ({ day: new Date(firstDay + i * DAY_MS), mean: m, std: std[i] }))
-  return { height: block.orog?.[index], values }
+  return { height: block.orog?.[point.index], values }
 }

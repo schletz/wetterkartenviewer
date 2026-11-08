@@ -19,7 +19,7 @@ interface StartPageProps {
 }
 
 /**
- * Temperature diagram (in Austria) and ECMWF ENS meteograms for the stored location, and the entry to the charts.
+ * Temperature diagram (in Austria and Hungary) and ECMWF ENS meteograms for the stored location, and the entry to the charts.
  * On wide screens the cells fill the window height in one row that scrolls with the mouse at its edges.
  */
 export default function StartPage({ location, onLocationChange, onOpenMaps }: StartPageProps) {
