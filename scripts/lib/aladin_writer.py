@@ -30,7 +30,8 @@ class AladinWriter:
       hour, with that hour as its time range; none at T+0.
     * u, v on pressure levels: turned from the grid to east and north.
     * the 2 m extremes: the 12 h they cover written as their time range; CHMI
-      gives them as instant fields, every 12 h from T+12.
+      gives them as instant fields valid at 06 and 18 UTC, so at T+12, 24 ... 72
+      in the runs of 06 and 18 UTC and at T+6, 18 ... 66 in those of 00 and 12 UTC.
     """
 
     # Files copied as they are; those accumulated from T+0 or valid for the last hour have no T+0.
@@ -160,10 +161,10 @@ class AladinWriter:
         return 2
 
     def _write_extreme(self, out, gid: int) -> int:
-        """Write a 2 m extreme with the hours it covers as its time range."""
+        """Write a 2 m extreme with the hours it covers as its time range; the first one of a run starts at T+0."""
         step = eccodes.codes_get(gid, "endStep")
         clone = eccodes.codes_clone(gid)
-        self._set_time_range(clone, step - self.EXTREME_HOURS, step)
+        self._set_time_range(clone, max(step - self.EXTREME_HOURS, 0), step)
         out.write(eccodes.codes_get_message(clone))
         eccodes.codes_release(clone)
         return 1

@@ -750,12 +750,12 @@ GRIB edition 1, centre 89, simple packing, rows from the south. The whole model 
 | CLSWIND_SPEED + CLSWIND_DIREC | `10u`, `10v` (written as parameters 33, 34) | m/s east and north, `uvRelativeToGrid` 0 | 0…72 |
 | CLSU_RAF_MOD_XFU + CLSV_RAF_MOD_XFU | `gust` (130) | speed of the maximum gust of the last hour, m/s, time range step−1…step | 1…72 |
 | CLSDEW_P_TEMPER, CLSTPRIM_W | `2d`, `wbt` (234) | 2 m dew point and wet-bulb temperature, K | 0…72 |
-| CLSMAXI_TEMPERAT, CLSMINI_TEMPERAT | `tmax_2m`, `tmin_2m` (aliases of `mx2t6`, `mn2t6`) | 2 m extremes of the last 12 h, K, time range step−12…step | 12, 24 … 72 |
+| CLSMAXI_TEMPERAT, CLSMINI_TEMPERAT | `tmax_2m`, `tmin_2m` (aliases of `mx2t6`, `mn2t6`) | 2 m extremes of the last 12 h, K, time range step−12…step, the first of a run from T+0 | valid at 06 and 18 UTC: 12, 24 … 72 (runs of 06, 18 UTC), 6, 18 … 66 (runs of 00, 12 UTC) |
 | P85000…, P70000… TEMPERATUR, HUMI_RELAT, GEOPOTENTI | `t`, `r`, `z` level 850, 700 | K, **fraction** 0…1 (ICON %), m²/s² | 0…72 |
 | P00000, P85000, P70000 WIND_U_COM, WIND_V_COM | `u`, `v` level 1000, 850, 700 | m/s east and north, `uvRelativeToGrid` 0 | 0…72 |
 
 ICON has fields ALADIN does not publish: `ww`, `ceiling`, `sp` (per user: every other ICON field is taken from ALADIN too). Names of the pressure levels are Pa, but 1000 hPa is `P00000`.
-Meaning measured on run 2026110906: the extremes equal the hourly `2t` of the 12 h before the step within +0.05 K and never fall below it (24 h or the time since T+0 do not fit); CLSTPRIM_W differs by 0.1–0.2 K from `wbt` computed like ICON's, surface pressure estimated from `msl` and `z`, without a trend with height (so no potential temperature).
+Meaning measured on the runs 2026110818, 00, 06 and 12 (one per cycle): the extremes equal the hourly `2t` of the 12 h before the step, or since T+0 for the first one of a run, within +0.05 K on average and never fall below it (24 h or the time since T+0 do not fit); CLSTPRIM_W differs by 0.1–0.2 K from `wbt` computed like ICON's, surface pressure estimated from `msl` and `z`, without a trend with height (so no potential temperature).
 
 Wind frames (measured on run 2026110900, gust direction minus wind direction against longitude has the trend −sin LaD exactly): CLSWIND_DIREC refers to true north, the gust components to the grid. The gust is stored as a speed, so the frame does not matter; do not derive a gust direction without rotating by `sin(LaD) · (lon − LoV)`. The components on pressure levels refer to the grid as well (the flag is 1 on every field and says nothing; direction minus the direction of the geostrophic wind along the grid axes, 700 hPa, T+24…72: trend ≈ 0 against longitude, +0.72 expected for east/north); `AladinWriter` turns them.
 

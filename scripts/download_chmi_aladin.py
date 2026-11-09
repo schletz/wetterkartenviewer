@@ -19,7 +19,7 @@ indexed by ForecastGrib with constants.ALADIN_NAMES):
     CLSWIND_SPEED, CLSWIND_DIREC         written as 10u and 10v (m/s, east and north)
     CLSU_RAF_MOD_XFU, CLSV_RAF_MOD_XFU   written as gust: speed of the maximum gust of the last hour (m/s), from T+1
     CLSDEW_P_TEMPER, CLSTPRIM_W          2d, wbt: 2 m dew point and wet-bulb temperature (K)
-    CLSMAXI_TEMPERAT, CLSMINI_TEMPERAT   tmax_2m, tmin_2m: 2 m extremes of the last 12 h (K), at T+12, 24 ... 72
+    CLSMAXI_TEMPERAT, CLSMINI_TEMPERAT   tmax_2m, tmin_2m: 2 m extremes of the last 12 h (K), at 06 and 18 UTC
     P85000..., P70000...                 t (K), r (0..1), z (m2/s2), u, v (m/s, turned to east and north)
     P00000WIND_U_COM, P00000WIND_V_COM   u, v at 1000 hPa (m/s, turned to east and north)
 

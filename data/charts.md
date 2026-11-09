@@ -516,7 +516,7 @@ in Klammern, der Name davor ist der des Skills und des Viewers.
 | `10u`, `10v` | 0–72 | m/s | Wind in 10 m, Ostkomponente und Nordkomponente; aus Windstärke und Windrichtung des Modells |
 | `gust` (130) | 1–72 | m/s | stärkste Böe in 10 m während der Stunde vor dem Termin |
 | `2d`, `wbt` (234) | 0–72 | K | Taupunkt und Feuchtkugeltemperatur in 2 m, beide vom Modell |
-| `tmax_2m`, `tmin_2m` | 12, 24 … 72 | K | höchste bzw. tiefste Temperatur in 2 m der 12 h vor dem Termin |
+| `tmax_2m`, `tmin_2m` | 06 und 18 UTC: 12, 24 … 72 (Läufe 06, 18 UTC), 6, 18 … 66 (Läufe 00, 12 UTC) | K | höchste bzw. tiefste Temperatur in 2 m der 12 h vor dem Termin, beim ersten Termin eines Laufs seit T+0 |
 | `t`, `z` auf 850, 700 hPa | 0–72 | K, m²/s² | Temperatur, Geopotential (÷ 9,81 = m) |
 | `r` auf 850, 700 hPa | 0–72 | 0–1 | relative Feuchte (nicht % wie bei ICON-D2) |
 | `u`, `v` auf 1000, 850, 700 hPa | 0–72 | m/s | Wind, Ostkomponente und Nordkomponente |
