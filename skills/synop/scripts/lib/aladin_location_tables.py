@@ -53,9 +53,9 @@ class AladinLocationTables(IconLocationTables):
     def extremes_table(self, rows: list[dict]) -> str:
         """Highest (06-18 UTC) and lowest (18-06 UTC) T2m for the windows inside the run.
 
-        The extreme of the model counts where its 12 h are the window (runs
-        at 06 and 18 UTC); otherwise the hourly T2m, which may miss a peak
-        between full hours.
+        The extreme of the model counts where its time range is the window, which
+        holds for every window inside a run; otherwise the hourly T2m, which may
+        miss a peak between full hours.
         """
         by_step = {row["step"]: row for row in rows}
         days: dict = {}

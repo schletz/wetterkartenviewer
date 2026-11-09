@@ -243,7 +243,7 @@ wie dort (Listen in `charts.md`, „GRIB-Datei“, „ICON-D2-Datei“ und „AL
 - **Lücken:** Felder nur zu T+0 (`orog`, `z`, `sdor`, `lsm`, `hsurf`) stehen in jeder Zeile.
   Parameter, die es zu einem Zeitschritt nicht gibt (`mx2t3` nach +144 h, `mx2t` außer am Ende
   seines Tagesfensters, `ww` zu T+0, bei ALADIN `tp`, `ptype`, `ptype_severe`, `flash` und `gust` zu
-  T+0 und `tmax_2m`/`tmin_2m` außer alle 12 h ab T+12), bleiben leer, ebenso `uf`, `vf`, `inv` und `rhbl` unter dem
+  T+0 und `tmax_2m`/`tmin_2m` außer zu den Terminen 06 und 18 UTC), bleiben leer, ebenso `uf`, `vf`, `inv` und `rhbl` unter dem
   Modellboden. Die Felder des Modells auf Druckflächen unter dem Modellboden (`t1000`, `u925`, bei
   ICON und ALADIN `u1000` in Alpentälern) stehen extrapoliert da.
 - **Nur im ECMWF-TSV fehlen** Bewölkung und Niederschlag (siehe oben); im ICON-TSV stehen sie.
