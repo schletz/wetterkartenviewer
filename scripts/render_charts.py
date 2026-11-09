@@ -24,8 +24,8 @@ defined in lib/chart_products.py; one chart per step unless noted:
     mountain_2000    temperature, wind and summits in cloud at 2000 m
     freezing_level   freezing level
     snow_line        snow line where the upper air signals precipitation
-    weather_summary  cloud cover, 6 h precipitation and its type, isobars every 4 hPa (near-surface
-                     model weather); from T+3
+    weather_summary  cloud cover, precipitation since the previous step (3 h, 6 h after T+144) and its
+                     type, isobars every 4 hPa (near-surface model weather); from T+3
     tmax, tmin      daily 2 m maximum (06-18 UTC) and minimum (18-06 UTC), one chart per day
     orography        model orography and rough sub-grid terrain, one static chart
 
@@ -63,7 +63,8 @@ Output in <outdir>/<projection>/:
     <product>/<YYYYMMDDHH>.webp    valid time in UTC (tmax/tmin: <YYYYMMDD>.webp)
     orography.webp                 static chart
     sheets/<product>.webp          contact sheet: the 12 UTC chart of every day (tmax/tmin: every day;
-                                   ICON-D2: 03, 09, 15 and 21 UTC)
+                                   ICON-D2: 03, 09, 15 and 21 UTC); weather_summary of the IFS: from the
+                                   charts in weather_summary_24h/, with the precipitation of the whole day
     geometry.json                  projection and run of the window and tile origins of every contact
                                    sheet, so readers of data/ can mark a location without this code
 
@@ -166,8 +167,9 @@ def write_sheets(products: ChartProducts, names: list[str], out_dir: Path, sheet
     written = {}
     for name in names:
         if name in products.STEP:
-            steps = [s for s in products.keys(name) if grib.valid_time(s).hour in products.SHEET_HOURS]
-            tiles = [(products.path(out_dir, name, s), f"{grib.valid_time(s):%a %d.%m. %H} UTC") for s in steps]
+            drawn = products.SHEET_PRODUCTS.get(name, name)
+            steps = [s for s in products.keys(drawn) if grib.valid_time(s).hour in products.SHEET_HOURS]
+            tiles = [(products.path(out_dir, drawn, s), f"{grib.valid_time(s):%a %d.%m. %H} UTC") for s in steps]
             title = f"{name}: {'/'.join(f'{h:02d}' for h in products.SHEET_HOURS)} UTC of every day, {run}"
         elif name in products.DAY:
             tiles = [(products.path(out_dir, name, d), f"{d:%a %d.%m.}") for d in products.keys(name)]
@@ -240,7 +242,8 @@ def main(argv: list[str]) -> int:
     out_dir = args.outdir / projection.name
     climate_dir = args.climate if any(name in ChartProducts.CLIMATE for name in args.products) else None
     products = build_products(args.grib, projection, climate_dir)
-    tasks = [(name, key, out_dir) for name in args.products for key in products.keys(name)]
+    sheet_tiles = [products.SHEET_PRODUCTS[name] for name in args.products if name in products.SHEET_PRODUCTS]
+    tasks = [(name, key, out_dir) for name in (*args.products, *sheet_tiles) for key in products.keys(name)]
     print(f"run {products.grib.base_time:%Y%m%d%H}, {projection.name}: {len(args.products)} products", flush=True)
     progress = Progress(f"render {projection.name}", len(tasks), "charts")
     written = []

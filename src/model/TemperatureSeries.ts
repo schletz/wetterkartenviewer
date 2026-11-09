@@ -72,7 +72,7 @@ export interface LocationTemperatures {
    */
   gust10m: { series: PointSeries; hours: number[]; colours: ColourBand[] } | null
   /**
-   * ECMWF precipitation in mm over the 6 h before each step (3 h at T+3), the colour bands of the weather_summary
+   * ECMWF precipitation in mm since the previous step (3 h to T+144, then 6 h), the colour bands of the weather_summary
    * chart, the value below which it stays uncoloured and the class of its type per step (`Precip6hFile`); null
    * without precip6h file.
    */

@@ -90,7 +90,7 @@ function timeLabel(time: Date): string {
  * Meteogram of T2m (ECMWF and a regional model: ICON-D2 where it has a cell, else CHMI ALADIN) with the ECMWF 2 m dew point and wet-bulb temperature, the anomaly of the
  * ECMWF daily mean against the ERA5 climate of the daily mean as bars per day and the ECMWF 10 m gusts as a colour bar, T850 (ECMWF) with its anomaly against the
  * ERA5 climate, θe850 as a line spanning the axis from the θe of dry air at its lowest to that of saturated air at
- * its highest temperature and the ECMWF 6 h precipitation as a colour bar with the ECMWF cloud cover in its dry blocks, the ECMWF 1000–500 hPa thickness with the Showalter index of a parcel lifted from 850 hPa with its dew point from
+ * its highest temperature and the ECMWF precipitation per step as a colour bar with the ECMWF cloud cover in its dry blocks, the ECMWF 1000–500 hPa thickness with the Showalter index of a parcel lifted from 850 hPa with its dew point from
  * RH850 as layered areas around the middle of its axis, blue above (stable), red below (unstable), and RH700 as a
  * line spanning the axis from 0 to 100 %, in panels one below the other like the ENS meteograms. Fills its parent.
  */
@@ -217,7 +217,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     {
       key: 't850',
       title: ['Temperatur in 850 hPa (°C)', ...(thetae850 === null ? [] : ['θe']),
-        ...(precip6h === null ? [] : ['Niederschlag 6 h']),
+        ...(precip6h === null ? [] : ['Niederschlag 3/6 h']),
         ...(precip6h === null || tcc === null ? [] : ['Bewölkung'])].join(', '),
       legend: [
         { line: styles.t850, text: `ECMWF ${pointLabel(t850.point, t850.height)}` },
@@ -229,7 +229,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
       ],
       bands: anomaly850.bands,
       scaledLines: thetaELines,
-      // The bands, the 6 h window and the type symbols of the weather_summary chart, so a colour means the same
+      // The bands, the interval and the type symbols of the weather_summary chart, so a colour means the same
       // amount in the diagram and on the map; like the gusts no legend or tooltip value. Dry blocks show the cloud
       // cover at their step in the greys of the chart, which also draws the precipitation over the clouds.
       ...(precip6h === null ? {} : {

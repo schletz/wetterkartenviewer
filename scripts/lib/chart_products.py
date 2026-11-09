@@ -23,6 +23,8 @@ from .t850_climate import T850Climate
 CHANGE_HOURS = 24
 # weather_summary: factor from the GRIB cloud cover to %.
 TCC_PERCENT = 100.0
+# weather_summary_24h: interval of the precipitation on the contact sheet of weather_summary, in h.
+SHEET_PRECIP_HOURS = 24
 
 
 class ChartProducts:
@@ -47,11 +49,11 @@ class ChartProducts:
     CLIMATE = ("t850_anomaly",)
     # Names of the 10 m gust in the file, tried in order per step (ForecastGrib.pick).
     GUST_NAMES = IFS_GUST_NAMES
-    # Model name in the legend strip; weather_summary: precipitation interval in h;
-    # valid hours (UTC) of the charts in a contact sheet: one per day over 10 days.
+    # Model name in the legend strip; valid hours (UTC) of the charts in a contact sheet: one per day over 10 days.
     MODEL = "ECMWF IFS"
-    PRECIP_HOURS = 6
     SHEET_HOURS = (12,)
+    # Product -> product drawn only for the tiles of its contact sheet, which keeps the name of the first.
+    SHEET_PRODUCTS = {"weather_summary": "weather_summary_24h"}
     DEFAULTS = {
         "opencharts_europe": ("z500_t850", "t500", "z700_t700", "z850_rh700", "z850_thetae850", "thickness_mslp",
                               "dt850_24h"),
@@ -94,6 +96,10 @@ class ChartProducts:
         if product == "weather_summary":
             # Precipitation needs an interval; files without the weather fields give no charts.
             return [s for s in self.grib.steps("tp") if s > 0]
+        if product == "weather_summary_24h":
+            # Only complete days, so that the one legend of the sheet holds for every tile.
+            return [s for s in self.grib.steps("tp")
+                    if s >= SHEET_PRECIP_HOURS and self.grib.valid_time(s).hour in self.SHEET_HOURS]
         if product == "wind10m":
             # Gusts need an interval too: none at T+0 (ICON-D2 has an empty field there).
             return sorted({s for name in self.GUST_NAMES for s in self.grib.steps(name) if s > 0})
@@ -467,12 +473,24 @@ class ChartProducts:
 
         It shows the near-surface weather of the model as it comes
         (WEATHER_PARAMS), which the analysis deliberately leaves out. The
-        precipitation is summed over the last PRECIP_HOURS (6 h, 3 h at T+3);
-        its type is the one at the valid time, so a shower that ended earlier
-        shows colour but no symbol. The fields come from cloud_cover,
-        precipitation and precipitation_type, which other models override.
+        precipitation is summed over the time since the previous output step
+        (IFS 3 h to T+144, then 6 h; ICON-D2, ALADIN 1 h), the same meaning on
+        every model; its type is the one at the valid time, so a shower that
+        ended earlier shows colour but no symbol. The fields come from
+        cloud_cover, precipitation and precipitation_type, which other models
+        override.
         """
-        hours = min(self.PRECIP_HOURS, step)
+        return self.summary_canvas(step, step - self.grib.previous_step("tp", step))
+
+    def weather_summary_24h(self, step: int) -> ChartCanvas:
+        """The weather summary with the precipitation of the last SHEET_PRECIP_HOURS, as tiles of its contact sheet.
+
+        A sheet has one chart per day, which only shows the rain of that day if it sums the whole day.
+        """
+        return self.summary_canvas(step, SHEET_PRECIP_HOURS)
+
+    def summary_canvas(self, step: int, hours: int) -> ChartCanvas:
+        """The weather summary at ``step`` with the precipitation of the ``hours`` before it."""
         canvas = ChartCanvas(self.base_map, "MSLP (hPa), total cloud cover, precipitation and its type",
                              self.step_label(step))
         canvas.background(styles.SUMMARY_LAND_RGB, styles.SUMMARY_SEA_RGB)

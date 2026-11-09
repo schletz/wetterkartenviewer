@@ -35,6 +35,7 @@ liest. Lies nur die Abschnitte, die du gerade brauchst.
 | `chmi-aladin/` | die ALADIN-Produkte für Österreich und Ungarn |
 | `<fenster>/<produkt>/<YYYYMMDDHH>.webp` | Karte zur Gültigkeitszeit in UTC (Tmax/Tmin: `<YYYYMMDD>.webp`) |
 | `<fenster>/sheets/<produkt>.webp` | Kontaktabzug: 12-UTC-Karte jedes Tages (ICON-D2: 03, 09, 15, 21 UTC) |
+| `<fenster>/weather_summary_24h/<YYYYMMDDHH>.webp` | Nur IFS: die Kacheln des Kontaktabzugs von `weather_summary`, mit 24-h-Niederschlag |
 | `<fenster>/orography.webp` | Modellorografie, statisch |
 | `<fenster>/geometry.json` | Modell, Lauf, Projektion und Kachelpositionen der Kontaktabzüge, zum Markieren eines Orts |
 | `era5_means/*.grb2` | Klimatologie 1991–2020: `HHz` je Tageszeit, `daily`, `monthly` |
@@ -403,16 +404,20 @@ Gipfel um mehrere 100 m von der Modellhöhe ab.
 
 ## weather_summary
 
-Mitteleuropa, ab T+3. Grau: Gesamtbewölkung ab 40 %. Grün bis Rot: Niederschlag der letzten 6 h
-(bei T+3 der letzten 3 h). Symbole: Niederschlagsart zum Termin (Schnee, Schneeregen, gefrierender
-Regen), Regen ohne Symbol. Schwarze Linien: Isobaren alle 4 hPa mit Hoch und Tief.
+Mitteleuropa, ab T+3. Grau: Gesamtbewölkung ab 40 %. Grün bis Rot: Niederschlag seit dem vorigen
+Termin, also der letzten 3 h bis T+144 und der letzten 6 h danach (die Legende nennt das Intervall).
+Symbole: Niederschlagsart zum Termin (Schnee, Schneeregen, gefrierender Regen), Regen ohne Symbol.
+Schwarze Linien: Isobaren alle 4 hPa mit Hoch und Tief.
 
 - Bewölkung, Niederschlag und Niederschlagsart sind Bodenparameter des Modells mit allen Schwächen
   der groben Auflösung. Wie du sie gewichtest, steht am Anfang von SKILL.md (Arbeitsteilung der
   Modelle).
 - Der Niederschlag ist eine Summe über die Stunden vor dem Termin, die Niederschlagsart gilt zum
   Termin selbst.
-- Der Kontaktabzug zeigt die Phasen mit Wolken und Niederschlag über 10 Tage.
+- Der Kontaktabzug zeigt die Phasen mit Wolken und Niederschlag über 10 Tage: Bewölkung und
+  Isobaren um 12 UTC, der Niederschlag ist abweichend von den Einzelkarten die **Summe der letzten
+  24 h** (12 bis 12 UTC). Er beginnt mit dem ersten vollen Tag; bei einem 00-UTC-Lauf fehlt daher
+  der erste 12-UTC-Termin (T+12).
 
 ## ICON-D2-Datei
 
@@ -472,7 +477,7 @@ Die Karten lesen sich wie ihre IFS-Gegenstücke im Mitteleuropafenster, mit dies
 ICON-D2 für Österreich und Umgebung, stündlich von T+1 bis T+48. Inhalt wie
 [weather_summary](#weather_summary), aber:
 
-- Der Niederschlag ist die Summe der **letzten Stunde**, nicht der letzten 6 h.
+- Der Niederschlag ist die Summe der **letzten Stunde**, wegen des stündlichen Ausgabeschritts.
 - Die Niederschlagsart kommt aus `ww` und ist auf dieselben Symbole abgebildet wie bei IFS.
 - **Zusätzlich:** Gewitter (Blitz, ww 95), Gewitter mit Hagel (Dreieck, ww 96), Nebel (drei
   Striche, ww 45/48) und Sturmböen ab 75 km/h (Bft 9) als Zahl in km/h. ICON-D2 rechnet Konvektion

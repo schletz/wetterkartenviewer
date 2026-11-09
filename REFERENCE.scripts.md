@@ -13,7 +13,7 @@ The API sections follow Javadoc: intro, fields, methods per module or class.
 - Download one ECMWF IFS HRES run (0.1°, cropped to Europe, derived fields appended) and one DWD ICON-D2 run (icosahedral grid ≈ 2.2 km, whole domain, without compression, the 2 m wet-bulb temperature appended) into `data/`.
 - Download one CHMI ALADIN run (Lambert grid 2.3 km, to T+72, whole model grid) into `data/`.
 - Render WebP charts for four windows into `data/`, encode each tile layer of the viewer as `maps/<window>/<product>.mp4` (one frame per step), write `maps/manifest.json`.
-- Cut T850, T500, RH850, RH700, θe850, the 10 m gusts, the 6 h precipitation, the total cloud cover, the 1000–500 hPa thickness, the 2 m dew point and wet-bulb temperature (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to Austria and Hungary (ICON-D2: Austria only; ALADIN T2m: Hungary only) as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
+- Cut T850, T500, RH850, RH700, θe850, the 10 m gusts, the precipitation per step, the total cloud cover, the 1000–500 hPa thickness, the 2 m dew point and wet-bulb temperature (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to Austria and Hungary (ICON-D2: Austria only; ALADIN T2m: Hungary only) as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
 - Upload the videos and series files to a GitHub release, push a manifest commit; GitHub Actions builds and deploys the app with them.
 - IFS updates every 12 h, ICON-D2 every 3 h, ALADIN every 6 h; `download_loop.sh` runs the whole chain every 10 min on an always-on machine.
 - `data/` is also the data directory of the skill synop (source in `skills/synop`, installed to `~/.claude/skills/synop`), see *Contract with the skill synop*; `download_loop.sh` mirrors it to a network drive (per user), from where the skill reads it without this repository.
@@ -629,7 +629,7 @@ Run 2026110712, all 13 files: 9.3 MB, gzip 2.08 MB; 2329 of the 4725 ECMWF point
 | `rh700.json`, ECMWF run | `ecmwf` with `rh700` (`r` at 700 hPa, %), encoded like rh850; the app draws it as a line over the thickness axis (0–100 %) | 422 KB, gzip 98 KB (run 2026110400) |
 | `thetae850.json`, ECMWF run | `ecmwf` with `thetae850` (`papt` at 850 hPa, **K**, not °C), scale 0.1; no climate; written only if the IFS file has `papt` (else a message and no file, the app draws no line); the app draws it as a line in the T850 panel without an axis of its own | 449 KB, gzip 118 KB (run 2026110600) |
 | `gust10m.json`, ECMWF run | `ecmwf` with `gust10m` (km/h, `10fg`/`10fg3` × `KMH_PER_MS`, steps 3…240, none at T+0) and `hours` (per step the interval it covers: 1, 3 or 6), `scale` 1 (`WIND_SCALE`; the band limits are whole km/h); `colours`: the bands of `chart_styles.GUST10M` as `[lower, upper, "#rrggbb"]` (last upper 300), so the app colours its bar like the wind10m chart without a copy of the scale; no climate | ≈ 0.4 MB, gzip ≈ 80 KB |
-| `precip6h.json`, ECMWF run | `ecmwf` with `precip6h` (mm over the window before each step, exactly as `weather_summary`: `tp(step) − tp(step − min(PRECIP_HOURS, step))`, ≥ 0; steps 3…240, `hours` 3 at T+3, else 6; up to T+144 the 6 h windows of neighbouring 3-hourly steps overlap), `scale` 0.1 (`PRECIP_SCALE`); `colours`: the bands of `chart_styles.PRECIPITATION` (0.2…1000 mm), `transparent_below` 0.2 (drier stays uncoloured); `ptype` (scale 1, encoded like the values): class of the precipitation type per window, 0 none, k ≥ 1 the k-th group of `chart_styles.PRECIP_TYPES` (1 snow `5`, 2 wet snow or rain and snow `6`/`7`, 3 freezing `3`/`8`/`12`). ptype is instantaneous, so every output step inside the window counts (two up to T+144, one after), several classes resolved by `PTYPE_PRECEDENCE`; windows below 0.2 mm get 0, as the chart draws no symbol outside its shading. Run 2026110700, box points × steps: 1 snow 4476, 2 wet 2863, 3 freezing 604 of 144 768; no climate. Open Data packs `tp` with 12 bits over the whole cropped box, so accumulated values step by 2⁻¹³…2⁻¹² m (0.12–0.24 mm): a single quantum already reaches the first band | 0.6 MB, gzip 53 KB (run 2026110700) |
+| `precip6h.json`, ECMWF run | `ecmwf` with `precip6h` (mm since the previous step, the interval of `weather_summary`: `tp(step) − tp(previous_step("tp", step))`, ≥ 0; despite the name, steps 3…240, `hours` 3 to T+144, then 6, intervals do not overlap), `scale` 0.1 (`PRECIP_SCALE`); `colours`: the bands of `chart_styles.PRECIPITATION` (0.2…1000 mm), `transparent_below` 0.2 (drier stays uncoloured); `ptype` (scale 1, encoded like the values): class of the precipitation type per interval, 0 none, k ≥ 1 the k-th group of `chart_styles.PRECIP_TYPES` (1 snow `5`, 2 wet snow or rain and snow `6`/`7`, 3 freezing `3`/`8`/`12`). ptype is the instantaneous type at the step, as on the chart; intervals below 0.2 mm get 0, as the chart draws no symbol outside its shading. Run 2026110900, box points × steps: 1 snow 2982, 2 wet 1674, 3 freezing 226 of 149 056; no climate. Open Data packs `tp` with 12 bits over the whole cropped box, so accumulated values step by 2⁻¹³…2⁻¹² m (0.12–0.24 mm): a single quantum already reaches the first band | 0.67 MB, gzip 63 KB (run 2026110900) |
 | `tcc.json`, ECMWF run | `ecmwf` with `tcc` (total cloud cover in %, GRIB fraction × `TCC_PERCENT`, instantaneous at each step 0…240, the field `weather_summary` shades), `scale` 1 (`CLOUD_SCALE`; the bands are 10 % wide); `colours`: the bands of `chart_styles.CLOUD_COVER` (40…101 %), `transparent_below` 40 (clearer stays uncoloured); ECMWF only (per user), no climate | 403 KB, gzip 99 KB (run 2026110712) |
 | `t2m_aladin.json`, `<aladin run>-hu` | CHMI ALADIN grid points of Hungary within `BORDER_MARGIN` (21 731, file order): `run`, `steps` (0…72), `points`, `coord_scale`, `lat`, `lon` (deltas of 1e-4°), `hsurf` (m, from `z`), `t2m`; no ECMWF, climate or `box`. In its own file because t2m.json is rewritten with every ICON run and required by every location; the app draws it only where ICON-D2 has no cell | 4.1 MB, gzip 644 KB (run 2026110900) |
 | `heights.json`, `<icon run>-<cells>` | ICON cells within `BORDER_MARGIN` of Austria in file order (25 344): `lat`, `lon` as deltas of `coord_scale` 1e-4°, `hsurf` (m) | 316 KB, gzip 78 KB |
@@ -647,6 +647,7 @@ Values in °C (T) and K (std); `box` and `scale` at the top of t850/t2m.
 | `era5_means/*.grb2` | by hand from Google Drive (link in README.md) | ERA5 1991–2020, 422 MB, 13 224 fields; `check_climate` requires it |
 | `<window>/<product>/<YYYYMMDDHH>.webp` | render_charts.py | step charts named by valid time; daily products `<YYYYMMDD>.webp` |
 | `<window>/orography.webp`, `sheets/<product>.webp`, `geometry.json` | render_charts.py | static chart (no folder), contact sheets, geometry |
+| `<window>/weather_summary_24h/<YYYYMMDDHH>.webp` | render_charts.py | IFS only, 12 UTC of each day with 24 h of `tp` before it: the tiles of `sheets/weather_summary.webp`; no layer of the viewer |
 | `charts.md` | by hand, committed | German description of files, GRIB fields, products for the skill |
 
 Windows: `opencharts_europe` (all IFS products), `opencharts_central_europe` (IFS defaults), `icon-d2` (all ICON products), `chmi-aladin` (all ALADIN products).
@@ -823,7 +824,6 @@ A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. IC
 | `WIND_SCALE = 1.0` | unit of gust10m.json (km/h), set apart like `RH_SCALE` |
 | `PRECIP_SCALE = 0.1` | unit of precip6h.json (mm); the lowest band starts at 0.2 mm |
 | `CLOUD_SCALE = 1.0` | unit of tcc.json (%), set apart like `RH_SCALE` |
-| `PTYPE_PRECEDENCE = (3, 1, 2)` | of several ptype classes in one window the first wins: freezing (black ice), then snow, then wet snow |
 | `HUMIDITY_SERIES = {"td2m": "2d", "tw2m": "wbt"}` | file → shortName of the 2 m humidity series (°C, ECMWF only) |
 
 | Function | Summary |
@@ -835,8 +835,8 @@ A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. IC
 | `region_window(grid, box_margin, border_margin) -> (select, grid)` | `select(field)` cuts the kept points out of a field as a flat array in the numbering of the returned grid's `runs` |
 | `derived_block(grib, steps, key, field_of, scale=SCALE)` | `field_of(step)` at each of `steps`, cut to the kept points; a `MissingFieldError` inside drops the step |
 | `gust_block(grib)` | gusts of both names in km/h plus `hours` per kept step |
-| `precipitation_block(grib)` | precipitation over `ChartProducts.PRECIP_HOURS` before each `tp` step > 0 in mm plus `hours` and `ptype`; the window follows the chart's constant |
-| `precipitation_class(grib, step) -> ndarray` | ptype class of the window before `step` (see precip6h.json); a lost ptype sample is skipped |
+| `precipitation_block(grib)` | precipitation since the previous `tp` step at each `tp` step > 0 in mm plus `hours` and `ptype` |
+| `precipitation_class(grib, step) -> ndarray` | ptype class of the interval before `step` (see precip6h.json); a lost ptype gives 0 everywhere, so the list stays aligned with `steps` |
 | `colour_bands(scale) -> list` | `ColourScale.bands` as `[lower, upper, "#rrggbb"]` |
 | `ecmwf_block(grib, name, level, key, offset=-KELVIN, factor=1, scale=SCALE)` (via `derived_block`), `icon_block(grib, cells)`, `climate_block(archive, level, run, last_step, kind)` (`kind` "term" or "daily"), `heights_document(grib, cells)` | the parts of the files |
 | `points_near(lat, lon, box, rings)`, `icon_cells(grib)` | point indices in file order |
@@ -951,7 +951,7 @@ On Windows the pool uses spawn; worker state lives in the module global `_produc
 | `grid_type(grib_path) -> str` | `gridType` of the first message: `UNSTRUCTURED` = ICON, `LAMBERT` = ALADIN, else IFS |
 | `build_products(grib_path, projection, climate_dir) -> ChartProducts` | ICON: `ForecastGrib(path, ICON_NAMES)`, `IconSurface`, `BaseMap`, `TriangleGrid` → `IconProducts`. ALADIN: `ForecastGrib(path, ALADIN_NAMES)`, `AladinSurface`, `BaseMap`, `LambertGrid(grib.lambert, …)` → `AladinProducts`. IFS: `ForecastGrib`, `ModelSurface`, `BaseMap`, `PixelGrid`, plus `ClimateArchive`/`T850Climate`/`PixelGrid(archive.grid)` only if a `CLIMATE` product is requested |
 | `render(task) -> Path` | worker: `products.draw(...).save(path)` |
-| `write_sheets(products, names, out_dir, sheet) -> dict` | one sheet per product: charts at `SHEET_HOURS`, every day for DAY products, none for orography |
+| `write_sheets(products, names, out_dir, sheet) -> dict` | one sheet per product: charts at `SHEET_HOURS` (of `SHEET_PRODUCTS[name]` if the product has one, rendered by `main` along with it), every day for DAY products, none for orography |
 | `write_geometry(projection, products, sheet, sheets, out_dir)` | see *geometry.json* |
 
 ### build_county_lines.py
@@ -1141,6 +1141,7 @@ Arrays are float32 and **read-only** (shared via `lru_cache`); never modify them
 | --- | --- |
 | `__init__(path, aliases=None)` | index the file |
 | `parameters()`, `steps(name)` | (shortName, level, typeOfLevel) in file order / end steps ascending |
+| `previous_step(name, step) -> int` | last step of the parameter before `step`, 0 if none; the start of a precipitation interval (a step that is only a placeholder counts, its field raises `MissingFieldError`) |
 | `has(name, step, level=None) -> bool` | true for placeholders too |
 | `pick(names, step, level=None) -> str` | first of `names` with a message at the step, else `names[0]` (its `field` then raises); for `IFS_GUST_NAMES` |
 | `window_hours(name, step, level=None) -> int` | end − start step of the message, e.g. 1/3/6 for the IFS gusts, 1 for ICON `gust`; `MissingFieldError` if absent |
@@ -1258,8 +1259,8 @@ Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L w
 | `DAY = {'tmax': 'max', 'tmin': 'min'}`, `STATIC = ('orography',)`, `ALL` | |
 | `CLIMATE = ('t850_anomaly',)` | products that need `climate` |
 | `MODEL = 'ECMWF IFS'` | legend and `geometry.json` |
-| `PRECIP_HOURS = 6` | interval of `weather_summary` (3 h at T+3) |
 | `SHEET_HOURS = (12,)` | valid hours on contact sheets |
+| `SHEET_PRODUCTS` | `weather_summary` → `weather_summary_24h`: a product drawn only for the tiles of the sheet of the first; neither in `STEP` nor `ALL` |
 | `DEFAULTS` | europe: `z500_t850`, `t500`, `z700_t700`, `z850_rh700`, `z850_thetae850`, `thickness_mslp`, `dt850_24h`; central_europe: `t850_mslp`, `z850_thetae850`, `t850_anomaly`, `rh700_wind700`, `vt_rh700`, `t2m_wind10m`, `wind10m`, `inversion`, `mountain_2000`, `freezing_level`, `snow_line`, `tmax`, `tmin`, `orography`, `weather_summary`; no `icon-d2` entry |
 | `CHANGE_HOURS = 24`, `TCC_PERCENT = 100.0` | `dt850_24h`; tcc 0–1 → % |
 | `detail` (instance) | `km_per_px(50)` smaller than Europe (central_europe, icon-d2): denser isobars, printed values |
@@ -1268,7 +1269,7 @@ Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L w
 | Method | Summary |
 | --- | --- |
 | `__init__(grib, surface, base_map, pixels, climate=None, climate_pixels=None)` | |
-| `keys(product) -> list` | STEP: `t` steps; `weather_summary`: `tp` steps > 0; `wind10m`: steps > 0 of `GUST_NAMES` (IFS from T+3, ICON from T+1); `dt850_24h`: steps with `step − 24`; DAY: `extreme_days`; STATIC: `[None]` |
+| `keys(product) -> list` | STEP: `t` steps; `weather_summary`: `tp` steps > 0; `weather_summary_24h`: `tp` steps ≥ 24 at `SHEET_HOURS` (complete days only, the sheet has one legend, so a 00 UTC run has 9 tiles instead of 10); `wind10m`: steps > 0 of `GUST_NAMES` (IFS from T+3, ICON from T+1); `dt850_24h`: steps with `step − 24`; DAY: `extreme_days`; STATIC: `[None]` |
 | `path(out_dir, product, key) -> Path` | `<window>/<product>/<YYYYMMDDHH>.webp`, `<YYYYMMDD>.webp`, `orography.webp` |
 | `draw(product, key) -> ChartCanvas` | |
 | `field(name, step, level=None, smooth_km=0, offset=0, factor=1)` | `(value + offset) * factor` on the pixels |
@@ -1277,7 +1278,9 @@ Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L w
 | `print_values` | only on `detail` windows, default over land; no white halo (per user: the colours stay visible, 9 pt bold stays legible even on 28–32 °C) |
 | `isobars(canvas, step, isobars=None)` | `MSLP_DETAIL` (2 hPa) on detail windows, else `MSLP` (5 hPa) |
 | `mountain_2000(step)` | hatches `summit_cloud(profile, step, height)` after 10 km smoothing; IFS: RH at height ≥ `SUMMIT_CLOUD_RH` |
-| `weather_summary(step)` | precipitation = `tp(step) − tp(step − min(PRECIP_HOURS, step))`, ≥ 0, mm; ptype symbols where ptype fits and ≥ 0.2 mm |
+| `weather_summary(step)` | `summary_canvas` with the hours since `grib.previous_step("tp", step)`: IFS 3 up to T+144, 6 after, ICON and ALADIN 1 |
+| `weather_summary_24h(step)` | `summary_canvas` with `SHEET_PRECIP_HOURS` = 24 |
+| `summary_canvas(step, hours)` | precipitation = `tp(step) − tp(step − hours)`, ≥ 0, mm, `hours` in the legend; ptype symbols where ptype fits and ≥ 0.2 mm |
 | `cloud_cover`, `precipitation`, `precipitation_type`, `extreme_days`, `daily_extreme_field` | hooks |
 | `orography()` | rough terrain hatched only if `surface.sdor` |
 | `wind10m(step)` | gusts of `GUST_NAMES` shaded in `GUST10M` (km/h, Beaufort bands), window from `window_hours` in the title; streamlines of the mean 10 m wind, `MSLP_SUMMARY` isobars |
@@ -1294,8 +1297,9 @@ A run gives 3 × 49 + 48 step charts, usually 1 `tmax` and 2 `tmin`, `orography`
 | Field | Meaning |
 | --- | --- |
 | `STEP = ('t2m_wind10m', 'wind10m', 'mountain_2000', 'weather_summary')`, `DAY`, `STATIC`, `CLIMATE = ()` | |
-| `MODEL = 'ICON-D2'`, `PRECIP_HOURS = 1` | |
+| `MODEL = 'ICON-D2'` | |
 | `SHEET_HOURS = (3, 9, 15, 21)` | 15 UTC for afternoon storms, 03/09 for fog |
+| `SHEET_PRODUCTS = {}` | four charts per day already show the course of the rain |
 | `DEFAULTS = {'icon-d2': ALL}` | |
 
 | Method | Difference from IFS |

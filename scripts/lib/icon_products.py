@@ -35,10 +35,11 @@ class IconProducts(ChartProducts):
     ALL = (*STEP, *DAY, *STATIC)
     CLIMATE = ()
     MODEL = "ICON-D2"
-    PRECIP_HOURS = 1
     # Every 6 h, so the sheet keeps 8 readable tiles over 48 h, at hours that catch the daily cycle:
     # 15 UTC the afternoon thunderstorms, 03 and 09 UTC fog forming and clearing, 21 UTC the evening.
     SHEET_HOURS = (3, 9, 15, 21)
+    # Four charts per day already show the course of the rain.
+    SHEET_PRODUCTS: dict = {}
     DEFAULTS = {"icon-d2": ALL}
 
     def draw(self, product: str, key) -> ChartCanvas:

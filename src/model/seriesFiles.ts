@@ -189,8 +189,8 @@ export interface Gust10mFile {
 }
 
 /**
- * ECMWF precipitation in mm over the window before each step, as on the weather_summary chart (6 h, 3 h at T+3; up to
- * T+144 the windows of neighbouring steps overlap), with that chart's colour bands; no climatology.
+ * ECMWF precipitation in mm since the previous step, as on the weather_summary chart (3 h to T+144, then 6 h), with
+ * that chart's colour bands; no climatology.
  */
 export interface Precip6hFile {
   version: string
@@ -201,10 +201,10 @@ export interface Precip6hFile {
   /** Values below stay uncoloured, as on the chart. */
   transparent_below: number
   /**
-   * `hours`: length of the window before each step. `ptype`: class of the precipitation in the window, 0 none (or
+   * `hours`: length of the interval before each step. `ptype`: class of the precipitation in the interval, 0 none (or
    * below `transparent_below`), 1 snow, 2 wet snow or rain and snow, 3 freezing rain or drizzle, ice pellets
-   * (the symbol groups of the weather_summary chart), from the ECMWF ptype at every output step inside the window;
-   * missing in files of older pipelines.
+   * (the symbol groups of the weather_summary chart), from the ECMWF ptype at the step; missing in files of older
+   * pipelines.
    */
   ecmwf: EcmwfBlock & { precip6h: number[]; hours: number[]; ptype?: number[] }
 }

@@ -108,6 +108,10 @@ class ForecastGrib:
         """End steps in hours at which a parameter is available, ascending."""
         return sorted({end for name, _, end in self._index if name == short_name})
 
+    def previous_step(self, short_name: str, step: int) -> int:
+        """Last step before ``step`` at which a parameter is available; 0 if none, where a sum since the run starts."""
+        return max((s for s in self.steps(short_name) if s < step), default=0)
+
     def pick(self, names: tuple[str, ...], step: int, level: int | None = None) -> str:
         """First of ``names`` with a message at the step, else the first name (whose field then raises
         MissingFieldError); for a parameter published under several names, e.g. IFS_GUST_NAMES."""
