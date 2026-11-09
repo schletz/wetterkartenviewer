@@ -52,13 +52,18 @@ class ForecastGrib:
         self._level_types: dict[tuple[str, int], str] = {}
         # index key -> whether every value is missing (a placeholder of missing_values.py), set on decoding
         self._empty: dict[tuple, bool] = {}
+        next_start = 0
         with self.path.open("rb") as fh:
             while (gid := eccodes.codes_grib_new_from_file(fh, headers_only=True)) is not None:
                 try:
                     # Steps in hours; ICON gives its time invariant fields in minutes ("0m").
                     eccodes.codes_set(gid, "stepUnits", 1)
                     key = (self._name(gid), eccodes.codes_get(gid, "level"), eccodes.codes_get(gid, "endStep"))
-                    self._index[key] = (eccodes.codes_get(gid, "startStep"), int(eccodes.codes_get(gid, "offset")))
+                    # On Windows ecCodes reports the offset 0 for a message beyond 2 GiB: there the end of the
+                    # previous message counts, the files holding their messages without gaps.
+                    start = max(int(eccodes.codes_get(gid, "offset")), next_start)
+                    next_start = start + eccodes.codes_get(gid, "totalLength")
+                    self._index[key] = (eccodes.codes_get(gid, "startStep"), start)
                     self._level_types.setdefault(key[:2], eccodes.codes_get(gid, "typeOfLevel"))
                     if not hasattr(self, "base_time"):
                         self._read_grid(gid)
@@ -72,7 +77,9 @@ class ForecastGrib:
         """Name of a message: its shortName or alias; the derived fields of the local category get theirs from local_params."""
         if eccodes.codes_get(gid, "edition") == 1:
             name = eccodes.codes_get(gid, "shortName")
-            return self._aliases.get(eccodes.codes_get(gid, "indicatorOfParameter"), name) if name == "unknown" else name
+            if name == "unknown":
+                return self._aliases.get(eccodes.codes_get(gid, "indicatorOfParameter"), name)
+            return self._aliases.get(name, name)
         if (eccodes.codes_get(gid, "discipline") == 0
                 and eccodes.codes_get(gid, "parameterCategory") == LOCAL_CATEGORY):
             number = eccodes.codes_get(gid, "parameterNumber")

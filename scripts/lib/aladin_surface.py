@@ -16,6 +16,7 @@ class AladinSurface:
     """
 
     def __init__(self, grib: ForecastGrib):
-        self.height: np.ndarray = grib.field("z", 0) / GRAVITY
+        # Level 0: z also exists on the pressure levels.
+        self.height: np.ndarray = grib.field("z", 0, 0) / GRAVITY
         self.sdor = None
         self.land: np.ndarray = grib.field("lsm", 0)

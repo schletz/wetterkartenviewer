@@ -1,18 +1,17 @@
 """Every value of one CHMI ALADIN step at a location, as the ALADIN location table and its TSV need them.
 
-The file holds near-surface fields only, so there is no free atmosphere; this
-module reads them at the point, converts units and takes the amounts of the
-last hour from the sums since T+0.
+This module reads the fields at the point, converts units and takes the
+amounts of the last hour from the sums since T+0.
 """
 
 from .constants import KELVIN
-from .step_sampler import StepSampler
+from .icon_step_sampler import GRAVITY, IconStepSampler
 
-PERCENT = 100.0     # tcc is a fraction
+PERCENT = 100.0     # tcc and the relative humidity are fractions
 
 
-class AladinStepSampler(StepSampler):
-    """Samples the near-surface weather and the GRIB values of one ALADIN step."""
+class AladinStepSampler(IconStepSampler):
+    """Samples the weather at the ground, the 850/700 hPa values and the GRIB values of one ALADIN step."""
 
     # A 2.3 km model resolves its weather, as ICON-D2 does, so nothing is left out of the TSV.
     HIDDEN = ()
@@ -39,11 +38,9 @@ class AladinStepSampler(StepSampler):
             "ptype_severe": grib["ptype_severe"],
             "visibility": grib["fog_visibility"],
             "flashes": self._last_hour("flash", step),
+            **self.upper_air(step, grib, grib["z"] / GRAVITY, PERCENT),
             "grib": grib,
         }
-
-    def value(self, name: str, values) -> float:
-        return self.point.nearest(values) if name in self.NEAREST else self.point(values)
 
     def _last_hour(self, name: str, step: int) -> float | None:
         """Increase over the last hour of a sum that has no message at T+0; None at T+0."""

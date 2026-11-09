@@ -266,7 +266,7 @@ def aladin_document(grib: ForecastGrib, version: str) -> dict:
     steps = grib.steps("2t")
     return {"version": version, "scale": SCALE, "coord_scale": COORD_SCALE, "points": len(points), "run": run_of(grib),
             "steps": steps, "lat": coordinate(lat), "lon": coordinate(lon),
-            "hsurf": np.rint(grib.field("z", 0)[points] / GRAVITY).astype(np.int64).tolist(),
+            "hsurf": np.rint(grib.field("z", 0, 0)[points] / GRAVITY).astype(np.int64).tolist(),
             "t2m": time_major_deltas([grib.field("2t", step)[points] - KELVIN for step in steps])}
 
 

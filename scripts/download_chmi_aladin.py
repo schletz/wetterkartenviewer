@@ -1,12 +1,12 @@
-"""Download one CHMI ALADIN run (Lambert grid, 2.3 km, to T+72) into a single GRIB file cut to the chart window.
+"""Download one CHMI ALADIN run (Lambert grid, 2.3 km, to T+72) into a single GRIB file.
 
 CHMI publishes four runs a day (00, 06, 12, 18 UTC), one bz2 file per variable
 with all 73 steps, about 3 to 4.5 hours after the start of the run, and keeps them for about three days:
 https://opendata.chmi.cz/meteorology/weather/nwp_aladin/Lambert_2.3km/
 
-The file stays GRIB edition 1 on the model's grid points, cut to the window
-chmi-aladin (Austria and Hungary) plus a small margin. Fields (names as indexed
-by ForecastGrib with constants.ALADIN_NAMES):
+The file stays GRIB edition 1 on the whole model grid: the server only offers
+whole files, so nothing that was downloaded is thrown away. Fields (names as
+indexed by ForecastGrib with constants.ALADIN_NAMES):
 
     SURFGEOPOTENTIEL, SURFIND_TERREMER   z (m2/s2), lsm (0..1), T+0 only
     CLSTEMPERATURE, MSLPRESSURE          2t (K), msl (Pa)
@@ -18,6 +18,10 @@ by ForecastGrib with constants.ALADIN_NAMES):
                                          the last hour (codes as ECMWF ptype), from T+1
     CLSWIND_SPEED, CLSWIND_DIREC         written as 10u and 10v (m/s, east and north)
     CLSU_RAF_MOD_XFU, CLSV_RAF_MOD_XFU   written as gust: speed of the maximum gust of the last hour (m/s), from T+1
+    CLSDEW_P_TEMPER, CLSTPRIM_W          2d, wbt: 2 m dew point and wet-bulb temperature (K)
+    CLSMAXI_TEMPERAT, CLSMINI_TEMPERAT   tmax_2m, tmin_2m: 2 m extremes of the last 12 h (K), at T+12, 24 ... 72
+    P85000..., P70000...                 t (K), r (0..1), z (m2/s2), u, v (m/s, turned to east and north)
+    P00000WIND_U_COM, P00000WIND_V_COM   u, v at 1000 hPa (m/s, turned to east and north)
 
 If the target is an existing directory, the file is written into it as
 chmi-aladin_<YYYYMMDDHH>.grb; the last line printed is the absolute path of the
@@ -49,7 +53,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.aladin_runs import AladinRuns  # noqa: E402
 from lib.aladin_writer import AladinWriter  # noqa: E402
 from lib.progress import Progress  # noqa: E402
-from lib.projection import CHMI_ALADIN  # noqa: E402
 
 PREFIX = "chmi-aladin_"
 SUFFIX = ".grb"
@@ -141,9 +144,9 @@ def main(argv: list[str]) -> int:
     except (RuntimeError, requests.RequestException, EOFError, OSError) as error:
         print(error, file=sys.stderr)
         return 1
-    print(f"downloaded in {time.monotonic() - started:.0f}s, cutting to the window", flush=True)
+    print(f"downloaded in {time.monotonic() - started:.0f}s, joining the files", flush=True)
     part = out.with_name(out.name + ".part")
-    count = AladinWriter(CHMI_ALADIN).write(raw_files, part)
+    count = AladinWriter().write(raw_files, part)
     if count != AladinWriter.expected_total():
         print(f"{count} messages instead of {AladinWriter.expected_total()}", file=sys.stderr)
         return 1

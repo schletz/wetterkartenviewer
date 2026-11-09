@@ -31,7 +31,7 @@ liest. Lies nur die Abschnitte, die du gerade brauchst.
 | `opencharts_central_europe/` | die Produkte für Mitteleuropa (Liste unter [Allgemeines](#allgemeines)) |
 | `icon-d2_<YYYYMMDDHH>.grb2` | ICON-D2-Lauf auf dem Modellgitter ([ICON-D2-Datei](#icon-d2-datei)) |
 | `icon-d2/` | die ICON-D2-Produkte für Österreich und Umgebung |
-| `chmi-aladin_<YYYYMMDDHH>.grb` | CHMI-ALADIN-Lauf, auf die Karten zugeschnitten ([ALADIN-Datei](#aladin-datei)) |
+| `chmi-aladin_<YYYYMMDDHH>.grb` | CHMI-ALADIN-Lauf auf dem ganzen Modellgitter ([ALADIN-Datei](#aladin-datei)) |
 | `chmi-aladin/` | die ALADIN-Produkte für Österreich und Ungarn |
 | `<fenster>/<produkt>/<YYYYMMDDHH>.webp` | Karte zur Gültigkeitszeit in UTC (Tmax/Tmin: `<YYYYMMDD>.webp`) |
 | `<fenster>/sheets/<produkt>.webp` | Kontaktabzug: 12-UTC-Karte jedes Tages (ICON-D2: 03, 09, 15, 21 UTC) |
@@ -491,14 +491,15 @@ ICON-D2 für Österreich und Umgebung, stündlich von T+1 bis T+48. Inhalt wie
 ## ALADIN-Datei
 
 Ein Lauf von CHMI ALADIN (Open Data des tschechischen Wetterdienstes, 2,3 km) in GRIB 1 auf dem
-Lambert-Gitter des Modells, zugeschnitten auf das Fenster `chmi-aladin`: ein Wert je Gitterpunkt,
-zeilenweise von Süden. Stündlich von T+0 bis T+72. Es gibt nur Felder am Boden, keine Druckflächen.
+ganzen Lambert-Gitter des Modells (38,6–57,2° N, 4,7° W–34,4° E; Rom, Paris, Berlin und Kiew liegen
+darin, Athen und Oslo nicht): ein Wert je Gitterpunkt, zeilenweise von Süden. Die Karten zeigen nur
+das Fenster `chmi-aladin`. Stündlich von T+0 bis T+72. Druckflächen gibt es auf 850 und 700 hPa, auf 1000 hPa nur den Wind.
 Für einen Teil der Felder hat ecCodes keinen Namen (`unknown`); dort steht die GRIB-1-Parameternummer
 in Klammern, der Name davor ist der des Skills und des Viewers.
 
 | Name | Schritte | Einheit | Bedeutung |
 |---|---|---|---|
-| `z`, `lsm` | nur T+0 | m²/s², 0–1 | Geopotential des Modellbodens (÷ 9,81 = m), Landanteil |
+| `z` (Boden), `lsm` | nur T+0 | m²/s², 0–1 | Geopotential des Modellbodens (÷ 9,81 = m), Landanteil |
 | `2t` | 0–72 | K | Temperatur in 2 m |
 | `msl` | 0–72 | Pa | Luftdruck auf Meeresniveau |
 | `tcc` (171) | 0–72 | 0–1 | Gesamtbewölkung (nicht % wie bei ICON-D2) |
@@ -509,6 +510,11 @@ in Klammern, der Name davor ist der des Skills und des Viewers.
 | `flash` (236) | 1–72 | Blitze/km² | Blitzdichte seit T+0 |
 | `10u`, `10v` | 0–72 | m/s | Wind in 10 m, Ostkomponente und Nordkomponente; aus Windstärke und Windrichtung des Modells |
 | `gust` (130) | 1–72 | m/s | stärkste Böe in 10 m während der Stunde vor dem Termin |
+| `2d`, `wbt` (234) | 0–72 | K | Taupunkt und Feuchtkugeltemperatur in 2 m, beide vom Modell |
+| `tmax_2m`, `tmin_2m` | 12, 24 … 72 | K | höchste bzw. tiefste Temperatur in 2 m der 12 h vor dem Termin |
+| `t`, `z` auf 850, 700 hPa | 0–72 | K, m²/s² | Temperatur, Geopotential (÷ 9,81 = m) |
+| `r` auf 850, 700 hPa | 0–72 | 0–1 | relative Feuchte (nicht % wie bei ICON-D2) |
+| `u`, `v` auf 1000, 850, 700 hPa | 0–72 | m/s | Wind, Ostkomponente und Nordkomponente |
 
 ## Produkte im Fenster chmi-aladin
 

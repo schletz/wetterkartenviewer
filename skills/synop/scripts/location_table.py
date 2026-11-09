@@ -29,11 +29,13 @@ For icon-d2_<run>.grb2 (T+0 to T+48, hourly) the tables are
 Values are linear inside the triangle of the three cell centres around the
 location; the weather code and the cloud base come from the nearest cell.
 
-For chmi-aladin_<run>.grb (T+0 to T+72, hourly, near-surface fields only) the tables are
+For chmi-aladin_<run>.grb (T+0 to T+72, hourly) the tables are
 
     weather at the ground   per hour: T2m, 10 m wind, gust, MSLP, cloud cover, precipitation
                             of the last hour and its type, thunderstorm, hail or fog
-    daily extremes          highest hourly T2m 06-18 UTC and lowest 18-06 UTC
+    free atmosphere         every 3 h: wind at 1000 hPa; height, T, RH and wind at 850 and 700 hPa
+    daily extremes          Tmax 06-18 UTC and Tmin 18-06 UTC: the 12 h extremes of the model
+                            where they cover the window (runs at 06, 18 UTC), else from hourly T2m
 
 Values are bilinear between the four surrounding grid points; the
 precipitation type and the visibility come from the nearest one.
@@ -138,8 +140,7 @@ def main(argv: list[str]) -> int:
         return 1
     with ProcessPoolExecutor(max_workers=args.workers, initializer=init_worker,
                              initargs=(args.grib, args.lat, args.lng)) as pool:
-        # The ALADIN file has no temperature on levels of the free atmosphere.
-        rows = list(pool.map(sample_step, grib.steps("2t" if grib.lambert is not None else "t")))
+        rows = list(pool.map(sample_step, grib.steps("t")))
     if grib.lambert is not None:
         print_aladin(AladinLocationTables(grib, point), args, rows)
     elif grib.grid is not None:
@@ -173,10 +174,12 @@ def print_icon(tables: IconLocationTables, args: argparse.Namespace, rows: list[
 
 
 def print_aladin(tables: AladinLocationTables, args: argparse.Namespace, rows: list[dict]) -> None:
-    print(tables.header(args.label, args.lat, args.lng, args.elevation))
+    print(tables.header(args.label, args.lat, args.lng, args.elevation, rows))
     print("\n## Weather at the ground\n")
     print(tables.surface_table(rows))
-    print("\n## Daily extremes at 2 m (model height, from hourly values)\n")
+    print("\n## Free atmosphere\n")
+    print(tables.upper_table(rows))
+    print("\n## Daily extremes at 2 m (model height)\n")
     print(tables.extremes_table(rows))
 
 

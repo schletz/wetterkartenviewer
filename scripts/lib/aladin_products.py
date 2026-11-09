@@ -28,10 +28,6 @@ class AladinProducts(IconProducts):
     MODEL = "CHMI ALADIN"
     DEFAULTS = {"chmi-aladin": ALL}
 
-    def keys(self, product: str) -> list:
-        # The file has no upper air temperature, of which ChartProducts takes the steps.
-        return self.grib.steps("2t") if product == "t2m_wind10m" else super().keys(product)
-
     def last_hour(self, name: str, step: int) -> np.ndarray:
         """Increase over the last hour of a field accumulated from T+0, which has no message at T+0."""
         if step == 1:

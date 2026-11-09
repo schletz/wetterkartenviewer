@@ -1,11 +1,11 @@
 # synop `scripts/` — Agent reference
 
-Reference for the six entry-point scripts and the package `lib/` of the synop skill, so that a later agent can extend, debug or refactor them without reading the whole source. Paths are relative to `scripts/` (the folder holding this file). How the analysing agent uses the outputs is in `../SKILL.md` (diagram and HTML report in `../references/html_report.md`); what the data directory holds and how each chart reads is in `charts.md` of the data directory.
+Reference for the five entry-point scripts and the package `lib/` of the synop skill, so that a later agent can extend, debug or refactor them without reading the whole source. Paths are relative to `scripts/` (the folder holding this file). How the analysing agent uses the outputs is in `../SKILL.md` (diagram and HTML report in `../references/html_report.md`); what the data directory holds and how each chart reads is in `charts.md` of the data directory.
 
 ## Purpose
 
 - Read one ECMWF IFS run, one ICON-D2 run and one CHMI ALADIN run from a **data directory** that an external program, the viewer ("Wetterkartenviewer", laut User), writes. The scripts never derive or render; they only read the data directory and write to the paths given by `--out`/`--tsv`.
-- The data directory is either a folder the user names or `../.cache`, which `fetch_data.py` mirrors from the public blob container the viewer pipeline fills (URL in `../download_url.txt`, not in the repo: the skill is public; `.cache/` and the URL file are git-ignored in `~/.claude/.gitignore`).
+- The data directory is the folder the user names, usually the viewer's copy on a network drive.
 - Sample every field of either forecast GRIB at one location: Markdown tables on stdout plus a TSV of all values in GRIB units, one TSV per model.
 - From the TSV plus the climatology `<data>/era5_means/`: SVG diagram of T850 and 1000–500 hPa thickness with the T850 anomaly; assemble the agent's Markdown, the SVG and the TSV into one self-contained HTML report.
 - Copy the viewer's WebP charts and contact sheets with a point or lat/lon box drawn on.
@@ -19,12 +19,11 @@ Each script only parses arguments and wires `lib` classes. All insert their own 
 
 | File | Lines | Responsibility | lib classes used |
 | --- | --- | --- | --- |
-| location_table.py | 184 | sample every step at one point in a process pool, print Markdown, optional TSV; the file decides the model (`grib.lambert` set → ALADIN, `grib.grid` set → ECMWF, else ICON-D2) | ForecastGrib, GridPointSampler / CellPointSampler / LambertPointSampler, StepSampler / IconStepSampler / AladinStepSampler, LocationTables / IconLocationTables / AladinLocationTables, ForecastTsv |
+| location_table.py | 187 | sample every step at one point in a process pool, print Markdown, optional TSV; the file decides the model (`grib.lambert` set → ALADIN, `grib.grid` set → ECMWF, else ICON-D2) | ForecastGrib, GridPointSampler / CellPointSampler / LambertPointSampler, StepSampler / IconStepSampler / AladinStepSampler, LocationTables / IconLocationTables / AladinLocationTables, ForecastTsv |
 | generate_diagram.py | 93 | TSV + climatology → SVG diagram | ForecastTsv, ClimateArchive, T850Climate, DiagramRow, CoupledAxes, TimeAxis, AnomalyBands, ForecastDiagram |
 | build_report.py | 115 | Markdown + SVG + TSV → one HTML file; holds the page CSS (`STYLE`, :23-46) | ForecastTsv, MarkdownHtml |
 | mark_location.py | 93 | copy the charts of every window with a point or box drawn on | ChartGeometry, LocationMarker |
 | calendar_days.py | 79 | days with weekday and Austrian holiday (Easter computus) | none |
-| fetch_data.py | 153 | mirror the blob container into `../.cache`; standard library only (urllib, ElementTree) | none |
 
 ### Package `lib/` (24 classes, one per file; constants.py, diagram_layout.py, fonts.py and `__init__.py` hold none)
 
@@ -40,11 +39,11 @@ Every dependency is injected through the constructor ("Ctor deps"); no class cre
 | cell_point_sampler.py | 58 | CellPointSampler | clat, clon, valid mask, lat, lng | linear value inside the triangle of the three ICON cells around the point; `nearest(values)` |
 | lambert_point_sampler.py | 38 | LambertPointSampler | LambertPlane, lat, lng | bilinear value between the four ALADIN grid points around the point; `nearest(values)` |
 | step_sampler.py | 95 | StepSampler | ForecastGrib, PointSampler | all values of one ECMWF step at the point (dict row) incl. every GRIB value for the TSV |
-| icon_step_sampler.py | 59 | IconStepSampler(StepSampler) | ForecastGrib, CellPointSampler | all values of one ICON-D2 step; weather kept in the TSV, `ww`/`ceiling` from the nearest cell |
-| aladin_step_sampler.py | 54 | AladinStepSampler(StepSampler) | ForecastGrib, LambertPointSampler | all values of one ALADIN step; `ptype`, `ptype_severe`, `fog_visibility` from the nearest grid point; amounts of the last hour |
+| icon_step_sampler.py | 71 | IconStepSampler(StepSampler) | ForecastGrib, CellPointSampler | all values of one ICON-D2 step; weather kept in the TSV, `ww`/`ceiling` from the nearest cell; `upper_air` also serves ALADIN |
+| aladin_step_sampler.py | 51 | AladinStepSampler(IconStepSampler) | ForecastGrib, LambertPointSampler | all values of one ALADIN step; `ptype`, `ptype_severe`, `fog_visibility` from the nearest grid point; amounts of the last hour |
 | location_tables.py | 138 | LocationTables | ForecastGrib, PointSampler | ECMWF Markdown header + three tables; module functions `height_note`, `gust_windows`, `number`, `wind`, `table` |
-| icon_location_tables.py | 111 | IconLocationTables | ForecastGrib, PointSampler | ICON-D2 Markdown header + three tables (hourly ground weather, 3-hourly 850/700 hPa, daily extremes); module function `weather` |
-| aladin_location_tables.py | 92 | AladinLocationTables | ForecastGrib, PointSampler | ALADIN Markdown header + two tables (hourly ground weather, daily extremes from hourly T2m); module functions `precip_type`, `signal` |
+| icon_location_tables.py | 117 | IconLocationTables | ForecastGrib, PointSampler | ICON-D2 Markdown header + three tables (hourly ground weather, 3-hourly 850/700 hPa, daily extremes); module function `weather` |
+| aladin_location_tables.py | 93 | AladinLocationTables(IconLocationTables) | ForecastGrib, PointSampler | ALADIN Markdown header + three tables (hourly ground weather, 3-hourly 850/700 hPa from ICON's `upper_table`, daily extremes); module functions `precip_type`, `signal` |
 | forecast_tsv.py | 48 | ForecastTsv | path | write the TSV; read back the air-mass series |
 | climate_archive.py | 201 | ClimateArchive | directory (required), period | index every `*.grb2` of the directory from the header bytes, decode fields, grid, nearest point |
 | t850_climate.py | 50 | T850Climate | ClimateArchive | T850 mean (°C) / std (K) per valid time, at a point (`at_point`) or as field (`field`, used by no script) |
@@ -72,17 +71,15 @@ mark_location.py --data <data> --out <dir> (--lat LAT --lng LNG | --bbox S N W E
 generate_diagram.py <tsv> --climate <data>/era5_means --lat LAT --lng LNG [--min-850 --max-850 --min-thickness --max-thickness] [--out FILE]
 build_report.py --markdown F --svg F [--tsv F] [--caption TXT] [--table-summary Data] [--lang de] --out F
 calendar_days.py --start YYYY-MM-DD [--days 10]
-fetch_data.py <container url> [--cache DIR]
 ```
 
 | Script | Output | Exit 1 when | Notes |
 | --- | --- | --- | --- |
-| location_table | Markdown on stdout (UTF-8), optional TSV | point outside the forecast grid, the ICON-D2 domain or its boundary zone, or the cut ALADIN file | default workers = CPU count; run and model come from the GRIB, not from the file name |
+| location_table | Markdown on stdout (UTF-8), optional TSV | point outside the forecast grid, the ICON-D2 domain or its boundary zone, or the ALADIN grid | default workers = CPU count; run and model come from the GRIB, not from the file name |
 | mark_location | WebP copies (quality 90) at the same relative path below `--out` | no `<data>/*/geometry.json`; marker visible in no window (copies are written anyway) | argparse rejects both/neither of point and bbox, and S ≥ N or W ≥ E |
 | generate_diagram | SVG to `--out` or stdout | TSV unreadable/<2 rows, climatology lookup fails, invalid axis limits | |
 | build_report | HTML file; prints `Report written to <abs path>` | an input file unreadable | |
 | calendar_days | `YYYY-MM-DD\tWeekday\tHoliday` per line (UTF-8) | invalid `--start` | weekday via `%A` without `setlocale`, i.e. English names; holiday names German |
-| fetch_data | files below `--cache` (default `../.cache`); last stdout line = cache path | no `current_run.json` (upload running or failed; nothing downloaded); it names no ECMWF run or a GRIB the listing lacks; it is missing or changed after the download (cache may mix two runs); a download failed (rerun fetches the rest) | see *Blob cache* |
 
 Argparse errors exit 2. Status lines go to stdout, errors to stderr; messages and table texts are English.
 
@@ -131,7 +128,7 @@ The scripts depend on what the viewer writes; nothing in the code checks it beyo
 | --- | --- | --- |
 | `ecmwf_<run>.grb2` | ForecastGrib | path passed explicitly; regular lat/lon grid with rows north → south, one grid for all messages (taken from the first); run = `dataDate`/`dataTime` of the first message |
 | `icon-d2_<run>.grb2` | ForecastGrib, CellPointSampler | path passed explicitly; `gridType` ≠ `regular_ll` (unstructured, 542 040 cells); raw DWD fields under the shortNames of `ICON_NAMES`; `clat`/`clon`/`hsurf`/`lsm` at T+0 only; boundary zone NaN; `ww` from T+1; `tmax_2m`/`tmin_2m` restart every 6 h from the run start |
-| `chmi-aladin_<run>.grb` | ForecastGrib, LambertPointSampler | path passed explicitly; GRIB edition 1, `gridType` lambert, cut to the window `chmi-aladin`, flat fields row by row from the south; `10u`/`10v` east and north; `z`, `lsm` at T+0 only; `tp`, `ptype`, `ptype_severe`, `flash`, `gust` from T+1; parameters ecCodes calls `unknown` are named by `ALADIN_NAMES` |
+| `chmi-aladin_<run>.grb` | ForecastGrib, LambertPointSampler | path passed explicitly; GRIB edition 1, `gridType` lambert, whole model grid (1053 × 837), flat fields row by row from the south; `10u`/`10v` and `u`/`v` on 1000/850/700 hPa east and north; `t`, `r` (0–1), `z` on 850/700 hPa; ground `z` (level 0), `lsm` at T+0 only; `tp`, `ptype`, `ptype_severe`, `flash`, `gust` from T+1; `tmax_2m`, `tmin_2m` every 12 h from T+12 over the last 12 h; names from `ALADIN_NAMES` |
 | local parameters | `LOCAL_NAMES` (lib/forecast_grib.py:21) | discipline 0, category 192, parameterNumber 0–5 = `inv`, `rhbl`, `psig`, `snowl`, `uf`, `vf`; another number reads as `local<N>` |
 | fields read by name (ICON) | IconStepSampler, IconLocationTables | `2t`, `10u`/`10v`, `gust`, `msl`, `tcc`, `ceiling`, `tp` (accumulated), `ww`, `u`/`v` 1000/850/700 hPa, `t`/`r`/`z` 850/700 hPa, `tmax_2m`/`tmin_2m`; T+0: `clat`, `clon`, `hsurf`, `lsm` |
 | fields read by name (ECMWF) | StepSampler, LocationTables | `t` 850 hPa and 2000/2500/3000 m, `thick`, `msl`, `uf`/`vf` 1000/925 hPa, `inv`, `rhbl`, `r` 700 hPa and 2000 m, `w` 700 hPa, `psig`, `2t`, `deg0l`, `snowl`, `u`/`v` 2000/2500/3000 m, `gh` 850 hPa, the gust `10fg` or `10fg3` (`IFS_GUST_NAMES`, from T+3); T+0: `orog` (m), `sdor`, `lsm`; daily `mx2t`/`mn2t` at the end step of their window (18 / 06 UTC) |
@@ -162,9 +159,9 @@ The scripts depend on what the viewer writes; nothing in the code checks it beyo
 
 `IconLocationTables` (lib/icon_location_tables.py): header with `hsurf`, `lsm`, the same height note and 850 hPa warning as ECMWF (constants imported from location_tables.py), surface table every hour, upper table every `UPPER_HOURS` = 3 h, extremes from the rows (no extra reads): window (start, end] as for ECMWF, skipped unless it lies inside the run; per hour `tmax_2m`/`tmin_2m` where its 6 h period (restart = (step − 1) // 6·6) begins at or after the window start, else the hourly `2t`. `weather(code)` prints the code with its text from `WEATHER` (WMO 4677).
 
-`AladinStepSampler.sample(step)` (lib/aladin_step_sampler.py) builds on `grib_values`: T2m in °C, MSLP in hPa, `tcc` × 100, wind at 10 m, gust, and `precip`/`flashes` of the last hour (`tp`, `flash` have no message at T+0, so step 1 takes the sum itself; None at T+0). `HIDDEN` is empty. The file has no free atmosphere, so `location_table.py` takes its steps from `2t` instead of `t`.
+`AladinStepSampler.sample(step)` (lib/aladin_step_sampler.py) builds on `grib_values`: T2m in °C, MSLP in hPa, `tcc` × 100, wind at 10 m, gust, and `precip`/`flashes` of the last hour (`tp`, `flash` have no message at T+0, so step 1 takes the sum itself; None at T+0). `HIDDEN` is empty. It extends `IconStepSampler` for `upper_air` (RH × 100, ground height from level 0 of `z`).
 
-`AladinLocationTables` (lib/aladin_location_tables.py): `signal(row)` follows `AladinProducts.significant_weather` of the viewer with the constants copied into lib/constants.py, so table and chart name the same weather; `extremes_table` takes the hourly T2m including both window ends, because the file has no extremes of the model. `LambertPointSampler` checked against `codes_grib_find_nearest` at four towns: identical values.
+`AladinLocationTables` (lib/aladin_location_tables.py): `signal(row)` follows `AladinProducts.significant_weather` of the viewer with the constants copied into lib/constants.py, so table and chart name the same weather; `extremes_table` takes `tmax_2m`/`tmin_2m` where their 12 h are exactly the window (runs at 06, 18 UTC), else the hourly T2m including both window ends. `LambertPointSampler` checked against `codes_grib_find_nearest` at four towns: identical values.
 
 `LocationTables.header` gives model height (`orog`), `sdor`, `lsm`; with `--elevation` the T2m shift `MIXED_LAPSE_K_PER_100M` (0.65) × (model − real height)/100; a warning when mean gh850 − model height < `NEAR_GROUND_M` (500 m). Head lists and cell lists of `main_table`/`mountain_table` are written side by side by hand and must stay aligned (lib/location_tables.py:56-81). `main_table` ends with `Gust m/s`; the header names the gust windows of the run as `gust_windows(rows)` reads them from the rows ("1 h to T+90, 3 h to T+144, 6 h to T+240"), so a changed publication of the viewer shows up there. Mountain winds only at the first and last height; freezing level and snow line rounded to 100 m. `extremes_table` groups `mx2t`/`mn2t` by the UTC date of their end step.
 
@@ -192,7 +189,7 @@ Anomaly shading: for every k in `SIGMA_STEPS` (0, 1, 2, 3; generate_diagram.py:3
 | `WEATHER_PARAMS` | lib/constants.py:8 | `tcc`, `tp`, `ptype`; left out of the ECMWF TSV because a 9 km global model gets fog, low stratus and their precipitation wrong (comment :5-7) |
 | `IFS_GUST_NAMES` | lib/constants.py | `10fg`, `10fg3`: names of the ECMWF 10 m gust by step (1 h to T+90, 3 h to T+144, then 6 h); a copy of the viewer's `constants.IFS_GUST_NAMES` |
 | `ICON_NAMES` | lib/constants.py | ecCodes shortName → viewer name of the ICON fields (`tlat`→`clat`, `CLCT`→`tcc`, `prmsl`→`msl`, `WW`→`ww`, `max_i10fg`→`gust`, `ceil`→`ceiling`, …); a copy of the viewer's `constants.ICON_NAMES` |
-| `ALADIN_NAMES` | lib/constants.py | GRIB 1 parameter number → name for fields ecCodes calls `unknown` (61 `tp`, 171 `tcc`, 223 `fog_visibility`, 229 `ptype_severe`, 230 `ptype`, 236 `flash`, 130 `gust`); a copy of the viewer's `constants.ALADIN_NAMES` |
+| `ALADIN_NAMES` | lib/constants.py | GRIB 1 parameter number → name for fields ecCodes calls `unknown` (61 `tp`, 171 `tcc`, 223 `fog_visibility`, 229 `ptype_severe`, 230 `ptype`, 234 `wbt`, 236 `flash`, 130 `gust`) and shortName → name for the extremes (`mx2t6` → `tmax_2m`, `mn2t6` → `tmin_2m`, 12 h despite the name); a copy of the viewer's `constants.ALADIN_NAMES` |
 | `ALADIN_STORM_FLASHES_KM2`, `ALADIN_FOG_VISIBILITY_M`, `ALADIN_GRAUPEL`, `ALADIN_HAIL` | lib/constants.py | 0.02 flashes/km²/h (not checked against observed storms), 700 m, codes 9 and 10; copies of the viewer's `chart_styles` |
 | `PRECIP_TYPES` | lib/aladin_location_tables.py | code → text of ALADIN's `ptype` |
 | `LOCAL_CATEGORY`, `LOCAL_NAMES` | lib/forecast_grib.py:25-27 | 192; parameterNumber → name, fixed by the viewer |
@@ -224,7 +221,6 @@ Anomaly shading: for every k in `SIGMA_STEPS` (0, 1, 2, 3; generate_diagram.py:3
 - **Markers**: single charts get the label, sheet tiles do not; drawing happens on a crop of the map area (tile size = image size × `sheets.scale`) so boxes never spill onto the legend or neighbour tiles. `LocationMarker.visible` is decided once per window from the map area, so all charts of a window are either marked or copied plain.
 - **Windows**: scripts that print non-ASCII reconfigure stdout to UTF-8; process pools use spawn, so worker state is set in `init_worker` (module global `_sampler`, location_table.py:68).
 
-- **Blob cache**: listing `?restype=container&comp=list` with `NextMarker` paging (anonymous, container-level public access). A cached file is current if size and `int(st_mtime)` equal `Content-Length` and `Last-Modified` of the blob; after a download `os.utime` sets the mtime to `Last-Modified`, so no index file is needed. Downloads go via `<file>.part`, 8 in parallel, timeout 60 s, no retries. Afterwards every file not listed (old runs, `.part`) and empty folders are deleted, so the cache holds exactly one run per model; the climatology (≈ 400 MB) is fetched once. Consistency: the pipeline (wetterkartenviewer `scripts/blob_mirror.py`) deletes `current_run.json` (`{"ecmwf": run, "icon-d2": run, "updated": …}`, model key = GRIB prefix without `_`; CHMI ALADIN has no key, the listing shows its file) before an upload and writes it last; `read_runs` fetches it with `Cache-Control: no-cache` before the listing and again after the downloads, and only an unchanged file counts. It is cached like any other blob.
 
 ## Error handling
 
@@ -242,7 +238,7 @@ Anomaly shading: for every k in `SIGMA_STEPS` (0, 1, 2, 3; generate_diagram.py:3
 | `GribAnalyze`: unknown level/param, no matching day, only one of lat/lng, missing kind/hour | `ValueError` with the valid options |
 | Write errors (`--out`, `--tsv`) | uncaught |
 
-No logging framework, no tests, no retries; only fetch_data.py uses the network.
+No logging framework, no tests, no retries; no script uses the network.
 
 ## Extension points
 
@@ -273,7 +269,8 @@ No logging framework, no tests, no retries; only fetch_data.py uses the network.
 - **Memory:** each location worker builds its own `ForecastGrib` with up to 64 cached fields (ICON: 542 040 cells, about 2 MB per field); default worker count is the CPU count.
 - **ICON 1000 hPa:** u/v at 1000 hPa exist everywhere, extrapolated below the ground; the table hides them there by an estimate from MSLP (8 m/hPa), the TSV keeps them.
 - **ICON names:** `ICON_NAMES` and `NO_CEILING_M` mirror the viewer (scripts/lib/constants.py, charts.md "ICON-D2-Datei"); a renamed or rescaled field there shows up here as `KeyError` or a wrong unit.
-- **ALADIN names:** `ALADIN_NAMES` and the four ALADIN thresholds mirror the viewer (scripts/lib/constants.py, chart_styles.py); only an unchanged threshold keeps table and chart in agreement. An ALADIN TSV has no `t850`, so generate_diagram and build_report cannot use it.
+- **ALADIN names:** `ALADIN_NAMES` and the four ALADIN thresholds mirror the viewer (scripts/lib/constants.py, chart_styles.py); only an unchanged threshold keeps table and chart in agreement. An ALADIN TSV has `t850` but no `thick`, so generate_diagram and build_report cannot use it.
+- **Files beyond 2 GiB:** on Windows ecCodes reports the offset 0 for such messages; `ForecastGrib` then takes the end of the previous message (`totalLength`), so its files may have no gaps there.
 - **Read-only arrays:** never modify a `ForecastGrib.field` result in place; derive a new array.
 - **Below the model ground:** `uf`, `vf`, `inv`, `rhbl` are NaN there (dash in the table, empty in the TSV); plain pressure-level fields (`t1000`, `u925`, …) are model extrapolations and come through as numbers.
 - **Wind at 3000 m** and other mountain values are whatever the viewer wrote at those heights; the scripts do no vertical interpolation.

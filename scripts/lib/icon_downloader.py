@@ -7,10 +7,11 @@ import time
 from pathlib import Path
 
 import eccodes
+import numpy as np
 import requests
 
 from .forecast_writer import message_spans, read_message
-from .missing_values import missing_message
+from .missing_values import encode, missing_message
 
 RETRIES = 3
 RETRY_DELAY = 10
@@ -27,7 +28,8 @@ class IconDownloader:
     steps in hours. A raw file that exists was written via .part, so an
     interrupted call can simply be repeated. A file the server lacks or
     delivers damaged becomes a placeholder with missing values when the
-    files are joined.
+    files are joined. The joined file is packed without compression: it
+    decodes about twice as fast, with the same values.
     """
 
     def __init__(self, raw_dir: Path):
@@ -72,8 +74,20 @@ class IconDownloader:
             eccodes.codes_release(gid)
         return not step.endswith("m") or int(step[:-1]) % 60 == 0
 
+    @staticmethod
+    def _uncompressed(message: bytes) -> bytes:
+        """The message in simple packing, with the same bits per value and the same decoded values."""
+        gid = eccodes.codes_new_from_message(message)
+        try:
+            values = eccodes.codes_get_values(gid)
+            missing = eccodes.codes_get(gid, "missingValue")
+        finally:
+            eccodes.codes_release(gid)
+        # The values must be written again: setting packingType alone keeps the compressed bytes of the data section.
+        return encode(message, np.where(values == missing, np.nan, values), {"packingType": "grid_simple"})
+
     def join(self, urls: list[str], raw_files: list[Path | None], target: Path) -> int:
-        """Concatenate the raw files in the given order; returns the number of messages.
+        """Concatenate the raw files in the given order, uncompressed; returns the number of messages.
 
         A file that is missing (None) or holds no intact message is replaced
         by a placeholder copied from the same field at another step; without
@@ -100,7 +114,7 @@ class IconDownloader:
                     lost.append(self.raw_file(url).name)
                     continue
                 for message in messages:
-                    out.write(message)
+                    out.write(self._uncompressed(message))
                 count += len(messages)
         if replaced:
             print(f"warning: {len(replaced)} files lost on the server, written with missing values: "

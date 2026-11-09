@@ -1,6 +1,6 @@
 ---
 name: synop
-description: Wetterprognose und synoptische 10-Tage-Analyse für Orte in Europa aus ECMWF-, ICON-D2- und CHMI-ALADIN-Daten, im Chat oder als HTML-Bericht. Nur aufrufen, wenn der Nutzer den Skill synop ausdrücklich anfordert (/synop oder "mit dem Skill synop"), nie von dir aus, auch nicht bei Wetterfragen: Der Skill lädt über 1 GB Modelldaten.
+description: Wetterprognose und synoptische 10-Tage-Analyse für Orte in Europa aus ECMWF-, ICON-D2- und CHMI-ALADIN-Daten, im Chat oder als HTML-Bericht. Nur aufrufen, wenn der Nutzer den Skill synop ausdrücklich anfordert (/synop oder "mit dem Skill synop"), nie von dir aus, auch nicht bei Wetterfragen: Der Skill liest Modelldaten von mehreren GB.
 ---
 
 # Synoptische Analyse aus ECMWF-, ICON-D2- und ALADIN-Daten
@@ -13,7 +13,7 @@ Wetterdienstes CHMI) mit einem globalen Mittelfristmodell (ECMWF IFS).
 |-----------|--------------------------------|------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 | ECMWF IFS | 0,1° (rund 9 km)               | 3 h bis T+144, danach 6 h bis T+240; Lauf alle 12 h  | Europa (Zuschnitt des globalen Modells)                                                                           |
 | ICON-D2   | rund 2,2 km (Ikosaedergitter)  | 1 h bis T+48; Lauf alle 3 h                          | Deutschland, Österreich, Schweiz und Randgebiete (etwa 43–58° N, 4° W–20° E); Karten nur für Österreich und Umgebung |
-| CHMI ALADIN | 2,3 km (Lambert-Gitter)        | 1 h bis T+72; Lauf alle 6 h, erst 3–4,5 h nach dem Laufbeginn da | Österreich, Ungarn und Umgebung (Karten: etwa 44,8–50,8° N, 6–23,5° E); nur Felder am Boden |
+| CHMI ALADIN | 2,3 km (Lambert-Gitter)        | 1 h bis T+72; Lauf alle 6 h, erst 3–4,5 h nach dem Laufbeginn da | Mitteleuropa, 38,6–57,2° N, 4,7° W–34,4° E (Rom, Paris, Berlin, Kiew; nicht Athen, Oslo); Karten nur für Österreich und Ungarn (etwa 44,8–50,8° N, 6–23,5° E) |
 
 Das Wetter am Boden – Nebel, Hochnebel, Gewitter, Wind und Temperatur in Tälern – hängt am Gelände
 und an Vorgängen von wenigen Kilometern. Ein 9-km-Modell glättet die Täler weg und rechnet Schauer
@@ -26,9 +26,9 @@ Daraus folgt die Arbeitsteilung:
    sie in der Gegend wahrscheinlich sind, nicht, dass sie genau den Ort treffen. Welches Modell am
    Ort zählt:
    - **Ort in ICON-D2** (z. B. Wien, München): bis T+48 ICON-D2. Es hat als einziges
-     Wetterschlüssel, Wolkenuntergrenze und die Flächen 850/700 hPa und rechnet doppelt so oft.
+     Wetterschlüssel und Wolkenuntergrenze und rechnet doppelt so oft.
      ALADIN ist bis T+48 die zweite Meinung und reicht die Prognose von T+49 bis T+72 nach.
-   - **Ort nur in ALADIN** (z. B. Budapest, Ostungarn): bis T+72 ALADIN.
+   - **Ort nur in ALADIN** (z. B. Budapest, Rom, Warschau): bis T+72 ALADIN.
 2. **Großwetterlage und alles nach dem Ende der Kurzfristmodelle aus ECMWF.** Verwende dort nur die
    Grundparameter der freien Atmosphäre: Höhe, Temperatur, Wind und Feuchte der Druckflächen (1000,
    925, 850, 700, 600, 500 hPa). Dazu gehört, was direkt daraus folgt, etwa Schichtdicke,
@@ -39,7 +39,7 @@ Daraus folgt die Arbeitsteilung:
    mitteln. Für die Großwetterlage zählt ECMWF, für das Wetter am Ort das Kurzfristmodell, das meist
    auch der jüngere Lauf ist.
 
-Liegt der Ort außerhalb von ICON-D2 und ALADIN (z. B. Rom, Skandinavien), gibt es nur ECMWF und die
+Liegt der Ort außerhalb von ICON-D2 und ALADIN (z. B. Athen, Skandinavien), gibt es nur ECMWF und die
 Regeln von Punkt 2 gelten für alle Tage.
 
 Die *bodennahen ECMWF-Parameter* (Bewölkung, Niederschlag und seine Art, Temperatur in 2 m) sind
@@ -77,8 +77,7 @@ der einzelnen Tage, auch wenn sie nicht ausgegeben wird.
 
 Die Skripte liegen in `<skill-dir>/scripts/`, ihre gemeinsamen Klassen in `scripts/lib/`. Sie
 brauchen Python 3 mit `eccodes`, `numpy`, `scipy` und `Pillow`, der Klimavergleich zusätzlich
-`pandas`. Außer `fetch_data.py`, das den Datenordner aus dem Blob Storage lädt, lesen und zeichnen
-sie nur: Ableiten und Rendern erledigt das Programm, das den Datenordner erzeugt.
+`pandas`. Sie lesen und zeichnen nur: Ableiten und Rendern erledigt das Programm, das den Datenordner erzeugt.
 
 Vor Änderungen in `scripts/` zuerst `scripts/REFERENCE.md` lesen: Sie beschreibt Klassen,
 Datenflüsse und Erweiterungspunkte, sodass du nicht den ganzen Code lesen musst.
@@ -99,26 +98,10 @@ Das Gebiet muss in Europa liegen (Atlantik bis Westrussland, Nordafrika bis Nord
 
 ### 2. Datenordner
 
-Die Daten liefert ein Datenordner (`<data>`), den ein anderes Programm erzeugt und aktualisiert.
-Woher er kommt:
-
-- **Der Nutzer nennt einen Ordner:** Nimm genau diesen und lade nichts. Er will die Prognose aus
-  genau diesen Daten, etwa aus einem älteren Lauf.
-- **Sonst aus dem Blob Storage:** Das Programm spiegelt seinen Ordner in einen öffentlich lesbaren
-  Container. Die URL steht in `<skill-dir>/download_url.txt`. Gibt der Nutzer eine URL an, schreib
-  sie als einzige Zeile in diese Datei (auch über eine bestehende), damit spätere Aufrufe sie
-  kennen. Fehlt die Datei und nennt er keine, frag ihn danach. Die URL steht nicht hier, weil der
-  Skill öffentlich ist. Dann bring den Cache auf den Stand des Containers:
-
-  ```
-  python <skill-dir>/scripts/fetch_data.py <url aus download_url.txt>
-  ```
-
-  Das Skript listet den Container, lädt nur neue oder geänderte Dateien nach `<skill-dir>/.cache`
-  und löscht dort ältere Läufe. Ist der Lauf schon im Cache, ist es in wenigen Sekunden fertig.
-  Der erste Abruf dauert länger, weil er rund 3 GB samt Klimatologie lädt. Die letzte Zeile der
-  Ausgabe ist `<data>`. Bricht es ab, weil im Container gerade ein neuer Lauf hochgeladen wird,
-  warte ein paar Minuten und ruf es erneut auf.
+Die Daten liefert ein Datenordner (`<data>`), den ein anderes Programm erzeugt, aktualisiert und auf
+ein Netzlaufwerk kopiert. Nimm den Ordner, den der Nutzer nennt, und frag danach, wenn er keinen
+nennt. Lade nichts nach: Der Nutzer will die Prognose aus genau diesen Daten, etwa aus einem älteren
+Lauf.
 
 Der Ordner enthält je einen Lauf von ECMWF IFS, ICON-D2 und CHMI ALADIN (fehlt ALADIN in einem
 älteren Ordner, arbeite ohne es):
@@ -129,7 +112,7 @@ Der Ordner enthält je einen Lauf von ECMWF IFS, ICON-D2 und CHMI ALADIN (fehlt 
   Kontaktabzügen
 - `icon-d2_<YYYYMMDDHH>.grb2`: der ICON-D2-Lauf bis +48 h, nur Rohfelder des Modells
 - `icon-d2/`: die ICON-D2-Karten für Österreich und Umgebung mit Kontaktabzügen
-- `chmi-aladin_<YYYYMMDDHH>.grb`: der ALADIN-Lauf bis +72 h, zugeschnitten auf die Karten (GRIB 1,
+- `chmi-aladin_<YYYYMMDDHH>.grb`: der ALADIN-Lauf bis +72 h auf dem ganzen Modellgitter (GRIB 1,
   daher `.grb`)
 - `chmi-aladin/`: die ALADIN-Karten für Österreich und Ungarn mit Kontaktabzügen
 - `era5_means/`: die Klimatologie für den Klimavergleich
@@ -140,8 +123,7 @@ im Fenster icon-d2“, für ALADIN „ALADIN-Datei“ und „Produkte im Fenster
 Abschnitte der Karten, die du ansiehst. Die Namen der GRIBs nennen die Läufe (Basiszeit in UTC).
 Nenn dem Nutzer die, die du verwendest. Ist der ECMWF-Lauf älter als etwa 24 h, der ICON-D2-Lauf
 älter als etwa 12 h oder der ALADIN-Lauf älter als etwa 18 h, sag dazu, dass die Daten nicht aktuell
-sind: Bei einem eigenen Ordner frag, ob er ihn zuerst aktualisieren will; beim Blob Storage
-aktualisiert das Programm den Container offenbar gerade nicht. Verwende für die ganze Analyse genau
+sind, und frag, ob er den Ordner zuerst aktualisieren will. Verwende für die ganze Analyse genau
 diese Läufe.
 
 Die Fenster der Karten:
@@ -221,7 +203,7 @@ und Wolkenuntergrenze kommen aus der nächsten Zelle, weil ein Mittel aus Codes 
   ECMWF.
 - **Tagesextreme:** Tmax 06–18 UTC und Tmin 18–06 UTC, soweit der Lauf das Fenster abdeckt.
 
-**ALADIN** (etwa 7 KB, 5 s pro Ort): bilinear zwischen den vier Gitterpunkten um den Ort,
+**ALADIN** (etwa 8 KB, 22 s pro Ort): bilinear zwischen den vier Gitterpunkten um den Ort,
 Niederschlagsart und Sicht vom nächsten Gitterpunkt.
 
 - **Kopf:** Modellhöhe, Landanteil und Abstand zur echten Höhe.
@@ -231,8 +213,12 @@ Niederschlagsart und Sicht vom nächsten Gitterpunkt.
   gefährlichster Niederschlagsart und Sicht zusammengesetzt. Die Blitzschwelle ist nicht an echten
   Gewittern geprüft: Bei schwülen Lagen sieh dir `flash` im TSV an und nenne Gewitter nur als
   Möglichkeit.
-- **Tagesextreme:** aus den stündlichen T2m, weil die Datei keine Extreme hat. Eine Spitze zwischen
-  zwei vollen Stunden fehlt also.
+- **Freie Atmosphäre, alle 3 h:** Wind auf 1000 hPa, Höhe, Temperatur, Feuchte und Wind auf 850 und
+  700 hPa wie bei ICON-D2. Mehr Druckflächen hat die Datei nicht; 925 hPa, 500 hPa und die
+  Schichtdicke kommen von ECMWF.
+- **Tagesextreme:** Tmax 06–18 UTC und Tmin 18–06 UTC. Bei den Läufen von 06 und 18 UTC sind es die
+  12-h-Extreme des Modells, sonst die stündlichen T2m, denen eine Spitze zwischen zwei vollen Stunden
+  fehlt.
 
 Ein TSV je Modell: Gitter, Zeitschritte und Parameter sind verschieden, eine gemeinsame
 Tabelle hätte für die Hälfte der Zeilen leere Spalten und mischte die Herkunft der Werte. Jedes TSV
@@ -241,23 +227,25 @@ wie dort (Listen in `charts.md`, „GRIB-Datei“, „ICON-D2-Datei“ und „AL
 - **Spalten:** `valid_utc`, `step_h`, dann der Name des Felds, auf Druckflächen mit Level
   (`t850`, `gh500`, `uf1000`), auf festen Höhen mit Level und `m` (`t2000m`, `u3000m`), sonst ohne
   (`msl`, `2t`, `thick`, `deg0l`, `inv`, `psig`, `mx2t`, `orog`; bei ICON `tcc`, `tp`, `ww`, `gust`,
-  `ceiling`, `tmax_2m`, `hsurf`; bei ALADIN nur `z`, `lsm`, `2t`, `msl`, `tcc`, `fog_visibility`,
-  `tp`, `ptype`, `ptype_severe`, `flash`, `10u`, `10v`, `gust`).
+  `ceiling`, `tmax_2m`, `hsurf`; bei ALADIN `z`, `lsm`, `2t`, `msl`, `tcc`, `fog_visibility`,
+  `tp`, `ptype`, `ptype_severe`, `flash`, `10u`, `10v`, `gust`, `2d`, `wbt`, `tmax_2m`, `tmin_2m`).
 - **Nur im ECMWF-TSV, nicht in der Tabelle:** `papt850`, die äquivalentpotentielle Temperatur θe auf
   850 hPa in K (Deutung unter „Luftmasse mit θe850“).
 - **Im ECMWF- und ICON-TSV, nicht in der Tabelle:** `2d`, der Taupunkt in 2 m (K, über Wasser), `wbt`, die
   Feuchtkugeltemperatur in 2 m (K, vom Viewer aus `2t`, `2d` und `sp` berechnet), und `sp`, der
-  Bodendruck am Modellboden (Pa). Deutung unter „Schwüle“ und „Niederschlagsart“.
+  Bodendruck am Modellboden (Pa). Deutung unter „Schwüle“ und „Niederschlagsart“. Im ALADIN-TSV stehen
+  `2d` und `wbt` ebenfalls, beide vom Modell selbst; `sp` hat ALADIN nicht.
 - **Einheiten:** wie im GRIB, also K, gpm, %, m/s, Pa/s, Pa, m. Bei ICON abweichend: `tcc` in %, `tp`
   in mm seit T+0 (die Stundenmenge ist die Differenz zweier Zeilen), `z850`/`z700` als Geopotential
   in m²/s² (÷ 9,81 = m). Bei ALADIN: `tcc` 0–1, `tp` in mm und `flash` in Blitzen pro km² seit T+0
-  (Stundenmenge wie bei ICON), `fog_visibility` in m, `z` als Geopotential des Modellbodens in m²/s².
+  (Stundenmenge wie bei ICON), `fog_visibility` in m, `z` als Geopotential des Modellbodens in m²/s²,
+  `z850`/`z700` wie bei ICON, `r850`/`r700` als Anteil 0–1 (nicht %).
 - **Lücken:** Felder nur zu T+0 (`orog`, `z`, `sdor`, `lsm`, `hsurf`) stehen in jeder Zeile.
   Parameter, die es zu einem Zeitschritt nicht gibt (`mx2t3` nach +144 h, `mx2t` außer am Ende
   seines Tagesfensters, `ww` zu T+0, bei ALADIN `tp`, `ptype`, `ptype_severe`, `flash` und `gust` zu
-  T+0), bleiben leer, ebenso `uf`, `vf`, `inv` und `rhbl` unter dem
+  T+0 und `tmax_2m`/`tmin_2m` außer alle 12 h ab T+12), bleiben leer, ebenso `uf`, `vf`, `inv` und `rhbl` unter dem
   Modellboden. Die Felder des Modells auf Druckflächen unter dem Modellboden (`t1000`, `u925`, bei
-  ICON `u1000` in Alpentälern) stehen extrapoliert da.
+  ICON und ALADIN `u1000` in Alpentälern) stehen extrapoliert da.
 - **Nur im ECMWF-TSV fehlen** Bewölkung und Niederschlag (siehe oben); im ICON-TSV stehen sie.
 
 Das ECMWF-TSV ist die Datenquelle für Diagramm und Bericht, alle TSV dienen eigenen Auswertungen
@@ -359,8 +347,8 @@ Die Regeln geben die Richtung vor, ersetzen aber nicht den Blick auf die konkret
   - Bei kräftigem Niederschlag liegt die Grenze tiefer, bei schwachem höher.
   - Zur Gegenprobe im Flachland bis etwa 300 m: T850 ≤ −4 °C oder Dicke ≤ 528 dam heißt Schnee
     wahrscheinlich. −4…−2 °C bzw. 528–536 dam heißt Schneeregen oder nasser Schnee.
-  - Am Boden entscheidet die Feuchtkugeltemperatur `wbt` (ECMWF- und ICON-TSV; ALADIN hat sie nicht,
-    nennt die Art aber direkt in `ptype`), nicht T2m: Fallender Niederschlag
+  - Am Boden entscheidet die Feuchtkugeltemperatur `wbt` (alle drei TSV; ALADIN nennt
+    die Art zusätzlich direkt in `ptype`), nicht T2m: Fallender Niederschlag
     verdunstet und kühlt die Luft bis auf sie ab. Bei `wbt` ≤ 0 °C kommt Schnee an, bis etwa +1 °C
     nasser Schnee oder Schneeregen, darüber Regen. In trockener Luft (großer Abstand von `2t` zu `2d`)
     schneit es daher auch bei T2m von +2 bis +4 °C, und die Temperatur fällt mit Einsetzen des

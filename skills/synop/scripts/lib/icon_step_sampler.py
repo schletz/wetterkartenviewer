@@ -33,9 +33,7 @@ class IconStepSampler(StepSampler):
         field, point = self.grib.field, self.point
         grib = self.grib_values(step)
         ceiling = grib["ceiling"]
-        # ICON has no geopotential at 1000 hPa; below the model ground its wind is extrapolated, as for ECMWF a dash.
-        above_ground = (grib["msl"] / 100.0 - 1000.0) * M_PER_HPA > grib["hsurf"]
-        row = {
+        return {
             "step": step,
             "t2m": grib["2t"] - KELVIN,
             "wind10m": point.wind(field("10u", step), field("10v", step)),
@@ -45,13 +43,27 @@ class IconStepSampler(StepSampler):
             "cloud_base": ceiling if ceiling is not None and ceiling < NO_CEILING_M else None,
             "precip": grib["tp"] - point(field("tp", step - 1)) if step > 0 else None,
             "ww": grib["ww"],
-            "wind1000": point.wind(field("u", step, 1000), field("v", step, 1000)) if above_ground else None,
+            **self.upper_air(step, grib, grib["hsurf"]),
             "grib": grib,
         }
+
+    def upper_air(self, step: int, grib: dict, ground_height: float, humidity_percent: float = 1.0) -> dict:
+        """Wind at 1000 hPa and height (m), temperature (deg C), humidity (%) and wind at LEVELS.
+
+        Args:
+            step: the step.
+            grib: the GRIB values of the step at the location (see grib_values).
+            ground_height: model ground at the location in m.
+            humidity_percent: factor from the humidity of the file to %.
+        """
+        field, point = self.grib.field, self.point
+        # The file has no geopotential at 1000 hPa; below the model ground its wind is extrapolated, as for ECMWF a dash.
+        above_ground = (grib["msl"] / 100.0 - 1000.0) * M_PER_HPA > ground_height
+        row = {"wind1000": point.wind(field("u", step, 1000), field("v", step, 1000)) if above_ground else None}
         for level in LEVELS:
             row[f"height{level}"] = grib[f"z{level}"] / GRAVITY
             row[f"t{level}"] = grib[f"t{level}"] - KELVIN
-            row[f"rh{level}"] = grib[f"r{level}"]
+            row[f"rh{level}"] = grib[f"r{level}"] * humidity_percent
             row[f"wind{level}"] = point.wind(field("u", step, level), field("v", step, level))
         return row
 

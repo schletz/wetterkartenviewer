@@ -12,9 +12,9 @@ icon-d2_<run>.grb2 holds the raw ICON-D2 fields (section "ICON-D2-Datei"),
 one value per cell of the unstructured grid; they carry the viewer's names
 (ICON_NAMES), the cell centres are clat/clon and the boundary zone is NaN.
 
-chmi-aladin_<run>.grb holds near-surface fields of CHMI ALADIN (section
-"ALADIN-Datei") in GRIB edition 1 on a Lambert grid, one flat array row by row
-from the south; parameters without shortName get theirs from ALADIN_NAMES.
+chmi-aladin_<run>.grb holds the fields of CHMI ALADIN (section "ALADIN-Datei")
+in GRIB edition 1 on a Lambert grid, one flat array row by row from the south;
+ALADIN_NAMES names the parameters without shortName and the 2 m extremes.
 """
 
 from datetime import datetime, timedelta
@@ -52,13 +52,18 @@ class ForecastGrib:
         self._offsets: dict[tuple, int] = {}               # (name, level, end step) -> byte offset
         self._starts: dict[tuple, int] = {}                # (name, level, end step) -> start step
         self._level_types: dict[tuple[str, int], str] = {}  # (name, level) -> typeOfLevel, in file order
+        next_start = 0
         with self.path.open("rb") as fh:
             while (gid := eccodes.codes_grib_new_from_file(fh, headers_only=True)) is not None:
                 try:
                     # Steps in hours; ICON gives its time invariant fields in minutes ("0m").
                     eccodes.codes_set(gid, "stepUnits", 1)
                     key = (self._name(gid), eccodes.codes_get(gid, "level"), eccodes.codes_get(gid, "endStep"))
-                    self._offsets[key] = int(eccodes.codes_get(gid, "offset"))
+                    # On Windows ecCodes reports the offset 0 for a message beyond 2 GiB: there the end of the
+                    # previous message counts, the files holding their messages without gaps.
+                    start = max(int(eccodes.codes_get(gid, "offset")), next_start)
+                    next_start = start + eccodes.codes_get(gid, "totalLength")
+                    self._offsets[key] = start
                     self._starts[key] = eccodes.codes_get(gid, "startStep")
                     self._level_types.setdefault(key[:2], eccodes.codes_get(gid, "typeOfLevel"))
                     if not hasattr(self, "base_time"):
@@ -73,7 +78,9 @@ class ForecastGrib:
     def _name(gid: int) -> str:
         if eccodes.codes_get(gid, "edition") == 1:
             name = eccodes.codes_get(gid, "shortName")
-            return ALADIN_NAMES.get(eccodes.codes_get(gid, "indicatorOfParameter"), name) if name == "unknown" else name
+            if name == "unknown":
+                return ALADIN_NAMES.get(eccodes.codes_get(gid, "indicatorOfParameter"), name)
+            return ALADIN_NAMES.get(name, name)
         if (eccodes.codes_get(gid, "discipline") == 0
                 and eccodes.codes_get(gid, "parameterCategory") == LOCAL_CATEGORY):
             number = eccodes.codes_get(gid, "parameterNumber")
@@ -98,9 +105,10 @@ class ForecastGrib:
         """(name, level, typeOfLevel) of every parameter in the file, in file order."""
         return [(name, level, level_type) for (name, level), level_type in self._level_types.items()]
 
-    def steps(self, name: str) -> list[int]:
-        """End steps in hours at which a parameter is available, ascending."""
-        return sorted({end for key_name, _, end in self._offsets if key_name == name})
+    def steps(self, name: str, level: int | None = None) -> list[int]:
+        """End steps in hours at which a parameter (on one level, if given) is available, ascending."""
+        return sorted({end for key_name, key_level, end in self._offsets
+                       if key_name == name and (level is None or key_level == level)})
 
     def has(self, name: str, step: int, level: int | None = None) -> bool:
         """Whether a field exists."""

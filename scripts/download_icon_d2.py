@@ -27,7 +27,7 @@ onto the chart pixels (lib/triangle_grid.py). Parameters, as named by DWD
                                    geopotential m2/s2 (z), m/s; ICON-D2 has no 925 hPa
 
 Parameters on pressure levels are written "<folder>@<hPa>" (FORECAST_PARAMS). A run
-is about 1228 files and 945 MB as GRIB.
+is about 1228 files and, packed without compression, 1.4 GB as GRIB.
 
 Without --run the newest complete run is taken: the run folders (00/ ... 21/)
 are ordered by the newest time stamp of their parameter folders, and the

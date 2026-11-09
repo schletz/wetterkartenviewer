@@ -8,16 +8,12 @@ depend on it; the synop skill reads it as its data directory:
     opencharts_central_europe/      the default products of the window
     icon-d2_<run>.grb2              ICON-D2 run on the raw model grid (download_icon_d2.py)
     icon-d2/                        the ICON-D2 products: Austria and surroundings, hourly to T+48
-    chmi-aladin_<run>.grb           CHMI ALADIN run cut to its window (download_chmi_aladin.py)
-    chmi-aladin/                    the ALADIN products: Austria and Hungary, hourly to T+72; neither
-                                    goes to the blob mirror, the skill does not read them
+    chmi-aladin_<run>.grb           CHMI ALADIN run on the whole model grid (download_chmi_aladin.py)
+    chmi-aladin/                    the ALADIN products: Austria and Hungary, hourly to T+72
     era5_means/                     climatology for t850_anomaly and the skill, kept across runs;
                                     downloaded by hand (README.md)
     charts.md                       products and GRIB contents for the skill; copied into
                                     any other data directory
-
-At the end data/ is mirrored into the Azure blob container of the skill (blob_mirror.py), if
-.env holds its credentials; a failed upload only warns, the next call sends the rest.
 
 maps/ holds only what the web app loads: manifest.json (committed), one
 AV1 video <window>/<product>.mp4 per tile layer in src/config/viewer.config.json
@@ -53,9 +49,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
-from azure.core.exceptions import AzureError
-
-from blob_mirror import mirror
 from lib.climate_archive import DIRECTORY as CLIMATE_DIRECTORY, ClimateArchive
 from lib.progress import Progress
 from maps_manifest import (MANIFEST, chart_frames, read_run, read_window_runs, tile_chart_paths, video_file,
@@ -259,11 +252,6 @@ def main() -> None:
     write_series(args.data, args.maps, grib, icon_grib or newest(args.data, ICON_PREFIX), args.force,
                  aladin_grib or newest(args.data, ALADIN_PREFIX, ALADIN_SUFFIX))
     print(write_manifest(args.data, args.maps, run))
-    stage("blob mirror")
-    try:
-        mirror(args.data)
-    except AzureError as error:
-        print(f"warning: blob mirror failed, the next call uploads the rest: {error}", file=sys.stderr)
     stage("done")
 
 

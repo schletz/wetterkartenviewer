@@ -18,10 +18,11 @@ ICON_NAMES = {"tlat": "clat", "tlon": "clon", "HSURF": "hsurf", "CLCT": "tcc", "
               "max_i10fg": "gust", "max_2t": "tmax_2m", "min_2t": "tmin_2m", "ceil": "ceiling",
               "TW_2M": "wbt"}
 
-# GRIB 1 parameter number -> name of the fields of the CHMI ALADIN file for which ecCodes has no shortName
-# (charts.md, "ALADIN-Datei"). A copy of the viewer's constants.ALADIN_NAMES.
-ALADIN_NAMES = {61: "tp", 171: "tcc", 223: "fog_visibility", 229: "ptype_severe", 230: "ptype", 236: "flash",
-                130: "gust"}
+# Names of the fields of the CHMI ALADIN file (charts.md, "ALADIN-Datei"): GRIB 1 parameter numbers without a shortName,
+# and the 2 m extremes, which ecCodes calls mx2t6/mn2t6 although they cover 12 h. A copy of the viewer's
+# constants.ALADIN_NAMES.
+ALADIN_NAMES = {61: "tp", 171: "tcc", 223: "fog_visibility", 229: "ptype_severe", 230: "ptype", 234: "wbt", 236: "flash",
+                130: "gust", "mx2t6": "tmax_2m", "mn2t6": "tmin_2m"}
 
 # ALADIN has no ww. Copies of the viewer's chart_styles, so that table and chart name the same weather: lightning
 # density of one hour that counts as a thunderstorm (flashes per km2), lowest visibility due to cloud below which

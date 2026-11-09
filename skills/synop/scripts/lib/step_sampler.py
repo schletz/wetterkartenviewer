@@ -73,7 +73,7 @@ class StepSampler:
         for name, level, level_type in order:
             if grib.has(name, step, level):
                 source = step
-            elif grib.steps(name) == [0]:
+            elif grib.steps(name, level) == [0]:
                 source = 0
             else:
                 source = None

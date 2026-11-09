@@ -38,10 +38,7 @@ class IconLocationTables:
                  "", f"- Model ground: height {height:.0f} m (cells about 2.2 km apart), land fraction {land:.2f}"]
         if elevation is not None:
             lines.append(height_note(height, elevation))
-        clearance = np.mean([row["height850"] for row in rows]) - height
-        if clearance < NEAR_GROUND_M:
-            lines.append(f"- 850 hPa lies on average only {clearance:.0f} m above the model ground: T850 follows "
-                         "the diurnal cycle of the ground there.")
+        lines += self.near_ground_note(rows, height)
         lines += ["- The weather at the ground (clouds, precipitation, weather code, gusts) comes from a model that "
                   "resolves showers, thunderstorms and fog; single cells are possibilities in the area, not a point "
                   "forecast.",
@@ -51,6 +48,15 @@ class IconLocationTables:
                   "Z: height of the pressure level in m. Wind 1000 is a dash where 1000 hPa lies below the "
                   "model ground (the model extrapolates it there; the TSV keeps those values)."]
         return "\n".join(lines)
+
+    @staticmethod
+    def near_ground_note(rows: list[dict], height: float) -> list[str]:
+        """Warning line if 850 hPa lies close above the model ground, where T850 is no free atmosphere."""
+        clearance = np.mean([row["height850"] for row in rows]) - height
+        if clearance >= NEAR_GROUND_M:
+            return []
+        return [f"- 850 hPa lies on average only {clearance:.0f} m above the model ground: T850 follows "
+                "the diurnal cycle of the ground there."]
 
     def surface_table(self, rows: list[dict]) -> str:
         """Weather at the ground per hour."""
