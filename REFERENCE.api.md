@@ -27,8 +27,8 @@ class StationFunctions <<functions>> {
  in the shape of the data hub.
 }
 class RefreshTimer <<function>> {
- Timer, every 5 min at
- minute 1, 6, 11, ...
+ Timer, every 10 min at
+ minute 1, 11, 21, ...
 }
 class DataHubResponses <<module>> {
  JSON bodies of
@@ -98,7 +98,8 @@ Tables: semicolons, cells padded with spaces, UTF-8, `Time` = `YYYYMMDDHHMM`, -9
 Azure Functions on the **Windows Consumption plan with `functionAppScaleLimit` 1**. Both matter, because the data lives in the memory of one process:
 
 - With several instances each would hold its own list. On the Flex Consumption plan timer functions scale apart from HTTP functions, so the timer would never fill the list the requests read.
-- The timer calls every 5 min keep the instance alive, but the platform still restarts it now and then; see `StationRefresher`.
+- The timer calls every 10 min keep the instance alive, but the platform still restarts it now and then; see `StationRefresher`.
+- Idle load on odp.met.hu: 288 requests and about 8 MB per day (144 listings of 41 KB, 144 files of 15 KB). A new file appears about 2 s after every full 10 minutes (17:30:02 seen), so the timer runs one minute later.
 
 Runs on the free grant of the plan, apart from cents for the required storage account (`AzureWebJobsStorage`).
 
