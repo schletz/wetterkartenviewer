@@ -15,7 +15,7 @@ The API sections follow Javadoc: intro, fields, methods per module or class.
 - Render WebP charts for four windows into `data/`, encode each tile layer of the viewer as `maps/<window>/<product>.mp4` (one frame per step), write `maps/manifest.json`.
 - Cut T850, T500, RH850, RH700, θe850, the 10 m gusts, the precipitation per step, the total cloud cover, the 1000–500 hPa thickness, the 2 m dew point and wet-bulb temperature (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to Austria and Hungary (ICON-D2: Austria only; ALADIN T2m: Hungary only) as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
 - Upload the videos and series files to a GitHub release, push a manifest commit; GitHub Actions builds and deploys the app with them.
-- IFS updates every 12 h, ICON-D2 every 3 h, ALADIN every 6 h; `download_loop.sh` runs the whole chain every 10 min on an always-on machine.
+- IFS updates every 12 h, ICON-D2 every 3 h, ALADIN every 6 h; `download_loop.sh` runs the whole chain every 10 min on an always-on machine; a downloader asks its server only from the time the next run can be complete (`RunSchedule`).
 - `data/` is also the data directory of the skill synop (source in `skills/synop`, installed to `~/.claude/skills/synop`), see *Contract with the skill synop*; `download_loop.sh` mirrors it to a network drive (per user), from where the skill reads it without this repository.
 
 ## Diagrams
@@ -172,20 +172,24 @@ if (data/era5_means/*.grb2 exists?) then (no)
  :sys.exit before any download or delete;
  stop
 endif
-:download_ecmwf_data.py data [--base];
+:download_ecmwf_data.py data [--base] [--force];
+note right
+ no --base or --force and the next run cannot be
+ complete yet: prints the run file on disk, no network
+end note
 if (exit code 0?) then (no)
  :sys.exit "ECMWF download failed";
  stop
 endif
 :remove_old_runs ecmwf_*: GRIB, .part, .raw/ of other runs;
-:download_icon_d2.py data [--run];
+:download_icon_d2.py data [--run] [--force];
 if (exit code 0?) then (yes)
  :remove_old_runs icon-d2_*;
 else (no)
  :warning; icon_grib = None,
  ICON window stays as it is;
 endif
-:download_chmi_aladin.py data [--run];
+:download_chmi_aladin.py data [--run] [--force];
 if (exit code 0?) then (yes)
  :remove_old_runs chmi-aladin_*;
 else (no)
@@ -246,6 +250,10 @@ class "download_icon_d2.py" as download_icon <<script>> {
 class "download_chmi_aladin.py" as download_aladin <<script>> {
  Downloads the variable files
  of one ALADIN run.
+}
+class RunSchedule {
+ Time from which the next run of
+ a model can be complete.
 }
 package "CHMI ALADIN" {
  class AladinRuns {
@@ -312,6 +320,9 @@ class LambertPlane << (D,#fdebd1) grib >>
 download_aladin ..> AladinRuns : latest(), has(), url()
 download_aladin ..> AladinWriter : write()
 AladinWriter ..> LambertPlane : grid angle
+download_ecmwf ..> RunSchedule : early return
+download_icon ..> RunSchedule : early return
+download_aladin ..> RunSchedule : early return
 download_ecmwf ..> OpenDataRuns : latest()
 download_ecmwf ..> RequestPlan
 download_ecmwf ..> GroupDownloader : retrieve()\n4 threads
@@ -756,9 +767,9 @@ maps_manifest.py <data> <maps> --run YYYYMMDDHH
 point_series.py <data> <maps> [--force] (newest ecmwf_*/icon-d2_*.grb2/chmi-aladin_*.grb of data)
 publish_maps.py <maps> [--force] (gh and git run in the repo root; other options ignored)
 fetch_maps.py <maps> <target> --repository owner/name
-download_ecmwf_data.py <out file|existing dir> [--base YYYYMMDDHH] [--max-step N] [--keep-raw]
-download_icon_d2.py <out file|existing dir> [--run YYYYMMDDHH] [--keep-raw]
-download_chmi_aladin.py <out file|existing dir> [--run YYYYMMDDHH] [--keep-raw]
+download_ecmwf_data.py <out file|existing dir> [--base YYYYMMDDHH] [--max-step N] [--keep-raw] [--force]
+download_icon_d2.py <out file|existing dir> [--run YYYYMMDDHH] [--keep-raw] [--force]
+download_chmi_aladin.py <out file|existing dir> [--run YYYYMMDDHH] [--keep-raw] [--force]
 render_charts.py <grib> <outdir> [--climate DIR] [--projection chmi-aladin|icon-d2|opencharts_central_europe|opencharts_europe]
  [--products a,b|all] [--workers N]
 build_borders.py <VGD_50_generalisiert.shp> [target.geojson]
@@ -770,7 +781,7 @@ download_loop.sh [--yes] every 600 s: download_data_with_reset.sh,
  then rsync -a --delete data/ to $WETTER_MIRROR_DIR (default ~/Downloads/wetterviewer_data; skipped if the folder is missing)
 ```
 
-Status on stdout, errors on stderr. Downloaders print the absolute GRIB path as their last stdout line and exit 0 with "already on disk" if the target is complete.
+Status on stdout, errors on stderr. Downloaders print the absolute GRIB path as their last stdout line and exit 0 with "already on disk" if the target is complete, or, without any request, with the newest run file on disk while the next run cannot be complete (`RunSchedule`).
 Output is whole lines only, never `\r`, so a terminal, a log file and an agent reading redirected output see the same. update_maps.py prints `[HH:MM:SS] <phase>` before each phase (ECMWF download, ICON-D2 download, render, encode videos, temperature series, done) and passes its subprocesses' stdout on line by line; long steps print `Progress` lines (*Progress*). update_maps.py and publish_maps.py set `sys.stdout` to line buffering.
 `download_ecmwf_data.py`, `download_icon_d2.py`, `download_chmi_aladin.py`, `render_charts.py`, `make_icon_test_grib.py` put their own folder on `sys.path` (work with `python -I`); `update_maps.py`, `maps_manifest.py`, `point_series.py`, `publish_maps.py`, `fetch_maps.py` import their sibling modules without `-I`; maps_manifest.py and fetch_maps.py need only the standard library (fetch_maps runs in the deploy workflow).
 Python packages (no requirements file): `ecmwf-opendata`, `eccodes`, `numpy`, `scipy`, `matplotlib` (Agg), `Pillow`, `requests`; build_borders.py also `pyshp`, `shapely` ≥ 2.1, `pyproj`; build_county_lines.py also `shapely` ≥ 2.1. `ffmpeg` with `libaom-av1` must be on PATH.
@@ -783,7 +794,7 @@ Orchestrates one update; the flow is diagram *update_maps*.
 Destructive by design: deletes other runs' GRIBs, `maps/manifest.json` on every call, `data/<window>/` before rendering and `maps/<window>/` of a model on a new run or `--force`, all before rendering.
 "Same run" is decided per model, from the manifest only: the ECMWF run at the top, the ICON run at the `icon-d2` layers, the ALADIN run at the `chmi-aladin` layers. An interrupted call leaves no manifest, so the next one counts as a new run for every model.
 An existing video is never checked for freshness. A layer added to the config takes effect without `--force` (its window is re-rendered because the path has no charts).
-Without a new run a call takes ≈ 3.5 s.
+Without a new run a call takes ≈ 3.5 s. `--force` is passed on to the downloaders, which then ask their servers.
 
 | Field | Meaning |
 | --- | --- |
@@ -907,7 +918,7 @@ Workflow `.github/workflows/deploy.yml`: on push to `main` or manually; Node 24,
 
 ### download_ecmwf_data.py
 
-`main`: `OpenDataRuns.latest()` (or `--base`, 00/12 only) → `RequestPlan` → "already on disk" if `output_complete` → `GroupDownloader.retrieve` × 4 threads into `<out>.raw/` → `ForecastWriter.write` into `<out>.part` → `DerivedWriter.append` → rename → delete `.raw/` unless `--keep-raw`.
+`main`: early return with `SCHEDULE` (not with `--base`, `--force` or a shorter `--max-step`) → `OpenDataRuns.latest()` (or `--base`, 00/12 only) → `RequestPlan` → "already on disk" if `output_complete` → `GroupDownloader.retrieve` × 4 threads into `<out>.raw/` → `ForecastWriter.write` into `<out>.part` → `DerivedWriter.append` → rename → delete `.raw/` unless `--keep-raw`.
 stderr is redirected to devnull during the group downloads (the client's progress bars cannot be switched off), so warnings go to stdout there; `Progress` counts finished groups via `add_done_callback`. The crop and derived-field steps print one line each when done.
 `out` is treated as a folder only if it exists. `--max-step` with a folder target still writes `ecmwf_<run>.grb2`; a later full call sees another count and downloads again.
 
@@ -918,7 +929,7 @@ stderr is redirected to devnull during the group downloads (the client's progres
 
 ### download_icon_d2.py
 
-`main`: `IconRuns.latest()` (or `run(--run)`, only runs DWD still holds) → "already on disk" if the target has one message per URL (the listings are always queried, no offline mode) → `IconDownloader.fetch` × 8 threads → `join` into `<out>.part` → exit 1 if messages ≠ URLs (`.part`, `.raw/` stay) → rename → delete `.raw/`.
+`main`: early return with `SCHEDULE` (not with `--run` or `--force`) → `IconRuns.latest()` (or `run(--run)`, only runs DWD still holds) → "already on disk" if the target has one message per URL (the listings are always queried, no offline mode) → `IconDownloader.fetch` × 8 threads → `join` into `<out>.part` → exit 1 if messages ≠ URLs (`.part`, `.raw/` stay) → rename → delete `.raw/`.
 "Already on disk" compares with `len(urls) + IconDerivedWriter.expected(urls)`; after `join` the derived fields are appended to the `.part` file, then it is renamed.
 Measured: 1228 files, 85 s for download and derived field (run 2026110706), less than 47 s for the repacking in `join` on the dev PC, 1.43 GB (run 2026110909); 1130 files took 43–138 s depending on the network. `Progress` counts files (every 10 %), the wrapper `fetch` advances it in the worker threads.
 
@@ -930,7 +941,7 @@ Measured: 1228 files, 85 s for download and derived field (run 2026110706), less
 
 ### download_chmi_aladin.py
 
-`main`: `AladinRuns.latest()` (or `has(--run)`) → "already on disk" if the target has `expected_total` messages → `fetch` × `PARALLEL_REQUESTS` (4) unpacks each bz2 into `<out>.raw/` → `AladinWriter.write` into `<out>.part` → rename → delete `.raw/`.
+`main`: early return with `SCHEDULE` (not with `--run` or `--force`) → `AladinRuns.latest()` (or `has(--run)`) → "already on disk" if the target has `expected_total` messages → `fetch` × `PARALLEL_REQUESTS` (4) unpacks each bz2 into `<out>.raw/` → `AladinWriter.write` into `<out>.part` → rename → delete `.raw/`.
 Every `.grb` in `.raw/` went through `.part` and had the expected message count; a file with too few messages (CHMI still uploading) raises, exit 1, and update_maps only warns. There is no placeholder for lost fields: unlike ICON a run is all-or-nothing, because a file holds every step.
 Measured: 30 files, 80 s download, 2.8 GB and 1834 messages after 37 s of joining and deriving (run 2026110906, dev PC).
 
@@ -964,6 +975,17 @@ build_borders.py (one-off, by hand): BEV VGD 1:50 000 cadastral communities (EPS
 make_icon_test_grib.py: copies an ICON file and from `--step` places a scene: thunderstorm line west of Munich (ww 95, 8–25 mm/h, gusts 90–125 km/h), hail core at its east end (ww 96, 45 mm/h), fog near Linz and in the Vienna basin (ww 45). Precipitation is added to `tp` at `--step` and all later steps. `CELLS`, `FOG`. Never write the output into `data/`, or update_maps.py renders and publishes it.
 
 ## API: scripts/lib/ — download
+
+### RunSchedule (run_schedule.py)
+
+`file_until_next_run(directory, now=None) -> Path | None`: the newest finished run file while `now < next_check(run)` = run + `interval` + `ready_after`, else None (no directory, no file, a name without a run, or the time has come). It only sets the earliest time to ask, so a late run is found by a later 10 min pass and a machine that was off asks at once. `ready_after` is the earliest time measured less a margin, not the average: a value above the earliest would hold back the runs that come early.
+An idle pass otherwise costs about 35 listing requests (ICON-D2: 8 run folders and 22 parameter folders, ALADIN 4 cycles, ECMWF the index).
+
+| Model | `interval` | `ready_after` | Complete after the start (read from the server listings, 2026-11-09) |
+| --- | --- | --- | --- |
+| ECMWF (`download_ecmwf_data.py`) | 12 h | 9:30 h | 0p1/ folder at 9:40 h, 7 of 7 runs; first published 9:49 h or later in 20 runs |
+| ICON-D2 (`download_icon_d2.py`) | 3 h | 1:00 h | T+48 of t_2m at 1:08 to 1:09 h, 8 runs; first published 1:14 h or later in 75 runs |
+| CHMI ALADIN (`download_chmi_aladin.py`) | 6 h | 3:00 h | last file at 3:14 to 3:36 h for 00 and 12 UTC, 4:26 to 4:34 h for 06 and 18 UTC, 11 runs |
 
 ### OpenDataRuns (open_data_runs.py)
 
@@ -1491,6 +1513,7 @@ No logging framework, no tests, no cleanup of `.part` files after an exception. 
 - **Values that must stay in sync**: projection parameters (Python, TS); image size 1200×690 (chart_canvas.py, tile_videos.py, TS, CSS); `MOUNTAIN_HEIGHT_M` vs `MOUNTAIN_HEIGHTS`; `PER_STEP` vs `step_messages`; `ICON_NAMES` (with `TW_2M` → `wbt`) vs its copy in skills/synop/scripts/lib/constants.py; product names in the classes vs render_charts.py docstring (`--help`) and data/charts.md; window names in `PROJECTIONS`, `WINDOWS`/`ICON_WINDOWS`, `DEFAULTS`, TS `PROJECTIONS`; `PREFIX` vs `ICON_PREFIX`; `PREFIX` of download_chmi_aladin.py vs `ALADIN_PREFIX`; layer format TS vs Python; two profile level lists (IFS `constants.PROFILE_LEVELS`, ICON `PROFILE_LEVELS`).
 - **θe formulas**: scripts/lib/moist_air.py (GRIB field `papt`) vs src/model/moistAdiabat.ts (axis of the θe line).
 - **Series format** (point_series.py vs src/model/seriesFiles.ts, `TemperatureSeries`): encoding, key names, grid convention; `SERIES_FILES` names vs `REQUIRED`/`OPTIONAL` in src/hooks/useSeriesFiles.ts. t2m.json's ICON part must have the cells of heights.json (`cells` equal; the app drops ICON otherwise). Changing the format without changing the runs needs `point_series.py --force` (or `update_maps.py --force`), else the files stay.
+- **Run schedule**: if a provider publishes earlier than `ready_after`, runs are delayed until that time without any error; compare the table under `RunSchedule` when a model seems late. A changed set of fields fetches the run on disk again only with `--force`, otherwise with the next run.
 - **Video and steps can drift**: whoever changes `data/<window>/<product>/` outside update_maps.py must delete the video.
 - **Fallback chains switch videos**; an ICON daily product in a chain covers only its day until 23 UTC.
 - **ICON steps hang on the ECMWF run**; relating steps to the ICON run means changing `chart_frames`, `ChartIndex` and `currentStep` together.
@@ -1509,7 +1532,7 @@ No logging framework, no tests, no cleanup of `.part` files after an exception. 
 
 - **Layer or tile**: edit `tiles[].layers` in viewer.config.json; on `opencharts_europe` any IFS product, on `icon-d2` any ICON product, on `opencharts_central_europe` defaults only (else extend `WINDOWS`/`DEFAULTS`). Effective with the next download_data call, no code change. In a chain put the shorter-range model first. `orography` and `sheets` are no layers.
 - **Non-default product on central Europe**: `WINDOWS['opencharts_central_europe']` = comma list or `"all"`, or extend `DEFAULTS`; update data/charts.md.
-- **New IFS product**: method named like the product in `ChartProducts`, name in `STEP`/`STATIC` (`DAY` maps to max/min), in `DEFAULTS` and in `CLIMATE` if it uses `climate`; new fields → extend the group in `RequestPlan.__init__` (`expected_total` follows, existing files are re-downloaded); other steps than the `t` steps → extend `keys`; scales in chart_styles.py; update render_charts.py docstring and data/charts.md.
+- **New IFS product**: method named like the product in `ChartProducts`, name in `STEP`/`STATIC` (`DAY` maps to max/min), in `DEFAULTS` and in `CLIMATE` if it uses `climate`; new fields → extend the group in `RequestPlan.__init__` (`expected_total` follows, existing files are re-downloaded with `--force` or replaced by the next run); other steps than the `t` steps → extend `keys`; scales in chart_styles.py; update render_charts.py docstring and data/charts.md.
 - **New ICON product**: existing product → add its name to `IconProducts.STEP`/`DAY`/`STATIC` if the ICON file has all fields; differing data source → add a hook in `ChartProducts` and override it; ICON-only → method in `IconProducts`. `ALL`/`DEFAULTS` follow. Update render_charts.py docstring, data/charts.md, and put it first in a chain.
 - **Renaming a product**: method name, `STEP`/`DAY`/`STATIC`, `DEFAULTS` (IFS) and `IconProducts.STEP`, render_charts.py docstring, viewer.config.json layers, data/charts.md (anchors too), README example, skills/synop/SKILL.md. Charts already rendered keep the old name until their window is rendered again (`data/<window>/` is emptied first, then the `--delete` mirror follows): with the same run only windows with a tile layer of the new name (`stale_windows`), i.e. not `opencharts_europe`, which waits for the next ECMWF run or `--force`. The committed maps/manifest.json keeps the old name until then, so a deploy before that shows the layer without a video.
 - **New ICON parameter**: DWD folder in `FORECAST_PARAMS`/`STATIC_PARAMS` (`<folder>@<hPa>`, no 925 hPa), alias in `ICON_NAMES` (and its skill copy) if needed. A derived ICON field goes into `IconDerivedWriter.append` and `expected`; on a DWD template ecCodes may give it a DWD shortName (like `TW_2M`), so add an alias. It must reach step 48 and yield one message per file after the hour filter. Multi-level parameters need unique levels.

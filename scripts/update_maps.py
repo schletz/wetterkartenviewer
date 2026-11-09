@@ -191,7 +191,7 @@ def main() -> None:
     parser.add_argument("--base", help="ECMWF run YYYYMMDDHH instead of the newest one")
     parser.add_argument("--icon-run", help="ICON-D2 run YYYYMMDDHH instead of the newest one")
     parser.add_argument("--aladin-run", help="CHMI ALADIN run YYYYMMDDHH instead of the newest one")
-    parser.add_argument("--force", action="store_true", help="render and encode even if the manifest has the runs")
+    parser.add_argument("--force", action="store_true", help="ask the servers and render and encode even if the manifest has the runs")
     args = parser.parse_args()
     # Whole lines at once, also when the output goes to a file or an agent.
     sys.stdout.reconfigure(line_buffering=True)
@@ -200,19 +200,21 @@ def main() -> None:
 
     check_climate(args.data)
     stage("ECMWF download")
-    grib = download("download_ecmwf_data.py", args.data, ["--base", args.base] if args.base else [])
+    # --force must reach the downloaders: a run on disk with other fields than the code expects is fetched again.
+    force = ["--force"] if args.force else []
+    grib = download("download_ecmwf_data.py", args.data, (["--base", args.base] if args.base else []) + force)
     if grib is None:
         sys.exit("ECMWF download failed")
     run = grib.stem.removeprefix(ECMWF_PREFIX)
     remove_old_runs(args.data, grib, ECMWF_PREFIX)
     stage("ICON-D2 download")
-    icon_grib = download("download_icon_d2.py", args.data, ["--run", args.icon_run] if args.icon_run else [])
+    icon_grib = download("download_icon_d2.py", args.data, (["--run", args.icon_run] if args.icon_run else []) + force)
     if icon_grib is None:
         print("warning: ICON-D2 download failed; its window keeps the charts it has", file=sys.stderr)
     else:
         remove_old_runs(args.data, icon_grib, ICON_PREFIX)
     stage("CHMI ALADIN download")
-    aladin_grib = download("download_chmi_aladin.py", args.data, ["--run", args.aladin_run] if args.aladin_run else [])
+    aladin_grib = download("download_chmi_aladin.py", args.data, (["--run", args.aladin_run] if args.aladin_run else []) + force)
     if aladin_grib is None:
         print("warning: CHMI ALADIN download failed; its window keeps the charts it has", file=sys.stderr)
     else:

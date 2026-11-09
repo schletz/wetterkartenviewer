@@ -64,7 +64,7 @@ import shutil
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from ecmwf.opendata import Client
@@ -79,9 +79,12 @@ from lib.open_data_runs import MAX_STEP, OpenDataRuns  # noqa: E402
 from lib.progress import Progress  # noqa: E402
 from lib.projection import PROJECTIONS  # noqa: E402
 from lib.request_plan import RequestPlan  # noqa: E402
+from lib.run_schedule import RunSchedule  # noqa: E402
 
 STEPS = list(range(0, 144, 3)) + list(range(144, MAX_STEP + 1, 6))
 PARALLEL_REQUESTS = 4
+# The 0p1/ folder of a run appeared 9:40 h after its start, in all 7 runs read on 2026-11-09.
+SCHEDULE = RunSchedule("ecmwf_", ".grb2", timedelta(hours=12), timedelta(hours=9, minutes=30))
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -93,6 +96,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--max-step", type=int, default=MAX_STEP,
                         help=f"last step in hours (default {MAX_STEP}); smaller values for quick tests")
     parser.add_argument("--keep-raw", action="store_true", help="keep the global raw files in <out>.raw/")
+    parser.add_argument("--force", action="store_true", help="ask the server even if no new run can be complete yet")
     args = parser.parse_args(argv)
     if args.base:
         args.base = datetime.strptime(args.base, "%Y%m%d%H")
@@ -103,6 +107,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    if not (args.base or args.force or args.max_step != MAX_STEP) and (waiting := SCHEDULE.file_until_next_run(args.out)):
+        print(waiting)
+        return 0
     started = time.monotonic()
     client = Client(source="ecmwf", resol="0p1")
     runs = OpenDataRuns(client, Client(source="ecmwf", resol="0p25"))

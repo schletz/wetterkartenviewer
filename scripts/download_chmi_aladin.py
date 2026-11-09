@@ -43,6 +43,7 @@ import shutil
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from pathlib import Path
 
 import eccodes
@@ -53,9 +54,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib.aladin_runs import AladinRuns  # noqa: E402
 from lib.aladin_writer import AladinWriter  # noqa: E402
 from lib.progress import Progress  # noqa: E402
+from lib.run_schedule import RunSchedule  # noqa: E402
 
 PREFIX = "chmi-aladin_"
 SUFFIX = ".grb"
+# The last file of a run was written 3:14 to 3:36 h (00, 12 UTC) or 4:26 to 4:34 h (06, 18 UTC)
+# after its start, in the 11 runs read on 2026-11-09; the earliest value counts for every cycle.
+SCHEDULE = RunSchedule(PREFIX, SUFFIX, timedelta(hours=6), timedelta(hours=3))
 PARALLEL_REQUESTS = 4
 RETRIES = 3
 RETRY_DELAY = 10
@@ -108,11 +113,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("out", type=Path, help=f"target GRIB file or a directory for {PREFIX}<run>{SUFFIX}")
     parser.add_argument("--run", help="run in YYYYMMDDHH (00, 06, 12 or 18 UTC); default: newest complete run")
     parser.add_argument("--keep-raw", action="store_true", help="keep the raw files in <out>.raw/")
+    parser.add_argument("--force", action="store_true", help="ask the server even if no new run can be complete yet")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    if not (args.run or args.force) and (waiting := SCHEDULE.file_until_next_run(args.out)):
+        print(waiting)
+        return 0
     started = time.monotonic()
     runs = AladinRuns(AladinWriter.VARIABLES)
     try:

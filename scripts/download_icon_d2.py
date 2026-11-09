@@ -57,6 +57,7 @@ import shutil
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from pathlib import Path
 
 import requests
@@ -68,6 +69,7 @@ from lib.icon_derived_writer import IconDerivedWriter  # noqa: E402
 from lib.icon_downloader import IconDownloader  # noqa: E402
 from lib.icon_runs import IconRuns  # noqa: E402
 from lib.progress import Progress  # noqa: E402
+from lib.run_schedule import RunSchedule  # noqa: E402
 
 # Pressure levels (hPa) of the height profile: they bracket 2000 m (mountain_2000) everywhere;
 # ICON-D2 has no 925 hPa.
@@ -78,6 +80,8 @@ FORECAST_PARAMS = ("clct", "tot_prec", "pmsl", "ww", "vmax_10m", "t_2m", "tmax_2
 STATIC_PARAMS = ("clat", "clon", "hsurf", "fr_land")
 PARALLEL_REQUESTS = 8
 PREFIX = "icon-d2_"
+# T+48 of t_2m was written 1:08 to 1:09 h after the start of the run, in all 8 runs read on 2026-11-09.
+SCHEDULE = RunSchedule(PREFIX, ".grb2", timedelta(hours=3), timedelta(hours=1))
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -86,11 +90,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("out", type=Path, help=f"target GRIB2 file or a directory for {PREFIX}<run>.grb2")
     parser.add_argument("--run", help="run in YYYYMMDDHH (00, 03, ... 21 UTC); default: newest complete run")
     parser.add_argument("--keep-raw", action="store_true", help="keep the raw files in <out>.raw/")
+    parser.add_argument("--force", action="store_true", help="ask the server even if no new run can be complete yet")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    if not (args.run or args.force) and (waiting := SCHEDULE.file_until_next_run(args.out)):
+        print(waiting)
+        return 0
     started = time.monotonic()
     runs = IconRuns(FORECAST_PARAMS, STATIC_PARAMS)
     try:
