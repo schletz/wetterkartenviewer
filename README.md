@@ -2,8 +2,8 @@
 
 ![Screenshot des Viewers](screenshot.jpg)
 
-Zeigt selbst gerenderte Karten des ECMWF IFS und des DWD-Modells ICON-D2 (Österreich, stündlich
-bis +48 h) mit einem Zeitslider und auf der Startseite drei ECMWF-ENS-Meteogramme.
+Zeigt selbst gerenderte Karten des ECMWF IFS, des DWD-Modells ICON-D2 (Österreich, stündlich
+bis +48 h) und von CHMI ALADIN (Österreich und Ungarn, stündlich bis +72 h) mit einem Zeitslider und auf der Startseite drei ECMWF-ENS-Meteogramme.
 Die Seite: https://schletz.github.io/wetterkartenviewer/
 
 Der Skill `synop` (in `skills/synop`) erstellt aus denselben Daten synoptische Analysen. Installieren:
@@ -29,8 +29,8 @@ Für den Dauerbetrieb (z. B. ein immer laufender Mac) ruft `./download_loop.sh` 
 `$WETTER_MIRROR_DIR` (Standard `~/Downloads/wetterviewer_data`), sofern der Ordner existiert.
 Nach dem Start fragt es einmal nach, `--yes` überspringt die Frage.
 
-1. `scripts/update_maps.py` lädt den neuesten IFS-Lauf (GRIB mit abgeleiteten Feldern) und den
-   neuesten ICON-D2-Lauf nach `data/` und rendert dort die Kartenfenster. Ältere Läufe werden
+1. `scripts/update_maps.py` lädt den neuesten IFS-Lauf (GRIB mit abgeleiteten Feldern), den
+   neuesten ICON-D2-Lauf und den neuesten CHMI-ALADIN-Lauf nach `data/` und rendert dort die Kartenfenster. Ältere Läufe werden
    gelöscht. Jedes Modell wird nur gerendert, wenn es einen neuen Lauf hat: ICON-D2 rechnet alle
    3 h, IFS alle 12 h; ein Aufruf alle 3 h aktualisiert also meist nur das ICON-Fenster. Jeden
    Layer der Kacheln kodiert es als AV1-Video `maps/<fenster>/<produkt>.mp4` (ein Frame pro Termin),
@@ -143,6 +143,11 @@ liest den Index und holt die passenden Byte-Bereiche.
 ### ICON-D2 (GRIB)
 
 - Download: https://opendata.dwd.de/weather/nwp/icon-d2/grib/
+
+### CHMI ALADIN (GRIB)
+
+- Download: https://opendata.chmi.cz/meteorology/weather/nwp_aladin/Lambert_2.3km/
+- Komitatsgrenzen Ungarns: Eurostat GISCO, NUTS 2021 (© EuroGeographics), siehe `scripts/build_county_lines.py`
 
 ### ERA5-Klimatologie
 

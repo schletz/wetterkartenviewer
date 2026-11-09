@@ -4,8 +4,9 @@ The container is readable and listable without credentials:
 
     https://<account>.blob.core.windows.net/forecastdata/<path relative to data/>
 
-It holds the data directory of the skill: ecmwf_<run>.grb2, icon-d2_<run>.grb2, charts.md,
-era5_means/ and the chart windows (opencharts_europe/, opencharts_central_europe/, icon-d2/).
+It holds the data directory of the skill: ecmwf_<run>.grb2, icon-d2_<run>.grb2, chmi-aladin_<run>.grb,
+charts.md, era5_means/ and the chart windows (opencharts_europe/, opencharts_central_europe/, icon-d2/,
+chmi-aladin/).
 Unfinished downloads (*.part, *.raw/) are left out; the videos of maps/ are never in data/.
 
 The container keeps no history: blobs without a local file (older runs, charts of past steps)
@@ -14,7 +15,7 @@ size or in the local modification time stored as blob metadata, so a call withou
 only lists the container.
 
 current_run.json marks a consistent container: {"ecmwf": "<run>", "icon-d2": "<run>",
-"updated": "<UTC ISO time>"}, one entry per model with a GRIB in data/. Before anything is
+"updated": "<UTC ISO time>"}, one entry per model of MODELS with a GRIB in data/. Before anything is
 uploaded or deleted it is removed, and it is written last, so a reader without it knows that an
 upload runs or failed, and a reader that finds it changed after downloading knows that it may
 hold files of two runs. A call that changes nothing keeps it (or writes it if it is missing).
@@ -45,10 +46,13 @@ ACCOUNT_VARIABLE, KEY_VARIABLE = "BLOB_STORAGE_ID", "BLOB_STORAGE_KEY"
 CONTAINER = "forecastdata"
 RUN_FILE = "current_run.json"
 # Model key in RUN_FILE → GRIB prefix; must match ECMWF_PREFIX and ICON_PREFIX of update_maps.py.
+# CHMI ALADIN has no entry: installed copies of the skill expect <model>_<run>.grb2 for every entry, its file
+# ends in .grb, and every upload rewrites RUN_FILE ("updated"), so a reader notices a new ALADIN run all the same.
 MODELS = {"ecmwf": "ecmwf_", "icon-d2": "icon-d2_"}
 # Suffixes of unfinished downloads (download_ecmwf_data.py, download_icon_d2.py).
 UNFINISHED = (".part", ".raw")
-CONTENT_TYPES = {".grb2": "application/octet-stream", ".md": "text/markdown; charset=utf-8",
+CONTENT_TYPES = {".grb2": "application/octet-stream", ".grb": "application/octet-stream",
+                 ".md": "text/markdown; charset=utf-8",
                  ".json": "application/json", ".webp": "image/webp"}
 MTIME = "mtime"
 # Files uploaded at once; a large GRIB is split into blocks sent BLOCK_UPLOADS at a time.

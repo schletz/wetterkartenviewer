@@ -1,4 +1,4 @@
-"""Download the newest ECMWF and ICON-D2 runs into data/, render their charts there and encode the tiles as videos in maps/.
+"""Download the newest ECMWF, ICON-D2 and CHMI ALADIN runs into data/, render their charts there and encode the tiles as videos in maps/.
 
 data/ (not committed except charts.md) holds exactly one run of each model plus what does not
 depend on it; the synop skill reads it as its data directory:
@@ -8,6 +8,9 @@ depend on it; the synop skill reads it as its data directory:
     opencharts_central_europe/      the default products of the window
     icon-d2_<run>.grb2              ICON-D2 run on the raw model grid (download_icon_d2.py)
     icon-d2/                        the ICON-D2 products: Austria and surroundings, hourly to T+48
+    chmi-aladin_<run>.grb           CHMI ALADIN run cut to its window (download_chmi_aladin.py)
+    chmi-aladin/                    the ALADIN products: Austria and Hungary, hourly to T+72; neither
+                                    goes to the blob mirror, the skill does not read them
     era5_means/                     climatology for t850_anomaly and the skill, kept across runs;
                                     downloaded by hand (README.md)
     charts.md                       products and GRIB contents for the skill; copied into
@@ -23,7 +26,7 @@ AV1 video <window>/<product>.mp4 per tile layer in src/config/viewer.config.json
 the videos and series as release assets.
 
 Files of older runs in data/ are deleted. What else happens depends on the run, separately
-for ECMWF (every 12 h) and ICON-D2 (every 3 h), so a new ICON run renders only its window:
+for ECMWF (every 12 h), ICON-D2 (every 3 h) and ALADIN (every 6 h), so a new run of one model renders only its windows:
 
     new run or --force    the model's windows in maps/ are emptied and rendered, their layers encoded
     same run              a window is rendered only if its folder in data/ is missing or a tile
@@ -32,11 +35,12 @@ for ECMWF (every 12 h) and ICON-D2 (every 3 h), so a new ICON run renders only i
                           lists only the layers of the config.
 
 "Same run" means that maps/manifest.json names the run: the ECMWF run at its top,
-the ICON-D2 run at the layers of its window. The manifest is deleted before anything
-is rendered or emptied, so an interrupted call counts as a new run of both models.
-If the ICON-D2 download fails, its window keeps what it had (a warning, no exit).
+the run of a regional model at the layers of its window. The manifest is deleted before anything
+is rendered or emptied, so an interrupted call counts as a new run of every model.
+If the download of a regional model fails, its window keeps what it had (a warning, no exit).
 
-Usage: python scripts/update_maps.py data maps [--base YYYYMMDDHH] [--icon-run YYYYMMDDHH] [--force]
+Usage: python scripts/update_maps.py data maps [--base YYYYMMDDHH] [--icon-run YYYYMMDDHH]
+           [--aladin-run YYYYMMDDHH] [--force]
 """
 
 import argparse
@@ -64,7 +68,9 @@ CHARTS_DOC = SCRIPTS.parent / "data" / "charts.md"
 # Products per window (None: the defaults); the Europe window gets all of them for locations outside central Europe.
 WINDOWS = {"opencharts_europe": "all", "opencharts_central_europe": None}
 ICON_WINDOWS = {"icon-d2": None}
-ECMWF_PREFIX, ICON_PREFIX = "ecmwf_", "icon-d2_"
+ALADIN_WINDOWS = {"chmi-aladin": None}
+ECMWF_PREFIX, ICON_PREFIX, ALADIN_PREFIX = "ecmwf_", "icon-d2_", "chmi-aladin_"
+ALADIN_SUFFIX = ".grb"
 # ffmpeg processes at a time; libaom uses several threads each.
 PARALLEL_ENCODES = 3
 
@@ -115,7 +121,7 @@ def download(script: str, data: Path, options: list[str]) -> Path | None:
 def remove_old_runs(data: Path, grib: Path, prefix: str) -> None:
     """Delete GRIB files, unfinished parts and raw download folders of other runs of one model."""
     keep = (grib.name, grib.name + ".raw", grib.name + ".part")
-    for old in data.glob(f"{prefix}*.grb2*"):
+    for old in data.glob(f"{prefix}*{grib.suffix}*"):
         if old.name not in keep:
             if old.is_dir():
                 shutil.rmtree(old)
@@ -130,7 +136,7 @@ def render(grib: Path, data: Path, window: str) -> None:
     Its stderr is held back and shown only if it fails.
     """
     command = [sys.executable, str(SCRIPTS / "render_charts.py"), str(grib), str(data), "--projection", window]
-    products = {**WINDOWS, **ICON_WINDOWS}[window]
+    products = {**WINDOWS, **ICON_WINDOWS, **ALADIN_WINDOWS}[window]
     if products:
         command += ["--products", products]
     # A file instead of a pipe: a pipe nobody reads until the end could fill up and block the renderer.
@@ -159,12 +165,12 @@ def stale_windows(data: Path, maps: Path, windows: dict, same_run: bool, run: st
 def encode_missing(data: Path, maps: Path, run: str) -> None:
     """Encode every tile layer that has no video in maps/ yet.
 
-    A layer of an ICON-D2 window without charts (its first download failed)
+    A layer of a regional window without charts (its first download failed)
     is skipped with a warning, so ECMWF still updates.
     """
     paths = [path for path in tile_chart_paths() if not (maps / video_file(path)).exists()]
     missing = [path for path in paths if not chart_frames(data, path, run)]
-    for path in [path for path in missing if path.split("/")[0] in ICON_WINDOWS]:
+    for path in [path for path in missing if path.split("/")[0] in {*ICON_WINDOWS, *ALADIN_WINDOWS}]:
         print(f"warning: no charts in {data} for {path}", file=sys.stderr)
         missing.remove(path)
         paths.remove(path)
@@ -191,6 +197,7 @@ def main() -> None:
     parser.add_argument("maps", type=Path, help="video directory of the web app")
     parser.add_argument("--base", help="ECMWF run YYYYMMDDHH instead of the newest one")
     parser.add_argument("--icon-run", help="ICON-D2 run YYYYMMDDHH instead of the newest one")
+    parser.add_argument("--aladin-run", help="CHMI ALADIN run YYYYMMDDHH instead of the newest one")
     parser.add_argument("--force", action="store_true", help="render and encode even if the manifest has the runs")
     args = parser.parse_args()
     # Whole lines at once, also when the output goes to a file or an agent.
@@ -211,6 +218,12 @@ def main() -> None:
         print("warning: ICON-D2 download failed; its window keeps the charts it has", file=sys.stderr)
     else:
         remove_old_runs(args.data, icon_grib, ICON_PREFIX)
+    stage("CHMI ALADIN download")
+    aladin_grib = download("download_chmi_aladin.py", args.data, ["--run", args.aladin_run] if args.aladin_run else [])
+    if aladin_grib is None:
+        print("warning: CHMI ALADIN download failed; its window keeps the charts it has", file=sys.stderr)
+    else:
+        remove_old_runs(args.data, aladin_grib, ALADIN_PREFIX)
     if (args.data / CHARTS_DOC.name).resolve() != CHARTS_DOC.resolve():
         shutil.copyfile(CHARTS_DOC, args.data / CHARTS_DOC.name)
 
@@ -219,13 +232,18 @@ def main() -> None:
     icon_run = icon_grib.stem.removeprefix(ICON_PREFIX) if icon_grib else None
     # Without a new download the ICON window stays as it is.
     icon_same = icon_grib is None or (all(published.get(w) == icon_run for w in ICON_WINDOWS) and not args.force)
+    aladin_run = aladin_grib.stem.removeprefix(ALADIN_PREFIX) if aladin_grib else None
+    aladin_same = aladin_grib is None or (all(published.get(w) == aladin_run for w in ALADIN_WINDOWS) and not args.force)
     # The manifest goes first, so an interrupted call is never taken for a finished one.
     (args.maps / MANIFEST).unlink(missing_ok=True)
     renders = {window: grib for window in stale_windows(args.data, args.maps, WINDOWS, same_run, run)}
     if icon_grib is not None:
         renders |= {window: icon_grib for window in stale_windows(args.data, args.maps, ICON_WINDOWS, icon_same, run)}
+    if aladin_grib is not None:
+        renders |= {window: aladin_grib for window in stale_windows(args.data, args.maps, ALADIN_WINDOWS, aladin_same, run)}
     if not renders:
-        print(f"charts of runs {run} (ECMWF) and {icon_run or 'unchanged'} (ICON-D2) are already rendered")
+        print(f"charts of runs {run} (ECMWF), {icon_run or 'unchanged'} (ICON-D2) and "
+              f"{aladin_run or 'unchanged'} (CHMI ALADIN) are already rendered")
     for window in renders:
         shutil.rmtree(args.data / window, ignore_errors=True)
     if renders:
@@ -238,7 +256,8 @@ def main() -> None:
     encode_missing(args.data, args.maps, run)
     stage("temperature series")
     # A failed ICON download leaves the previous ICON file, which still feeds the series.
-    write_series(args.data, args.maps, grib, icon_grib or newest(args.data, ICON_PREFIX), args.force)
+    write_series(args.data, args.maps, grib, icon_grib or newest(args.data, ICON_PREFIX), args.force,
+                 aladin_grib or newest(args.data, ALADIN_PREFIX, ALADIN_SUFFIX))
     print(write_manifest(args.data, args.maps, run))
     stage("blob mirror")
     try:

@@ -87,7 +87,7 @@ function timeLabel(time: Date): string {
 }
 
 /**
- * Meteogram of T2m (ECMWF and ICON-D2) with the ECMWF 2 m dew point and wet-bulb temperature, the anomaly of the
+ * Meteogram of T2m (ECMWF and a regional model: ICON-D2 where it has a cell, else CHMI ALADIN) with the ECMWF 2 m dew point and wet-bulb temperature, the anomaly of the
  * ECMWF daily mean against the ERA5 climate of the daily mean as bars per day and the ECMWF 10 m gusts as a colour bar, T850 (ECMWF) with its anomaly against the
  * ERA5 climate, θe850 as a line spanning the axis from the θe of dry air at its lowest to that of saturated air at
  * its highest temperature and the ECMWF 6 h precipitation as a colour bar with the ECMWF cloud cover in its dry blocks, the ECMWF 1000–500 hPa thickness with the Showalter index of a parcel lifted from 850 hPa with its dew point from
@@ -99,7 +99,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
   const svg = useRef<SVGSVGElement>(null)
   const size = useElementSize(box)
   const {
-    t850, climate850, t2mEcmwf, climate2m, t2mIcon, td2m, tw2m, thickness, t500, rh850, rh700, thetae850, gust10m,
+    t850, climate850, t2mEcmwf, climate2m, t2mRegional, td2m, tw2m, thickness, t500, rh850, rh700, thetae850, gust10m,
     precip6h, tcc,
   } = temperatures
 
@@ -107,8 +107,8 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
   const start = t850.values[0].valid.getTime()
   const end = t850.values[t850.values.length - 1].valid.getTime()
   const x = (time: Date | number) => PLOT_LEFT + ((+time - start) / (end - start)) * (plotRight - PLOT_LEFT)
-  // ICON-D2 points outside the ECMWF range are dropped.
-  const icon = t2mIcon?.values.filter((p) => +p.valid >= start && +p.valid <= end) ?? []
+  // Points of the regional model outside the ECMWF range are dropped.
+  const regional = t2mRegional?.values.filter((p) => +p.valid >= start && +p.valid <= end) ?? []
 
   // Days from 00 UTC of the first valid time; ticks every TICK_HOURS.
   const firstDay = Math.floor(start / (24 * HOUR_MS)) * 24 * HOUR_MS
@@ -194,7 +194,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
         ...(gust10m === null ? [] : ['Böen in 10 m'])].join(', '),
       legend: [
         { line: styles.t2mEcmwf, text: `ECMWF ${pointLabel(t2mEcmwf.point, t2mEcmwf.height)}` },
-        ...(t2mIcon === null ? [] : [{ line: styles.t2mIcon, text: `ICON-D2 ${pointLabel(t2mIcon.point, t2mIcon.height)}` }]),
+        ...(t2mRegional === null ? [] : [{ line: styles.t2mRegional, text: `${t2mRegional.model} ${pointLabel(t2mRegional.point, t2mRegional.height)}` }]),
         // Same grid point as the ECMWF T2m; one row for both, so the plot keeps its height on a phone.
         ...humidityLegend,
       ],
@@ -205,7 +205,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
         ...(td2m === null ? [] : [{ values: td2m.values, className: styles.dewPoint }]),
         ...(tw2m === null ? [] : [{ values: tw2m.values, className: styles.wetBulb }]),
         { values: t2mEcmwf.values, className: styles.t2mEcmwf },
-        ...(icon.length > 0 ? [{ values: icon, className: styles.t2mIcon }] : []),
+        ...(regional.length > 0 ? [{ values: regional, className: styles.t2mRegional }] : []),
       ],
       bands: anomaly2m.bands,
       // The bands of the wind10m chart, so a colour means the same speed in the diagram and on the map; no legend or
@@ -269,7 +269,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
   /** Value per valid time of a series, for the tooltips. */
   const byTime = (values: ValuePoint[] | undefined) => new Map(values?.map((p) => [+p.valid, p.value]) ?? [])
   const t2mEcmwfByTime = byTime(t2mEcmwf.values)
-  const t2mIconByTime = byTime(icon)
+  const t2mRegionalByTime = byTime(regional)
   const wetBulbByTime = byTime(tw2m?.values)
   const dewPointByTime = byTime(td2m?.values)
   const t850ByTime = byTime(t850.values)
@@ -283,7 +283,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
   }
   // Each panel's tooltip holds only its own series, so it stays short.
   const tooltipParts: Record<string, (time: number) => (string | null)[]> = {
-    t2m: (t) => [part(t2mEcmwfByTime, t, 'T2m ECMWF', '°C'), part(t2mIconByTime, t, 'T2m ICON-D2', '°C'),
+    t2m: (t) => [part(t2mEcmwfByTime, t, 'T2m ECMWF', '°C'), part(t2mRegionalByTime, t, `T2m ${t2mRegional?.model}`, '°C'),
       part(wetBulbByTime, t, 'Feuchtkugel', '°C'), part(dewPointByTime, t, 'Taupunkt', '°C')],
     t850: (t) => [part(t850ByTime, t, 'T850', '°C'), part(thetaEByTime, t, 'θe', 'K')],
     thickness: (t) => [part(thicknessByTime, t, 'Z1000–500', 'dam'), part(rh700ByTime, t, 'RH700', '%', 0)],
@@ -302,7 +302,7 @@ export default function TemperatureDiagram({ temperatures }: TemperatureDiagramP
     <div ref={box} className={styles.diagram}>
       {size.width > 0 && size.height > 0 && (
         <svg ref={svg} className={styles.svg} viewBox={`0 0 ${size.width} ${size.height}`} role="img"
-          aria-label="T2m von ECMWF und ICON-D2, Taupunkt und Feuchtkugeltemperatur in 2 m von ECMWF, Abweichung des Tagesmittels vom Klimamittel und Böen in 10 m von ECMWF, T850 von ECMWF mit Abweichung vom Klimamittel und äquivalentpotentieller Temperatur in 850 hPa und Niederschlag über 6 Stunden mit Schnee und gefrierendem Niederschlag sowie Bewölkung von ECMWF, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt, relative Feuchte in 700 hPa">
+          aria-label="T2m von ECMWF und einem Regionalmodell (ICON-D2 oder ALADIN), Taupunkt und Feuchtkugeltemperatur in 2 m von ECMWF, Abweichung des Tagesmittels vom Klimamittel und Böen in 10 m von ECMWF, T850 von ECMWF mit Abweichung vom Klimamittel und äquivalentpotentieller Temperatur in 850 hPa und Niederschlag über 6 Stunden mit Schnee und gefrierendem Niederschlag sowie Bewölkung von ECMWF, Schichtdicke 1000–500 hPa, Showalter-Index eines Pakets aus 850 hPa mit Taupunkt, relative Feuchte in 700 hPa">
           {placed.map((p) => <TemperaturePanel key={p.panel.key} placed={p} time={time} left={PLOT_LEFT} right={plotRight} />)}
           {t850.values.map((point, i) => {
             // Each hover column reaches halfway to its neighbours, so the 3 h and 6 h steps cover the plots without gaps.

@@ -9,7 +9,7 @@ interface TemperatureChartProps {
   location: GeoLocation
 }
 
-/** T850 and T2m of ECMWF and, in Austria, ICON-D2 for the location; shown only where the ECMWF series have a point. */
+/** T850 and T2m of ECMWF and of ICON-D2 (Austria) or CHMI ALADIN (Hungary) for the location; shown only where the ECMWF series have a point. */
 export default function TemperatureChart({ location }: TemperatureChartProps) {
   const state = useSeriesFiles()
   // Decoding the cell coordinates once per file set, not on every location change.

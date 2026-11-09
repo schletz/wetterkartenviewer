@@ -8,6 +8,7 @@ import eccodes
 import numpy as np
 
 from .extreme_windows import EXTREME_PARAMS, ExtremeWindows
+from .lambert_plane import LambertPlane
 from .local_params import LOCAL_CATEGORY, LOCAL_NAMES
 from .missing_field_error import MissingFieldError
 
@@ -22,24 +23,29 @@ class ForecastGrib:
 
     Besides the regular lat/lon files of download_ecmwf_data.py it reads
     the ICON files of download_icon_d2.py, whose fields have one value per
-    cell of the unstructured grid (``grid`` is None, fields are 1-D).
+    cell of the unstructured grid (``grid`` is None, fields are 1-D), and
+    the CHMI ALADIN files of download_chmi_aladin.py on a Lambert grid (GRIB
+    edition 1, ``grid`` is None, fields are 1-D row by row from the south).
 
     Attributes:
         base_time: run as a naive datetime in UTC.
         grid: dict with lat0, lon0 (-180..180), dlat, dlon, ni, nj of the
-            regular lat/lon grid, rows north to south; None for an unstructured grid.
+            regular lat/lon grid, rows north to south; None for any other grid.
+        lambert: the grid of a Lambert file, else None.
     """
 
-    def __init__(self, path: Path, aliases: dict[str, str] | None = None):
+    def __init__(self, path: Path, aliases: dict[str | int, str] | None = None):
         """Index a forecast file.
 
         Args:
-            path: the GRIB2 file.
+            path: the GRIB file.
             aliases: names under which GRIB shortNames are indexed, e.g.
-                {"prmsl": "msl"}, so the fields of another model carry the names the charts use.
+                {"prmsl": "msl"}, so the fields of another model carry the names the charts use;
+                an int key names a GRIB 1 parameter number that has no shortName.
         """
         self.path = Path(path)
         self._aliases = aliases or {}
+        self.lambert: LambertPlane | None = None
         # (shortName, level, end step) -> (start step, byte offset)
         self._index: dict[tuple, tuple[int, int]] = {}
         # (shortName, level) -> typeOfLevel, in file order
@@ -64,6 +70,9 @@ class ForecastGrib:
 
     def _name(self, gid: int) -> str:
         """Name of a message: its shortName or alias; the derived fields of the local category get theirs from local_params."""
+        if eccodes.codes_get(gid, "edition") == 1:
+            name = eccodes.codes_get(gid, "shortName")
+            return self._aliases.get(eccodes.codes_get(gid, "indicatorOfParameter"), name) if name == "unknown" else name
         if (eccodes.codes_get(gid, "discipline") == 0
                 and eccodes.codes_get(gid, "parameterCategory") == LOCAL_CATEGORY):
             number = eccodes.codes_get(gid, "parameterNumber")
@@ -76,6 +85,8 @@ class ForecastGrib:
         self.base_time = datetime.strptime(f"{get('dataDate')}{get('dataTime'):04d}", "%Y%m%d%H%M")
         if get("gridType") != "regular_ll":
             self.grid = None
+            if get("gridType") == "lambert":
+                self.lambert = LambertPlane.from_message(gid)
             return
         self.grid = {"lat0": get("latitudeOfFirstGridPointInDegrees"),
                      "lon0": (get("longitudeOfFirstGridPointInDegrees") + 180.0) % 360.0 - 180.0,

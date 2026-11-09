@@ -11,10 +11,11 @@ The API sections follow Javadoc: intro, fields, methods per module or class.
 ## Purpose
 
 - Download one ECMWF IFS HRES run (0.1°, cropped to Europe, derived fields appended) and one DWD ICON-D2 run (icosahedral grid ≈ 2.2 km, unchanged, the 2 m wet-bulb temperature appended) into `data/`.
-- Render WebP charts for three windows into `data/`, encode each tile layer of the viewer as `maps/<window>/<product>.mp4` (one frame per step), write `maps/manifest.json`.
-- Cut T850, T500, RH850, RH700, θe850, the 10 m gusts, the 6 h precipitation, the total cloud cover, the 1000–500 hPa thickness, the 2 m dew point and wet-bulb temperature (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to Austria and Hungary (ICON-D2: Austria only) as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
+- Download one CHMI ALADIN run (Lambert grid 2.3 km, to T+72, cut to its window) into `data/`.
+- Render WebP charts for four windows into `data/`, encode each tile layer of the viewer as `maps/<window>/<product>.mp4` (one frame per step), write `maps/manifest.json`.
+- Cut T850, T500, RH850, RH700, θe850, the 10 m gusts, the 6 h precipitation, the total cloud cover, the 1000–500 hPa thickness, the 2 m dew point and wet-bulb temperature (ECMWF), T2m (ECMWF, ICON-D2), the ERA5 climatology and the ICON-D2 heights to Austria and Hungary (ICON-D2: Austria only; ALADIN T2m: Hungary only) as JSON in `maps/austria/` for the temperature diagram of the start page (`point_series.py`).
 - Upload the videos and series files to a GitHub release, push a manifest commit; GitHub Actions builds and deploys the app with them.
-- IFS updates every 12 h, ICON-D2 every 3 h; `download_loop.sh` runs the whole chain every 10 min on an always-on machine.
+- IFS updates every 12 h, ICON-D2 every 3 h, ALADIN every 6 h; `download_loop.sh` runs the whole chain every 10 min on an always-on machine.
 - `data/` is also the data directory of the skill synop (source in `skills/synop`, installed to `~/.claude/skills/synop`), see *Contract with the skill synop*; `blob_mirror.py` mirrors it into a public Azure blob container so the skill works without this repository.
 
 ## Diagrams
@@ -34,6 +35,7 @@ Solid arrow: data, from writer to file and from file to reader. Dashed: calls.
 title download_data.cmd / download_data_with_reset.sh: update_maps.py, then publish_maps.py; download_loop.sh repeats it every 600 s
 cloud "ECMWF Open Data" as ecmwf
 cloud "DWD Open Data" as dwd
+cloud "CHMI Open Data" as chmi
 cloud "Google Drive" as gdrive
 cloud "Azure Blob Storage\ncontainer forecastdata" as blob
 component update_maps [
@@ -51,6 +53,11 @@ component download_icon [
  Downloads one ICON-D2 run
  into one GRIB2 file.
 ]
+component download_aladin [
+ **download_chmi_aladin.py**
+ Downloads one ALADIN run, cuts
+ it to its window, one GRIB1 file.
+]
 component render_charts [
  **render_charts.py**
  Renders the charts of
@@ -64,7 +71,8 @@ component tile_videos [
 component point_series [
  **point_series.py**
  Cuts temperatures, climate and heights
- of Austria and Hungary into JSON.
+ of Austria and Hungary into JSON,
+ ALADIN T2m of Hungary alone.
 ]
 component maps_manifest [
  **maps_manifest.py**
@@ -89,6 +97,7 @@ component synop [
 folder "data/" as data_dir {
  artifact "ecmwf_<run>.grb2" as ecmwf_grib
  artifact "icon-d2_<run>.grb2" as icon_grib
+ artifact "chmi-aladin_<run>.grb" as aladin_grib
  artifact "era5_means/*.grb2" as era5
  artifact "charts.md" as charts_md
 }
@@ -98,7 +107,7 @@ folder "data/<window>/" as window_dir {
 }
 folder "maps/" {
  artifact "<window>/<product>.mp4" as videos
- artifact "austria/t850, t2m, td2m, tw2m,\nheights, thickness, t500, rh850,\nrh700, thetae850, gust10m,\nprecip6h, tcc.json" as series
+ artifact "austria/t850, t2m, td2m, tw2m,\nheights, thickness, t500, rh850,\nrh700, thetae850, gust10m,\nprecip6h, tcc, t2m_aladin.json" as series
  artifact "manifest.json" as manifest
 }
 artifact "src/config/viewer.config.json" as config
@@ -114,6 +123,7 @@ node "GitHub" {
 }
 update_maps ..> download_ecmwf : subprocess
 update_maps ..> download_icon : subprocess
+update_maps ..> download_aladin : subprocess
 update_maps ..> render_charts : subprocess\nper stale window
 update_maps ..> tile_videos : encode_video()
 update_maps ..> point_series : write_series()
@@ -121,11 +131,14 @@ update_maps ..> maps_manifest : write_manifest()
 update_maps ..> blob_mirror : mirror()
 ecmwf --> download_ecmwf
 dwd --> download_icon
+chmi --> download_aladin
 gdrive --> era5 : by hand
 download_ecmwf --> ecmwf_grib
 download_icon --> icon_grib
+download_aladin --> aladin_grib
 ecmwf_grib --> render_charts
 icon_grib --> render_charts
+aladin_grib --> render_charts
 era5 --> render_charts
 render_charts --> charts
 render_charts --> geometry
@@ -133,6 +146,7 @@ charts --> tile_videos
 tile_videos --> videos
 ecmwf_grib --> point_series : t850, t500,\nr850, r700, papt850, 2t, 2d, wbt,\n10fg, 10fg3, tcc, thick, orog
 icon_grib --> point_series : 2t, hsurf
+aladin_grib --> point_series : 2t, z
 era5 --> point_series
 era5_orog --> point_series : z
 point_series --> series
@@ -182,11 +196,18 @@ else (no)
  :warning; icon_grib = None,
  ICON window stays as it is;
 endif
+:download_chmi_aladin.py data [--run];
+if (exit code 0?) then (yes)
+ :remove_old_runs chmi-aladin_*;
+else (no)
+ :warning; aladin_grib = None,
+ ALADIN window stays as it is;
+endif
 :copy data/charts.md if data/ is another folder;
 :published = read_window_runs(maps)
 same_run = manifest run == ECMWF run and not --force
-icon_same = no icon_grib or every ICON window
-published with the ICON run, and not --force;
+icon_same, aladin_same = no grib of the model or
+every window of it published with its run, and not --force;
 :delete maps/manifest.json;
 :stale_windows per model;
 note right
@@ -203,12 +224,12 @@ if (a renderer failed?) then (yes)
 endif
 :encode_missing: tile paths without maps/<path>.mp4;
 note right
- ICON path without charts: warn, skip
+ ICON or ALADIN path without charts: warn, skip
  other path without charts: sys.exit before encoding
  ThreadPool(PARALLEL_ENCODES) x encode_video
 end note
-:write_series with icon_grib or the newest
-icon-d2_*.grb2 left in data/;
+:write_series with icon_grib and aladin_grib or the
+newest of that model left in data/;
 note right
  a file is written only if its version changed
  or --force; ≈ 1.5 min per new ECMWF run
@@ -223,7 +244,7 @@ stop
 @enduml
 ```
 
-### download: IFS and ICON-D2
+### download: IFS, ICON-D2 and CHMI ALADIN
 
 ![For human readers only; the PlantUML source below holds the same content](docs/download.svg)
 
@@ -237,6 +258,20 @@ class "download_ecmwf_data.py" as download_ecmwf <<script>> {
 class "download_icon_d2.py" as download_icon <<script>> {
  Downloads one ICON-D2 run and
  joins it into one GRIB2 file.
+}
+class "download_chmi_aladin.py" as download_aladin <<script>> {
+ Downloads the variable files
+ of one ALADIN run.
+}
+package "CHMI ALADIN" {
+ class AladinRuns {
+ Finds the newest complete run
+ in the listings of the 4 cycles.
+ }
+ class AladinWriter {
+ Cuts the messages to the window,
+ derives 10u, 10v and the gust.
+ }
 }
 package "ECMWF IFS" {
  class OpenDataRuns {
@@ -289,6 +324,11 @@ class ModelSurface << (D,#fdebd1) grib >>
 class HeightProfile << (D,#fdebd1) grib >>
 class Diagnostics << (D,#fdebd1) grib >>
 class Projection << (D,#fdebd1) render >>
+class LambertPlane << (D,#fdebd1) grib >>
+download_aladin ..> AladinRuns : latest(), has(), url()
+download_aladin ..> AladinWriter : write()
+AladinWriter ..> LambertPlane : window
+AladinWriter ..> Projection : border_latlon()
 download_ecmwf ..> OpenDataRuns : latest()
 download_ecmwf ..> RequestPlan
 download_ecmwf ..> GroupDownloader : retrieve()\n4 threads
@@ -332,8 +372,12 @@ class "make_icon_test_grib.py" as make_test <<script>> {
 }
 package "GRIB access" {
  class ForecastGrib {
- Byte offset index of a forecast file
- of IFS or ICON, cached field decoding.
+ Byte offset index of a forecast file of
+ IFS, ICON or ALADIN, cached field decoding.
+ }
+ class LambertPlane <<dataclass>> {
+ Lambert model grid: position to
+ grid index and grid coordinates.
  }
  class ExtremeWindows {
  Daily windows covered by the
@@ -356,6 +400,10 @@ package "meteorology" {
  class IconSurface {
  Static ICON fields per cell:
  lat, lon, height, land, valid.
+ }
+ class AladinSurface {
+ Static ALADIN fields per
+ grid point: height, land.
  }
  class HeightProfile {
  Pressure level profile: value at a fixed
@@ -387,6 +435,10 @@ package "climatology" {
 class "chart_styles.py" as chart_styles <<module>> << (D,#fdebd1) render >>
 class ChartProducts << (D,#fdebd1) render >>
 class IconProducts << (D,#fdebd1) render >>
+class AladinProducts << (D,#fdebd1) render >>
+AladinProducts ..> AladinSurface : as surface
+AladinSurface --> ForecastGrib : grib
+ForecastGrib --> LambertPlane : lambert
 ChartProducts --> ForecastGrib : grib
 ChartProducts --> ModelSurface : surface
 ChartProducts --> T850Climate : climate\n(IFS only)
@@ -434,6 +486,10 @@ class "build_borders.py" as build_borders <<script>> {
  One-off tool: builds
  borders_austria.geojson.
 }
+class "build_county_lines.py" as build_county_lines <<script>> {
+ One-off tool: builds the lines
+ between the Hungarian counties.
+}
 package "products" {
  class ChartProducts {
  Registry with one drawing
@@ -442,6 +498,10 @@ package "products" {
  class IconProducts {
  Overrides the hooks of
  ChartProducts for ICON-D2.
+ }
+ class AladinProducts {
+ Overrides the hooks of
+ IconProducts for ALADIN.
  }
  class ChartCanvas {
  One matplotlib figure with map
@@ -488,6 +548,10 @@ package "map geometry" {
  Maps the ICON cells onto the
  pixels, PixelGrid interface.
  }
+ class LambertGrid {
+ Maps the ALADIN grid onto the
+ pixels, PixelGrid interface.
+ }
  class BaseMap {
  Projected borders and
  graticule of a window.
@@ -495,8 +559,13 @@ package "map geometry" {
 }
 render_charts ..> ChartProducts : IFS file
 render_charts ..> IconProducts : ICON file
+render_charts ..> AladinProducts : ALADIN file
 render_charts ..> ContactSheet
 IconProducts -|> ChartProducts
+AladinProducts -|> IconProducts
+AladinProducts ..> LambertGrid : as pixels
+LambertGrid --> Projection
+build_county_lines ..> BaseMap : lines as\ninner_borders
 ChartProducts --> BaseMap : base_map
 ChartProducts --> PixelGrid : pixels
 IconProducts ..> TriangleGrid : as pixels
@@ -543,7 +612,8 @@ Written by `build_manifest` (scripts/maps_manifest.py), typed as `Manifest` (src
  "thetae850": { "file": "austria/thetae850.json", "version": "2026110112" },
  "gust10m": { "file": "austria/gust10m.json", "version": "2026110112" },
  "precip6h": { "file": "austria/precip6h.json", "version": "2026110112" },
- "tcc": { "file": "austria/tcc.json", "version": "2026110112" } } }
+ "tcc": { "file": "austria/tcc.json", "version": "2026110112" },
+ "t2m_aladin": { "file": "austria/t2m_aladin.json", "version": "2026110900-hu" } } }
 ```
 
 - `run` (top): the ECMWF run. The slider and all `steps`, ICON ones included, count from it.
@@ -553,7 +623,7 @@ Written by `build_manifest` (scripts/maps_manifest.py), typed as `Manifest` (src
 - `charts[…].run`: run of the model of the video (`window_run` from `data/<window>/geometry.json`, else the ECMWF run). Cache parameter of the video URL, and how update_maps.py recognises the ICON run. Optional in TS.
 - `end`: step of the last frame, for a daily chart + 23 h, so a daily chart covers its day. `frame` returns null after `end`.
 - `fps`: `FPS` (10), used for encoding too; the app only uses the manifest value.
-- Steps are irregular: IFS 3-hourly to +144, then 6-hourly (65 frames; products start differently, `weather_summary` at +3, `dt850_24h` at +24). ICON hourly, 49 frames (48 for `weather_summary`), offset by the gap between the two runs (e.g. +21…+69); tmax/tmin one frame per day.
+- Steps are irregular: IFS 3-hourly to +144, then 6-hourly (65 frames; products start differently, `weather_summary` at +3, `dt850_24h` at +24). ICON hourly, 49 frames (48 for `weather_summary`), offset by the gap between the two runs (e.g. +21…+69); tmax/tmin one frame per day. ALADIN hourly, 73 frames (72 for `wind10m` and `weather_summary`), offset likewise (e.g. +12…+84).
 - `series` (`series_entries`): the files of `SERIES_FILES` present in `maps/`, with the `version` read from each file; the app's cache parameter. Missing → the app shows no temperature diagram. Optional in TS.
 
 ### maps/austria/*.json — temperature series of the start page
@@ -578,6 +648,7 @@ Run 2026110712, all 13 files: 9.3 MB, gzip 2.08 MB; 2329 of the 4725 ECMWF point
 | `gust10m.json`, ECMWF run | `ecmwf` with `gust10m` (km/h, `10fg`/`10fg3` × `KMH_PER_MS`, steps 3…240, none at T+0) and `hours` (per step the interval it covers: 1, 3 or 6), `scale` 1 (`WIND_SCALE`; the band limits are whole km/h); `colours`: the bands of `chart_styles.GUST10M` as `[lower, upper, "#rrggbb"]` (last upper 300), so the app colours its bar like the wind10m chart without a copy of the scale; no climate | ≈ 0.4 MB, gzip ≈ 80 KB |
 | `precip6h.json`, ECMWF run | `ecmwf` with `precip6h` (mm over the window before each step, exactly as `weather_summary`: `tp(step) − tp(step − min(PRECIP_HOURS, step))`, ≥ 0; steps 3…240, `hours` 3 at T+3, else 6; up to T+144 the 6 h windows of neighbouring 3-hourly steps overlap), `scale` 0.1 (`PRECIP_SCALE`); `colours`: the bands of `chart_styles.PRECIPITATION` (0.2…1000 mm), `transparent_below` 0.2 (drier stays uncoloured); `ptype` (scale 1, encoded like the values): class of the precipitation type per window, 0 none, k ≥ 1 the k-th group of `chart_styles.PRECIP_TYPES` (1 snow `5`, 2 wet snow or rain and snow `6`/`7`, 3 freezing `3`/`8`/`12`). ptype is instantaneous, so every output step inside the window counts (two up to T+144, one after), several classes resolved by `PTYPE_PRECEDENCE`; windows below 0.2 mm get 0, as the chart draws no symbol outside its shading. Run 2026110700, box points × steps: 1 snow 4476, 2 wet 2863, 3 freezing 604 of 144 768; no climate. Open Data packs `tp` with 12 bits over the whole cropped box, so accumulated values step by 2⁻¹³…2⁻¹² m (0.12–0.24 mm): a single quantum already reaches the first band | 0.6 MB, gzip 53 KB (run 2026110700) |
 | `tcc.json`, ECMWF run | `ecmwf` with `tcc` (total cloud cover in %, GRIB fraction × `TCC_PERCENT`, instantaneous at each step 0…240, the field `weather_summary` shades), `scale` 1 (`CLOUD_SCALE`; the bands are 10 % wide); `colours`: the bands of `chart_styles.CLOUD_COVER` (40…101 %), `transparent_below` 40 (clearer stays uncoloured); ECMWF only (per user), no climate | 403 KB, gzip 99 KB (run 2026110712) |
+| `t2m_aladin.json`, `<aladin run>-hu` | CHMI ALADIN grid points of Hungary within `BORDER_MARGIN` (21 735, file order): `run`, `steps` (0…72), `points`, `coord_scale`, `lat`, `lon` (deltas of 1e-4°), `hsurf` (m, from `z`), `t2m`; no ECMWF, climate or `box`. In its own file because t2m.json is rewritten with every ICON run and required by every location; the app draws it only where ICON-D2 has no cell | 4.1 MB, gzip 644 KB (run 2026110900) |
 | `heights.json`, `<icon run>-<cells>` | ICON cells within `BORDER_MARGIN` of Austria in file order (25 344): `lat`, `lon` as deltas of `coord_scale` 1e-4°, `hsurf` (m) | 316 KB, gzip 78 KB |
 
 `climate` (both levels): `period`, `grid` (0.25°, 14×55), `first_day` (00 UTC of the ECMWF run), `days` (to the last step, 11), `orog` (ERA5 orography per point, whole m, from `era5_orography`; ≈ 1.5 KB raw), then only the kind the app draws (`climate_block(…, kind)`): t850.json `hours` (00…21) and `term` (per day and hour, day-major), t2m.json `daily` (per day; its `std` is that of the daily means, ≈ 0.3 K below the mean term std, so it is the right σ for a daily mean anomaly); each `{mean (°C), std (K)}`. The ERA5 daily mean differs from the mean of the eight term means by < 0.09 K. The `monthly` kind is not written.
@@ -589,12 +660,13 @@ Values in °C (T) and K (std); `box` and `scale` at the top of t850/t2m.
 | --- | --- | --- |
 | `ecmwf_<run>.grb2` | download_ecmwf_data.py | one IFS run, see *Forecast file (IFS)*; 1.5–1.6 GB |
 | `icon-d2_<run>.grb2` | download_icon_d2.py | one ICON-D2 run, 1277 messages, ≈ 945 MB |
+| `chmi-aladin_<run>.grb` | download_chmi_aladin.py | one ALADIN run cut to its window, GRIB edition 1, 800 messages, ≈ 253 MB; see *CHMI ALADIN file* |
 | `era5_means/*.grb2` | by hand from Google Drive (link in README.md) | ERA5 1991–2020, 422 MB, 13 224 fields; `check_climate` requires it |
 | `<window>/<product>/<YYYYMMDDHH>.webp` | render_charts.py | step charts named by valid time; daily products `<YYYYMMDD>.webp` |
 | `<window>/orography.webp`, `sheets/<product>.webp`, `geometry.json` | render_charts.py | static chart (no folder), contact sheets, geometry |
 | `charts.md` | by hand, committed | German description of files, GRIB fields, products for the skill |
 
-Windows: `opencharts_europe` (all IFS products), `opencharts_central_europe` (IFS defaults), `icon-d2` (all ICON products).
+Windows: `opencharts_europe` (all IFS products), `opencharts_central_europe` (IFS defaults), `icon-d2` (all ICON products), `chmi-aladin` (all ALADIN products).
 `data/` is ignored by git except `charts.md`; `maps/` except `manifest.json` (so `maps/austria/` reaches Pages only through the release); `docs/` holds the diagram sources and PNGs.
 Sizes (run 2026103000): europe 266 MB, central_europe 125 MB, `maps/` ≈ 67 MB with 14 videos of 2.2–7.3 MB.
 
@@ -606,7 +678,8 @@ Entries of other products in an existing file are kept, so single-product runs a
 ### Contract with the skill synop
 
 The skill reads `data/` (docstrings scripts/update_maps.py, scripts/lib/local_params.py), locally or as its mirror `https://wetterkartenviewer.blob.core.windows.net/forecastdata/<path relative to data/>` (container-level public access: blobs and the listing `?restype=container&comp=list` need no credentials; see *blob_mirror.py*). Changing any of these breaks it until the skill is updated:
-product names and the folder layout above, `geometry.json` keys, GRIB short names, levels, units and `stepRange` of the daily extremes, the local parameter numbers 0–5 in category 192, `charts.md`.
+product names and the folder layout above, `geometry.json` keys, GRIB short names, levels, units and `stepRange` of the daily extremes, the local parameter numbers 0–5 in category 192, `charts.md`, the name and parameter numbers of the ALADIN file (`ALADIN_NAMES`) and the thresholds of `weather_summary` (`ALADIN_STORM_FLASHES_KM2`, `ALADIN_FOG_VISIBILITY_M`, `ALADIN_GRAUPEL`, `ALADIN_HAIL`), of which the skill has copies in `lib/constants.py`.
+`chmi-aladin_<run>.grb` and `data/chmi-aladin/` are not part of it: the skill does not read them and blob_mirror.py leaves them out.
 The skill has its own copies of `ForecastGrib` and `ClimateArchive`.
 Its `ChartGeometry` (`skills/synop/scripts/lib/chart_geometry.py`) reads `cone`/`lon0` (defaults 1 and 0 for files without them), so a window's projection may change without touching the skill.
 
@@ -664,20 +737,42 @@ Fields stay on the icosahedral grid (542 040 cells, 1-D arrays; boundary zone wi
 
 Total 4 + 24 × 49 + 48 = 1228 files, plus 49 `wbt` = 1277 messages. The aliases give ICON fields the IFS names, so `ChartProducts` methods work; units still differ and `IconProducts` handles them.
 
+### CHMI ALADIN file
+
+Source `https://opendata.chmi.cz/meteorology/weather/nwp_aladin/Lambert_2.3km/<HH>/ALADLAMB4opendata_<run>_<VARIABLE>.grb.bz2`, one bz2 file per variable with every step, no auth. Runs 00/06/12/18 UTC, all to T+72 hourly; the server keeps each cycle ≈ 3 days; files appear 3–4.5 h after the run start.
+GRIB edition 1, centre 89, rows from the south. The original grid is 1053 × 837, Lambert, tangent at 46.244° N, LoV 17° E, Dx 2325 m, R 6 367 470 m. The window is cut with `CROP_MARGIN` 4 grid lengths: 586 × 312 points, first point shifted ≤ 0.00015° (GRIB 1 stores 0.001°).
+`CZ_1km` on the same server covers only Czechia. Licence CC BY 4.0 (CHMI's general open data statement, which does not name model data); the app is private (per user).
+
+| CHMI variable | Index name (`ALADIN_NAMES`, parameter number for files without shortName) | Content | Steps |
+| --- | --- | --- | --- |
+| SURFGEOPOTENTIEL, SURFIND_TERREMER | `z`, `lsm` | m²/s², 0…1 | 0 |
+| CLSTEMPERATURE, MSLPRESSURE | `2t`, `msl` | K, Pa | 0…72 |
+| SURFNEBUL_TOTALE | `tcc` (171) | **fraction** (ICON %) | 0…72 |
+| CLS_VISICLD | `fog_visibility` (223) | lowest visibility due to cloud in the last hour, m | 0…72 |
+| SURFPREC_TOTAL | `tp` (61) | from T+0 in mm; **no message at T+0** | 1…72 |
+| SURFDIAG_FLASH | `flash` (236) | lightning density from T+0, per km² | 1…72 |
+| PRECIP_TYPE, PRECIP_TYPESEV | `ptype` (230), `ptype_severe` (229) | most frequent / most dangerous type of the last hour; ECMWF ptype codes plus 193 (wet snow with rain), 201…213 (intermittent) | 1…72 |
+| CLSWIND_SPEED + CLSWIND_DIREC | `10u`, `10v` (written as parameters 33, 34) | m/s east and north, `uvRelativeToGrid` 0 | 0…72 |
+| CLSU_RAF_MOD_XFU + CLSV_RAF_MOD_XFU | `gust` (130) | speed of the maximum gust of the last hour, m/s, time range step−1…step | 1…72 |
+
+Wind frames (measured on run 2026110900, gust direction minus wind direction against longitude has the trend −sin LaD exactly): CLSWIND_DIREC refers to true north, the gust components to the grid. The gust is stored as a speed, so the frame does not matter; do not derive a gust direction without rotating by `sin(LaD) · (lon − LoV)`.
+
 ## Command line
 
 ```
-update_maps.py <data> <maps> [--base YYYYMMDDHH] [--icon-run YYYYMMDDHH] [--force]
+update_maps.py <data> <maps> [--base YYYYMMDDHH] [--icon-run YYYYMMDDHH] [--aladin-run YYYYMMDDHH] [--force]
 maps_manifest.py <data> <maps> --run YYYYMMDDHH
-point_series.py <data> <maps> [--force] (newest ecmwf_*/icon-d2_*.grb2 of data)
+point_series.py <data> <maps> [--force] (newest ecmwf_*/icon-d2_*.grb2/chmi-aladin_*.grb of data)
 publish_maps.py <maps> [--force] (gh and git run in the repo root; other options ignored)
 fetch_maps.py <maps> <target> --repository owner/name
 blob_mirror.py <data> (credentials from the environment or .env)
 download_ecmwf_data.py <out file|existing dir> [--base YYYYMMDDHH] [--max-step N] [--keep-raw]
 download_icon_d2.py <out file|existing dir> [--run YYYYMMDDHH] [--keep-raw]
-render_charts.py <grib> <outdir> [--climate DIR] [--projection icon-d2|opencharts_central_europe|opencharts_europe]
+download_chmi_aladin.py <out file|existing dir> [--run YYYYMMDDHH] [--keep-raw]
+render_charts.py <grib> <outdir> [--climate DIR] [--projection chmi-aladin|icon-d2|opencharts_central_europe|opencharts_europe]
  [--products a,b|all] [--workers N]
 build_borders.py <VGD_50_generalisiert.shp> [target.geojson]
+build_county_lines.py <NUTS level 3 GeoJSON> [target.geojson]
 make_icon_test_grib.py <source.grb2> <target.grb2> [--step N] (default 12)
 download_data.cmd | download_data_with_reset.sh [update_maps options] = update_maps.py data maps, then publish_maps.py maps,
  both with all options; the .sh first runs git fetch + reset --hard origin/main (the .cmd does not)
@@ -687,8 +782,8 @@ download_loop.sh [--yes] every 600 s: download_data_with_reset.sh,
 
 Status on stdout, errors on stderr. Downloaders print the absolute GRIB path as their last stdout line and exit 0 with "already on disk" if the target is complete.
 Output is whole lines only, never `\r`, so a terminal, a log file and an agent reading redirected output see the same. update_maps.py prints `[HH:MM:SS] <phase>` before each phase (ECMWF download, ICON-D2 download, render, encode videos, temperature series, blob mirror, done) and passes its subprocesses' stdout on line by line; long steps print `Progress` lines (*Progress*). update_maps.py and publish_maps.py set `sys.stdout` to line buffering.
-`download_ecmwf_data.py` and `download_icon_d2.py`, `render_charts.py`, `make_icon_test_grib.py` put their own folder on `sys.path` (work with `python -I`); `update_maps.py`, `maps_manifest.py`, `point_series.py`, `publish_maps.py`, `fetch_maps.py`, `blob_mirror.py` import their sibling modules without `-I`; maps_manifest.py and fetch_maps.py need only the standard library (fetch_maps runs in the deploy workflow).
-Python packages (no requirements file): `ecmwf-opendata`, `eccodes`, `numpy`, `scipy`, `matplotlib` (Agg), `Pillow`, `requests`, `azure-storage-blob` (update_maps.py imports it also without credentials); build_borders.py also `pyshp`, `shapely` ≥ 2.1, `pyproj`. `ffmpeg` with `libaom-av1` must be on PATH.
+`download_ecmwf_data.py`, `download_icon_d2.py`, `download_chmi_aladin.py`, `render_charts.py`, `make_icon_test_grib.py` put their own folder on `sys.path` (work with `python -I`); `update_maps.py`, `maps_manifest.py`, `point_series.py`, `publish_maps.py`, `fetch_maps.py`, `blob_mirror.py` import their sibling modules without `-I`; maps_manifest.py and fetch_maps.py need only the standard library (fetch_maps runs in the deploy workflow).
+Python packages (no requirements file): `ecmwf-opendata`, `eccodes`, `numpy`, `scipy`, `matplotlib` (Agg), `Pillow`, `requests`, `azure-storage-blob` (update_maps.py imports it also without credentials); build_borders.py also `pyshp`, `shapely` ≥ 2.1, `pyproj`; build_county_lines.py also `shapely` ≥ 2.1. `ffmpeg` with `libaom-av1` must be on PATH.
 
 ## API: scripts/ (command line and modules)
 
@@ -696,15 +791,15 @@ Python packages (no requirements file): `ecmwf-opendata`, `eccodes`, `numpy`, `s
 
 Orchestrates one update; the flow is diagram *update_maps*.
 Destructive by design: deletes other runs' GRIBs, `maps/manifest.json` on every call, `data/<window>/` before rendering and `maps/<window>/` of a model on a new run or `--force`, all before rendering.
-"Same run" is decided per model, from the manifest only: the ECMWF run at the top, the ICON run at the `icon-d2` layers. An interrupted call leaves no manifest, so the next one counts as a new run for both models.
+"Same run" is decided per model, from the manifest only: the ECMWF run at the top, the ICON run at the `icon-d2` layers, the ALADIN run at the `chmi-aladin` layers. An interrupted call leaves no manifest, so the next one counts as a new run for every model.
 An existing video is never checked for freshness. A layer added to the config takes effect without `--force` (its window is re-rendered because the path has no charts).
 Without a new run a call takes ≈ 3.5 s.
 
 | Field | Meaning |
 | --- | --- |
 | `WINDOWS = {'opencharts_europe': 'all', 'opencharts_central_europe': None}` | IFS windows → `--products` (None = defaults) |
-| `ICON_WINDOWS = {'icon-d2': None}` | ICON windows; their paths without charts only warn in `encode_missing` |
-| `ECMWF_PREFIX, ICON_PREFIX = 'ecmwf_', 'icon-d2_'` | run file prefix; must match `PREFIX` of download_icon_d2.py |
+| `ICON_WINDOWS = {'icon-d2': None}`, `ALADIN_WINDOWS = {'chmi-aladin': None}` | regional windows; their paths without charts only warn in `encode_missing` |
+| `ECMWF_PREFIX, ICON_PREFIX, ALADIN_PREFIX = 'ecmwf_', 'icon-d2_', 'chmi-aladin_'`, `ALADIN_SUFFIX = '.grb'` | run file name; must match `PREFIX`/`SUFFIX` of the downloaders |
 | `PARALLEL_ENCODES = 3` | ffmpeg processes at once (libaom uses several threads each) |
 | `CHARTS_DOC` | data/charts.md of the repo |
 
@@ -714,24 +809,26 @@ Without a new run a call takes ≈ 3.5 s.
 | `run_live(command, stderr=None) -> (code, last line)` | Popen with `PYTHONUNBUFFERED=1` (else the child writes the pipe in blocks), prints each stdout line as it arrives |
 | `check_climate(data)` | exit if `data/era5_means` has no `*.grb2`, before any download or delete |
 | `download(script, data, options) -> Path \| None` | `run_live`, stderr inherited; last non-empty line = GRIB path; None on exit ≠ 0 |
-| `remove_old_runs(data, grib, prefix)` | delete `<prefix>*.grb2*` (file, `.part`, `.raw/`) of other runs |
+| `remove_old_runs(data, grib, prefix)` | delete `<prefix>*<suffix of grib>*` (file, `.part`, `.raw/`) of other runs |
 | `render(grib, data, window)` | `run_live` of render_charts.py for one window, stdout live; stderr goes to a temp file (an unread pipe could block the renderer) and is shown only in the `sys.exit` on failure. Windows render in parallel threads, so their lines interleave; every renderer line names its window |
 | `stale_windows(data, maps, windows, same_run, run) -> list` | windows to render; empties `maps/<window>/` unless same run; same run: window folder missing or a tile path without charts (incomplete product folders are not checked) |
 | `encode_missing(data, maps, run)` | encode config paths without video; exits before the first encode if a non-ICON path has no charts; `Progress` line per finished video (`as_completed`) |
 
 ### point_series.py
 
-Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 850 and 500, `r` 850 and 700, `2t`, `2d`, `wbt`, `10fg`, `10fg3`, `tp`, `ptype`, `tcc`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours` for T850, `daily` for T2m) with its orography through `era5_orography`.
-A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness, t500, rh850, rh700, thetae850, gust10m, precip6h, tcc, td2m and tw2m per ECMWF run and `REGION`, t2m per ECMWF or ICON run and `REGION`, heights only when missing or its cell count changes. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
+Writes maps/austria/*.json (format: *maps/austria/*.json*). Called by update_maps.py after encoding, before the manifest; also standalone. Reads the IFS file through `ForecastGrib` (index ≈ 10 s, then only `t` 850 and 500, `r` 850 and 700, `2t`, `2d`, `wbt`, `10fg`, `10fg3`, `tp`, `ptype`, `tcc`, `thick`, `orog`), the ICON file with `ICON_NAMES` (`clat`, `clon`, `hsurf`, `2t`), the ALADIN file with `ALADIN_NAMES` (`z`, `2t`) and the climatology through `ClimateArchive` (term kinds from `term_hours` for T850, `daily` for T2m) with its orography through `era5_orography`.
+A file is rewritten only when its version differs (or `--force`), so the release upload happens once per run: t850, thickness, t500, rh850, rh700, thetae850, gust10m, precip6h, tcc, td2m and tw2m per ECMWF run and `REGION`, t2m per ECMWF or ICON run and `REGION`, heights only when missing or its cell count changes, t2m_aladin per ALADIN run. A full write takes ≈ 1.5 min; an up-to-date call < 1 s. Writes go through `<file>.part`.
 A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. ICON cells with NaN `hsurf` (boundary zone) are dropped. Without any ICON file t2m.json has no `icon` and heights.json is not written; the app then draws the ECMWF series only.
 
 | Field | Meaning |
 | --- | --- |
 | `ICON_BOX` | 46.3–49.1° N, 9.5–17.2° E: Austria plus ≈ 10 km; the ICON cells are searched in it |
+| `HUNGARY_BOX` | 45.6–48.75° N, 16.0–23.1° E: Hungary plus ≈ 15 km; the ALADIN points are searched in it |
+| `ALADIN_REGION = "hu"` | suffix of the version of t2m_aladin.json: another selection of points needs a new file and URL |
 | `ECMWF_BOX` | 45.7–49.1° N, 9.5–22.9° E: around Austria and Hungary; the ECMWF and ERA5 points are searched in it |
 | `REGION = "at-hu"` | suffix of the `version` of every file with ECMWF data (`<run>-at-hu`, `<ecmwf>-<icon>-at-hu`): another region gets new files and new URLs even within a run, since browsers keep a file by its version |
 | `ERA5_BORDER_MARGIN = 0.1` | a place served by an ECMWF point lies at most one 0.1° grid step beyond the border and needs its ERA5 point |
-| `BORDER_MARGIN = 0.15` | ICON cells farther from Austria (degrees of latitude, longitudes × cos 47.7°) are left out; outline `austria_rings`, `matplotlib.path`, distance by `cKDTree` |
+| `BORDER_MARGIN = 0.15` | ICON cells farther from Austria and ALADIN points farther from Hungary (degrees of latitude, longitudes × cos of the box centre) are left out; outlines `austria_rings`, `hungary_rings`, `matplotlib.path`, distance by `cKDTree` |
 | `SCALE = 0.1`, `COORD_SCALE = 1e-4` | value (K or dam) and coordinate units |
 | `RH_SCALE = 1.0` | unit of rh850.json and rh700.json (%); its `scale` is set apart from `common`, since the document's `scale` must equal the encoding scale |
 | `WIND_SCALE = 1.0` | unit of gust10m.json (km/h), set apart like `RH_SCALE` |
@@ -742,7 +839,8 @@ A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. IC
 
 | Function | Summary |
 | --- | --- |
-| `write_series(data, maps, ecmwf_grib, icon_grib, force=False)` | write the stale files; `icon_grib` None → t2m without ICON |
+| `write_series(data, maps, ecmwf_grib, icon_grib, force=False, aladin_grib=None)` | write the stale files; `icon_grib` None → t2m without ICON; `aladin_grib` None → t2m_aladin stays as it is |
+| `aladin_document(grib, version) -> dict` | t2m_aladin.json of one run |
 | `time_major_deltas(fields, scale) -> list[int]` | the encoding |
 | `box_window(grid, margin) -> (rows, cols, grid)` | part of a regular grid inside `ECMWF_BOX` ± margin |
 | `region_window(grid, box_margin, border_margin) -> (select, grid)` | `select(field)` cuts the kept points out of a field as a flat array in the numbering of the returned grid's `runs` |
@@ -752,8 +850,8 @@ A step lost on the ECMWF server (`MissingFieldError`) is left out of `steps`. IC
 | `precipitation_class(grib, step) -> ndarray` | ptype class of the window before `step` (see precip6h.json); a lost ptype sample is skipped |
 | `colour_bands(scale) -> list` | `ColourScale.bands` as `[lower, upper, "#rrggbb"]` |
 | `ecmwf_block(grib, name, level, key, offset=-KELVIN, factor=1, scale=SCALE)` (via `derived_block`), `icon_block(grib, cells)`, `climate_block(archive, level, run, last_step, kind)` (`kind` "term" or "daily"), `heights_document(grib, cells)` | the parts of the files |
-| `austria_cells(lat, lon)`, `icon_cells(grib)` | cell indices in file order |
-| `newest(data, prefix) -> Path \| None` | newest finished `<prefix>*.grb2` (also used by update_maps.py when the ICON download failed) |
+| `points_near(lat, lon, box, rings)`, `icon_cells(grib)` | point indices in file order |
+| `newest(data, prefix, suffix='.grb2') -> Path \| None` | newest finished `<prefix>*<suffix>` (also used by update_maps.py when a regional download failed) |
 
 ### blob_mirror.py
 
@@ -866,20 +964,35 @@ Measured: 1228 files, 945 MB, 85 s with the derived field (run 2026110706); 1130
 | `FORECAST_PARAMS`, `STATIC_PARAMS` | 25 DWD folder names, `<folder>@<hPa>` on pressure levels; `clat`, `clon`, `hsurf`, `fr_land` |
 | `PARALLEL_REQUESTS = 8`, `PREFIX = 'icon-d2_'` | |
 
+### download_chmi_aladin.py
+
+`main`: `AladinRuns.latest()` (or `has(--run)`) → "already on disk" if the target has `expected_total` messages → `fetch` × `PARALLEL_REQUESTS` (4) unpacks each bz2 into `<out>.raw/` → `AladinWriter.write` into `<out>.part` → rename → delete `.raw/`.
+Every `.grb` in `.raw/` went through `.part` and had the expected message count; a file with too few messages (CHMI still uploading) raises, exit 1, and update_maps only warns. There is no placeholder for lost fields: unlike ICON a run is all-or-nothing, because a file holds every step.
+Measured: 14 files, 719 MB bz2, 41 s download, 253 MB and 800 messages after ≈ 60 s of cutting and deriving (run 2026110900).
+
+| Field | Meaning |
+| --- | --- |
+| `PREFIX = 'chmi-aladin_'`, `SUFFIX = '.grb'` | `.grb`, not `.grb2`: the file is GRIB edition 1 |
+| `PARALLEL_REQUESTS = 4`, `RETRIES = 3`, `RETRY_DELAY = 10`, `TIMEOUT_S = 300`, `CHUNK` | |
+
 ### render_charts.py
 
-`main`: `parse_args` picks the class by `is_icon` and the default window (`icon-d2` or `opencharts_europe`) and products (`DEFAULTS[window]` of the class; `KeyError` if the window has no entry and no `--products`). `build_products` once in the main process (for `keys`, sheets, geometry), then a process pool (`init_worker` builds the products per process, chunksize 2) renders every `(product, key)`; then `write_sheets` (reads the written WebPs, so it must run after the workers) and `write_geometry`.
-Measured ICON, all products: 199 charts + 6 sheets ≈ 43 s with a warm file cache, ≈ 148 s right after the download.
+`main`: `parse_args` picks the class by `grid_type` and the default window (`icon-d2`, `chmi-aladin` or `opencharts_europe`) and products (`DEFAULTS[window]` of the class; `KeyError` if the window has no entry and no `--products`). `build_products` once in the main process (for `keys`, sheets, geometry), then a process pool (`init_worker` builds the products per process, chunksize 2) renders every `(product, key)`; then `write_sheets` (reads the written WebPs, so it must run after the workers) and `write_geometry`.
+Measured ICON, all products: 199 charts + 6 sheets ≈ 43 s with a warm file cache, ≈ 148 s right after the download. ALADIN: 217 charts + 3 sheets ≈ 27 s.
 Output: `run <run>, <window>: N products`, `Progress` lines `render <window>` per 10 % of the charts (from `pool.map` in task order, so a line can lag behind chunks that finished out of turn), `<window>: contact sheets and geometry`, summary.
 On Windows the pool uses spawn; worker state lives in the module global `_products`.
 
 | Function | Summary |
 | --- | --- |
-| `is_icon(grib_path) -> bool` | `gridType` of the first message is `unstructured_grid` |
-| `build_products(grib_path, projection, climate_dir) -> ChartProducts` | ICON: `ForecastGrib(path, ICON_NAMES)`, `IconSurface`, `BaseMap`, `TriangleGrid` → `IconProducts`. IFS: `ForecastGrib`, `ModelSurface`, `BaseMap`, `PixelGrid`, plus `ClimateArchive`/`T850Climate`/`PixelGrid(archive.grid)` only if a `CLIMATE` product is requested |
+| `grid_type(grib_path) -> str` | `gridType` of the first message: `UNSTRUCTURED` = ICON, `LAMBERT` = ALADIN, else IFS |
+| `build_products(grib_path, projection, climate_dir) -> ChartProducts` | ICON: `ForecastGrib(path, ICON_NAMES)`, `IconSurface`, `BaseMap`, `TriangleGrid` → `IconProducts`. ALADIN: `ForecastGrib(path, ALADIN_NAMES)`, `AladinSurface`, `BaseMap`, `LambertGrid(grib.lambert, …)` → `AladinProducts`. IFS: `ForecastGrib`, `ModelSurface`, `BaseMap`, `PixelGrid`, plus `ClimateArchive`/`T850Climate`/`PixelGrid(archive.grid)` only if a `CLIMATE` product is requested |
 | `render(task) -> Path` | worker: `products.draw(...).save(path)` |
 | `write_sheets(products, names, out_dir, sheet) -> dict` | one sheet per product: charts at `SHEET_HOURS`, every day for DAY products, none for orography |
 | `write_geometry(projection, products, sheet, sheets, out_dir)` | see *geometry.json* |
+
+### build_county_lines.py
+
+One-off, by hand. Input: NUTS level 3 of Eurostat GISCO, 2021, 1:1 million, EPSG:4326 (`https://gisco-services.ec.europa.eu/distribution/v2/nuts/geojson/NUTS_RG_01M_2021_4326_LEVL_3.geojson`, © EuroGeographics). Output `scripts/lib/borders_hungary_counties.geojson`: one MultiLineString, 41 lines, 56 KB, 19 counties and Budapest. Only borders between counties: the outer border comes from the base map, a second generalized outline would show as a double line. `SIMPLIFY_DEG` 0.002 (≈ 0.2 px at 1.1 km/px) with `coverage_simplify`, so a shared border stays one line.
 
 ### build_borders.py and make_icon_test_grib.py
 
@@ -1025,9 +1138,29 @@ An existing raw file counts as complete (resume, not re-checked; `join` checks i
 | `fetch(url) -> Path \| None` | download, bz2 decompress, filter, write via `.part`; None after 404, network, bz2 or GRIB errors on the last attempt |
 | `join(urls, raw_files, target) -> int` | concatenate in URL order; a None or damaged file becomes a placeholder from the same field at another step; without template it is left out (count mismatch → exit 1) |
 
+### AladinRuns (aladin_runs.py)
+
+`latest()` reads the listings of all four cycle folders and takes the newest run with a file of every variable. A file in the listing can still be growing; the message count in `fetch` catches that. `has(run)`, `url(run, variable)`.
+
+### AladinWriter (aladin_writer.py)
+
+Writes in the order STATIC, FROM_ZERO, FROM_ONE, wind, gust; `zip` pairs the two files of the wind and of the gust by message order, so both must hold the same steps (the count check of `fetch` makes sure they do). The window is computed once per grid (`lru_cache`, the coordinates of the whole grid are costly).
+
+| Field | Meaning |
+| --- | --- |
+| `VARIABLES`, `STATIC`, `FROM_ZERO`, `FROM_ONE`, `WIND`, `GUST`, `STEPS = 73` | files of a run; `expected_messages(variable)`, `expected_total()` = 800 |
+| `CROP_MARGIN = 4` | grid lengths around the window, for interpolation at its edge |
+| `LAST_STEP_IN_TIME_RANGE = 255` | P1 and P2 of GRIB 1 are one byte |
+
 ## API: scripts/lib/ — GRIB access and meteorology
 
+### LambertPlane (lambert_plane.py)
+
+Tangent Lambert on the sphere of GRIB 1 (`EARTH_RADIUS_M = 6367470`), without pyproj. Checked against the coordinates ecCodes gives for all 182 832 points of a cut file: at most 1e-13° apart. `skills/synop/scripts/lib/lambert_plane.py` is an identical copy. `from_message(gid)`, `indices(lat, lon) -> (row, col)` (fractional, row 0 south), `latlon() -> (lat, lon)` (flat, field order).
+
 ### ForecastGrib (forecast_grib.py)
+
+For ALADIN (GRIB edition 1): `aliases` also takes int keys, the GRIB 1 parameter numbers of messages whose shortName is `unknown`; `lambert` holds the `LambertPlane`, `grid` is None and fields are flat like ICON's.
 
 Index key `(name, level, endStep)` → `(startStep, byte offset)`, **without typeOfLevel**: `t` at 850 hPa and at 2000 m differ only by level. Name = local name (category 192), else `aliases.get(shortName, shortName)`. `stepUnits` is set to hours (ICON gives static fields as "0m").
 Base time and grid come from the first message; `grid` is None unless `regular_ll`, fields are then 1-D.
@@ -1073,6 +1206,7 @@ A file with placeholders is complete: the next call says "already on disk" and n
 
 `ModelSurface(grib)`: `height` = z/g (m), `sdor`, `land` (lsm), T+0 on the model grid.
 `IconSurface(grib)`: `lat` (clat), `lon` (clon), `height` (hsurf), `sdor = None` (no rough-terrain hatching), `land` (fraction), `valid` (height not NaN).
+`AladinSurface(grib)` (aladin_surface.py): `height` (z / g), `sdor = None`, `land` (lsm).
 Lost static fields raise `MissingFieldError` while the products are built: rendering fails, every chart needs them.
 
 ### HeightProfile (height_profile.py)
@@ -1210,6 +1344,20 @@ A run gives 3 × 49 + 48 step charts, usually 1 `tmax` and 2 `tmin`, `orography`
 | `precipitation` | `tp` difference of the last hour, no ×1000 |
 | `precipitation_type` | ww via `nearest`, mapped by `WW_PTYPE` to IFS ptype codes, so legend and symbols match IFS |
 
+`significant_weather(step)` is the hook of ww for `weather_summary`.
+
+### AladinProducts (aladin_products.py)
+
+Subclass of IconProducts, wired with `AladinSurface` and `LambertGrid`: `t2m_wind10m`, `wind10m`, `weather_summary`, 73 + 72 + 72 = 217 charts. `MODEL = 'CHMI ALADIN'`, `DEFAULTS = {'chmi-aladin': ALL}`, no DAY or STATIC products (per user: three products).
+
+| Method | Difference from ICON |
+| --- | --- |
+| `keys` | `t2m_wind10m` from the steps of `2t`: the file has no `t` |
+| `last_hour(name, step)` | difference of a field accumulated from T+0; at T+1 the field itself, as there is no message at T+0 |
+| `cloud_cover`, `precipitation` | fraction × `ALADIN_CLOUD_PERCENT`; `last_hour('tp')` |
+| `precipitation_type` | `ptype` via `nearest`, mapped by `ALADIN_PTYPE` to the ptype codes of the legend |
+| `significant_weather` | 45 fog (visibility < `ALADIN_FOG_VISIBILITY_M`), 95 storm (`last_hour('flash')` ≥ `ALADIN_STORM_FLASHES_KM2`), 96 hail (`ptype_severe` 10, or 9 with storm) |
+
 ### ChartCanvas (chart_canvas.py)
 
 One matplotlib figure: map 1200×600 plus a legend strip of 90 px → 1200×690. Layers are drawn in call order within their zorder band (`Z_*`); `save` must come last because it lays out the notes column and the symbol row. Single charts lossless WebP, contact sheets quality 90. matplotlib uses Agg (forced at).
@@ -1244,7 +1392,7 @@ Which points of a regular grid the series keep. Austria comes from `AUSTRIA_BORD
 
 | Function | Summary |
 | --- | --- |
-| `austria_rings()`, `region_rings()` | outer rings as (lon, lat) arrays; `region_rings` (Austria and Hungary) is cached, the world outlines are 8.7 MB of JSON |
+| `austria_rings()`, `hungary_rings()`, `region_rings()` | outer rings as (lon, lat) arrays; `hungary_rings` and `region_rings` (both countries) are cached, the world outlines are 8.7 MB of JSON |
 | `nearest_point_mask(window, margin=0.0) -> ndarray` | nj × ni booleans; `margin` degrees widen the rectangle |
 | `mask_runs(mask) -> list[list[int]]` | per row `[start, length, ...]`, the `runs` of a `grid` |
 
@@ -1258,9 +1406,10 @@ Frozen dataclass of one window, same model as `ChartProjection` in TS: conformal
 | `EUROPE` `opencharts_europe` | 481.0 | −180.8 | 1320.8 | 1 | 0 | 10° / 0°, 40° | world_countries |
 | `CENTRAL_EUROPE` `opencharts_central_europe` | 667.24… | −1029.52… | 3493.4 | 1 | 10 | 5° / 0°, 41° | world_countries |
 | `ICON_D2` `icon-d2` | 733.24… | −7464.41… | 15611.89… | 0.73736… | 13.333… | 2° / 7°, 46° | borders_austria |
+| `CHMI_ALADIN` `chmi-aladin` | 583.03… | −4974.46… | 10644.47… | 0.73736… | 14.5 | 2° / 7°, 46° | borders_austria, inner_borders Hungarian counties |
 
-`EUROPE` is a least-squares fit to ECMWF opencharts control points (RMS 0.45 px) and will not change (per user). `CENTRAL_EUROPE` is the fitted opencharts window (pole 435.35/−1021.0, lon0 0, RMS 0.4 px) turned by `recentred` to lon0 10° E (per user: the meridian through Germany, near the image centre, stands upright), same scale and image centre 48.28° N 7.10° E; spans 36.5–57.2° N, 22.9° W–37.4° E, with Lisbon, Naples, Kyiv and Istanbul inside, Sicily and the north of Jutland outside. Meridian labels on 41° N, because 40° N runs below the image between 5° and 15° E. `icon-d2` comes from `lambert`: parallels 46°/49°, lon0 13° 20′ as Austria Lambert (EPSG:31287), centre 47.6° N 12.0° E, 0.75 km/px ≈ 8 px per model cell; west of Austria's centre because the model ends at ≈ 18.3° E; spans 5.72–18.19° E, 45.36–49.63° N, all inside ICON-D2.
-Fields: `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 600`, `EARTH_RADIUS_KM = 6371`, `WORLD_COUNTRIES`, `AUSTRIA_BORDERS`, `PROJECTIONS`.
+`EUROPE` is a least-squares fit to ECMWF opencharts control points (RMS 0.45 px) and will not change (per user). `CENTRAL_EUROPE` is the fitted opencharts window (pole 435.35/−1021.0, lon0 0, RMS 0.4 px) turned by `recentred` to lon0 10° E (per user: the meridian through Germany, near the image centre, stands upright), same scale and image centre 48.28° N 7.10° E; spans 36.5–57.2° N, 22.9° W–37.4° E, with Lisbon, Naples, Kyiv and Istanbul inside, Sicily and the north of Jutland outside. Meridian labels on 41° N, because 40° N runs below the image between 5° and 15° E. `icon-d2` comes from `lambert`: parallels 46°/49°, lon0 13° 20′ as Austria Lambert (EPSG:31287), centre 47.6° N 12.0° E, 0.75 km/px ≈ 8 px per model cell; west of Austria's centre because the model ends at ≈ 18.3° E; spans 5.72–18.19° E, 45.36–49.63° N, all inside ICON-D2. `chmi-aladin` comes from `lambert` too: same parallels, lon0 14.5° E (middle of the window), centre 47.8° N 14.75° E, 1.1 km/px, same area as 1760 × 880 at the 0.75 km/px of icon-d2 (per user: 1200 × 600, so the app needs no other image size). Spans ≈ 6–23.5° E, 44.8–50.8° N, margins around Austria and Hungary ≈ 265 km west (as icon-d2), 195 km north (north-westerly weather), 110 km south, 55 km east. Against 0.75 km/px the coarser scale moves 1.8 % of the T2m pixels and 2.3 % of the wet precipitation pixels into a neighbouring colour band, none further (run 2026110900): 2.1 px per grid length still sample the 2Δx wave.
+Fields: `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 600`, `EARTH_RADIUS_KM = 6371`, `WORLD_COUNTRIES`, `AUSTRIA_BORDERS`, `HUNGARY_COUNTIES`, `PROJECTIONS`.
 
 | Method | Summary |
 | --- | --- |
@@ -1271,7 +1420,9 @@ Fields: `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 600`, `EARTH_RADIUS_KM = 6371`, `W
 | `north_east()` | unit vectors north/east per pixel, shape (2, h, w), used to rotate u/v |
 | `border_latlon()` | for the crop box |
 
-### PixelGrid, TriangleGrid (pixel_grid.py, triangle_grid.py)
+### PixelGrid, TriangleGrid, LambertGrid (pixel_grid.py, triangle_grid.py, lambert_grid.py)
+
+`LambertGrid(plane, projection)`: fields are flat and reshaped to (ny, nx); bilinear in the plane of the model, Gaussian smoothing in grid lengths, `covered` for pixels inside the grid.
 
 `PixelGrid(grid, projection)`: `row = (lat0 − lat)/dlat`, `col = ((lon − lon0) % 360)/dlon`; bilinear (`map_coordinates` order 1, `mode="nearest"`), optional Gaussian smoothing in km (zonally exact at `SMOOTH_REF_LAT = 50`).
 `TriangleGrid(lat, lon, projection, valid)`: cells within `MARGIN_PX = 20` of the image are triangulated in pixel space (Delaunay), barycentric weights once per process (also in the main process). `covered` = pixel inside a triangle with three valid corners, else NaN. Smoothing is a pixel-space Gaussian normalised by covered weight (the domain border does not pull values to 0), σ = smooth_km / km_per_px at the centre.
@@ -1284,7 +1435,7 @@ Fields: `IMAGE_WIDTH = 1200`, `IMAGE_HEIGHT = 600`, `EARTH_RADIUS_KM = 6371`, `W
 
 ### BaseMap (base_map.py)
 
-`BaseMap(projection, borders=None)` reads `projection.borders` (GeoJSON EPSG:4326, Polygon/MultiPolygon). `LEVEL == "state"` → `state_rings`, others → `rings`. Rings without a point within `MARGIN_PX = 50` of the image are dropped. Also `parallels`, `meridians`; labels along `label_lon`/`label_lat`. GeoJSON 8.7 MB (world) / 3.5 MB (Austria) per process.
+`BaseMap(projection, borders=None)` reads `projection.borders` (GeoJSON EPSG:4326, Polygon/MultiPolygon, also LineString/MultiLineString). `LEVEL == "state"` → `state_rings`, others → `rings`; every line of `projection.inner_borders` joins `state_rings` (open lines are fine there, `rings` also fill land). Rings without a point within `MARGIN_PX = 50` of the image are dropped. Also `parallels`, `meridians`; labels along `label_lon`/`label_lat`. GeoJSON 8.7 MB (world) / 3.5 MB (Austria) per process.
 
 ### chart_styles.py, ColourScale, ContourStyle, SymbolStyle
 
@@ -1305,6 +1456,10 @@ chart_styles.py holds every scale and threshold:
 | `OUTSIDE_RGB = (190, 190, 190)` | outside a limited area model |
 | `WW_PTYPE` | 5 ← 70–75, 77, 85, 86; 7 ← 68, 69, 83, 84; 3 ← 56, 57, 66, 67; 8 ← 79 |
 | `WW_SYMBOLS`, `WW_SYMBOL_SPACING_PX = 20` | lightning (yellow, dark red edge), hail triangle, fog three lines with halo |
+| `ALADIN_PTYPE` | 3 ← 3; 5 ← 5, 205; 6 ← 6, 206; 7 ← 7, 193, 207, 213; 8 ← 8; 12 ← 12 |
+| `ALADIN_FOG_VISIBILITY_M = 700` | same fog area as ICON-D2 ww 45/48 over Austria and Bavaria: 11.8 % against 11.4 %, mean of 48 h, run 2026110906; 1000 m gives 14.4 % |
+| `ALADIN_STORM_FLASHES_KM2 = 0.02` | flashes per km² in the last hour, **not calibrated**: the run tried had no storm over land; check it on a summer case |
+| `ALADIN_GRAUPEL, ALADIN_HAIL = 9, 10`, `ALADIN_CLOUD_PERCENT = 100` | |
 | `STORM_GUST_KMH = 75`, `GUST_SPACING_PX = 60` | Bft 9, DWD "Sturmböen" |
 | `GUST10M` | gusts of wind10m in km/h, bands = Beaufort limits; also copied into gust10m.json |
 | `STREAMLINE_SMOOTH_KM = 15`, `STREAMLINE_DENSITY = 3` | streamlines only; chosen by eye |
@@ -1359,12 +1514,13 @@ Line: `render opencharts_europe [######..............]  30 % 390/1300 charts, 0:
 | blob upload fails (network, key) | update_maps.py: warning on stderr, exit 0, publish still runs; uploaded files stay, `current_run.json` stays missing (readers refuse the container), the next call sends the rest and writes it |
 | push rejected | `sys.exit`; local manifest commit stays (the next download_data_with_reset.sh discards it with its reset) |
 | ICON download failed | `write_series` takes the newest `icon-d2_*.grb2` still in `data/`; none → t2m.json without `icon`, the app draws the ECMWF series only |
+| ALADIN: no complete run, upload still running, a variable file with too few messages | one line on stderr, exit 1; update_maps only warns, the window keeps its charts and t2m_aladin.json stays; `.raw/` keeps the complete files for the next call |
 
 No logging framework, no tests, no cleanup of `.part` files after an exception. The stress test (fake ECMWF server, ICON 404, random bytes) existed only in a session scratchpad.
 
 ## Pitfalls
 
-- **Values that must stay in sync**: projection parameters (Python, TS); image size 1200×690 (chart_canvas.py, tile_videos.py, TS, CSS); `MOUNTAIN_HEIGHT_M` vs `MOUNTAIN_HEIGHTS`; `PER_STEP` vs `step_messages`; `ICON_NAMES` (with `TW_2M` → `wbt`) vs its copy in skills/synop/scripts/lib/constants.py; product names in the classes vs render_charts.py docstring (`--help`) and data/charts.md; window names in `PROJECTIONS`, `WINDOWS`/`ICON_WINDOWS`, `DEFAULTS`, TS `PROJECTIONS`; `PREFIX` vs `ICON_PREFIX` vs `blob_mirror.MODELS` (also the keys of `current_run.json` the skill reads); layer format TS vs Python; two profile level lists (IFS `constants.PROFILE_LEVELS`, ICON `PROFILE_LEVELS`).
+- **Values that must stay in sync**: projection parameters (Python, TS); image size 1200×690 (chart_canvas.py, tile_videos.py, TS, CSS); `MOUNTAIN_HEIGHT_M` vs `MOUNTAIN_HEIGHTS`; `PER_STEP` vs `step_messages`; `ICON_NAMES` (with `TW_2M` → `wbt`) vs its copy in skills/synop/scripts/lib/constants.py; product names in the classes vs render_charts.py docstring (`--help`) and data/charts.md; window names in `PROJECTIONS`, `WINDOWS`/`ICON_WINDOWS`, `DEFAULTS`, TS `PROJECTIONS`; `PREFIX` vs `ICON_PREFIX` vs `blob_mirror.MODELS` (also the keys of `current_run.json` the skill reads); `PREFIX` of download_chmi_aladin.py vs `ALADIN_PREFIX` vs `blob_mirror.NOT_MIRRORED`; layer format TS vs Python; two profile level lists (IFS `constants.PROFILE_LEVELS`, ICON `PROFILE_LEVELS`).
 - **θe formulas**: scripts/lib/moist_air.py (GRIB field `papt`) vs src/model/moistAdiabat.ts (axis of the θe line).
 - **Series format** (point_series.py vs src/model/seriesFiles.ts, `TemperatureSeries`): encoding, key names, grid convention; `SERIES_FILES` names vs `REQUIRED`/`OPTIONAL` in src/hooks/useSeriesFiles.ts. t2m.json's ICON part must have the cells of heights.json (`cells` equal; the app drops ICON otherwise). Changing the format without changing the runs needs `point_series.py --force` (or `update_maps.py --force`), else the files stay.
 - **Video and steps can drift**: whoever changes `data/<window>/<product>/` outside update_maps.py must delete the video.
@@ -1392,7 +1548,7 @@ No logging framework, no tests, no cleanup of `.part` files after an exception. 
 - **New GRIB parameter (IFS)**: group in `RequestPlan.__init__`, a complete cartesian product of what Open Data publishes.
 - **New derived field**: entry in `jobs` of `step_messages`, adjust `PER_STEP` by hand (forecast files written before count as incomplete, so the next call downloads their run again); without WMO/ECMWF id the next free number in `LOCAL_NAMES` (never reuse numbers); one-off fields also in the `+ 1` of `expected_total` (request_plan.py).
 - **New pressure level**: IFS `constants.PROFILE_LEVELS` (only published levels, no 800 hPa) and the wind groups `uvw700`/`uv_low`; ICON both lists.
-- **New chart window**: `Projection` in `PROJECTIONS` (Lambert via `lambert`); IFS: `ChartProducts.DEFAULTS` and `WINDOWS`; ICON: `IconProducts.DEFAULTS`, `ICON_WINDOWS`, window inside the ICON domain (render_charts.py defaults to `icon-d2` for ICON files); always TS `PROJECTIONS`. The IFS crop box grows automatically; old files keep the old box. Another image size touches `IMAGE_*`, `WIDTH`/`HEIGHT`, both CSS files and `ContactSheet`.
+- **New chart window**: `Projection` in `PROJECTIONS` (Lambert via `lambert`); IFS: `ChartProducts.DEFAULTS` and `WINDOWS`; ICON: `IconProducts.DEFAULTS`, `ICON_WINDOWS`, window inside the ICON domain (render_charts.py defaults to `icon-d2` for ICON files); ALADIN: `AladinProducts.DEFAULTS`, `ALADIN_WINDOWS`, and the window the file is cut to (`CHMI_ALADIN` in download_chmi_aladin.py: a window beyond it needs a new download); always TS `PROJECTIONS`. The IFS crop box grows automatically; old files keep the old box. Another image size touches `IMAGE_*`, `WIDTH`/`HEIGHT`, both CSS files and `ContactSheet`.
 - **Other climatology**: `PERIOD`/`DIRECTORY` or `--climate`; GRIB2 template 4.8, one message per field, `HHz` for every hour 00…21, T850 in K, regular grid north → south. Remove `check_climate` if no CLIMATE product remains. Update the README link.
 - **Another series field or region**: block in `write_series` (new file: name in `SERIES_FILES`, its version rule), type in src/model/seriesFiles.ts and use in `TemperatureSeries`; the manifest, publish and fetch follow `SERIES_FILES`. Another region: `ECMWF_BOX`, `region_rings` and `REGION` for ECMWF and ERA5 (`REGION` makes every file stale and gives it a new URL); `ICON_BOX` and the outline in `austria_cells` for ICON; the folder name in `SERIES_FILES`.
 - **Rare weather test**: `make_icon_test_grib.py data/icon-d2_<run>.grb2 <dir>/icon-d2_<run>.grb2 --step N`, then `render_charts.py <copy> <dir>`.

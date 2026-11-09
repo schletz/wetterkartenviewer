@@ -11,6 +11,10 @@ ground are missing and read as NaN.
 icon-d2_<run>.grb2 holds the raw ICON-D2 fields (section "ICON-D2-Datei"),
 one value per cell of the unstructured grid; they carry the viewer's names
 (ICON_NAMES), the cell centres are clat/clon and the boundary zone is NaN.
+
+chmi-aladin_<run>.grb holds near-surface fields of CHMI ALADIN (section
+"ALADIN-Datei") in GRIB edition 1 on a Lambert grid, one flat array row by row
+from the south; parameters without shortName get theirs from ALADIN_NAMES.
 """
 
 from datetime import datetime, timedelta
@@ -20,7 +24,8 @@ from pathlib import Path
 import eccodes
 import numpy as np
 
-from .constants import ICON_NAMES
+from .constants import ALADIN_NAMES, ICON_NAMES
+from .lambert_plane import LambertPlane
 
 LOCAL_CATEGORY = 192
 # parameterNumber -> name of the derived fields without WMO or ECMWF parameter (fixed by the viewer).
@@ -36,11 +41,14 @@ class ForecastGrib:
         base_time: run as a naive datetime in UTC.
         grid: dict with lat0, lon0 (-180..180), dlat, dlon, ni, nj of the
             regular lat/lon grid, rows north to south; None for the
-            unstructured ICON grid, whose fields are 1-D.
+            unstructured ICON grid and the Lambert grid of ALADIN, whose
+            fields are 1-D.
+        lambert: the grid of an ALADIN file, else None.
     """
 
     def __init__(self, path: Path):
         self.path = Path(path)
+        self.lambert: LambertPlane | None = None
         self._offsets: dict[tuple, int] = {}               # (name, level, end step) -> byte offset
         self._starts: dict[tuple, int] = {}                # (name, level, end step) -> start step
         self._level_types: dict[tuple[str, int], str] = {}  # (name, level) -> typeOfLevel, in file order
@@ -63,6 +71,9 @@ class ForecastGrib:
 
     @staticmethod
     def _name(gid: int) -> str:
+        if eccodes.codes_get(gid, "edition") == 1:
+            name = eccodes.codes_get(gid, "shortName")
+            return ALADIN_NAMES.get(eccodes.codes_get(gid, "indicatorOfParameter"), name) if name == "unknown" else name
         if (eccodes.codes_get(gid, "discipline") == 0
                 and eccodes.codes_get(gid, "parameterCategory") == LOCAL_CATEGORY):
             number = eccodes.codes_get(gid, "parameterNumber")
@@ -75,6 +86,8 @@ class ForecastGrib:
         self.base_time = datetime.strptime(f"{get('dataDate')}{get('dataTime'):04d}", "%Y%m%d%H%M")
         if get("gridType") != "regular_ll":
             self.grid = None
+            if get("gridType") == "lambert":
+                self.lambert = LambertPlane.from_message(gid)
             return
         self.grid = {"lat0": get("latitudeOfFirstGridPointInDegrees"),
                      "lon0": (get("longitudeOfFirstGridPointInDegrees") + 180.0) % 360.0 - 180.0,
@@ -109,7 +122,7 @@ class ForecastGrib:
         return step - self._starts[key]
 
     def field(self, name: str, step: int, level: int | None = None) -> np.ndarray:
-        """Values of one field as a read-only (nj, ni) float32 array, NaN where missing; 1-D on the ICON grid.
+        """Values of one field as a read-only (nj, ni) float32 array, NaN where missing; 1-D on ICON and ALADIN grids.
 
         Args:
             name: GRIB shortName, local or ICON name, e.g. "t", "thick", "deg0l", "inv", "ceiling".

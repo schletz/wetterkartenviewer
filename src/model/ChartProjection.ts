@@ -48,6 +48,7 @@ const PROJECTIONS: Record<string, ChartProjection> = {
   opencharts_central_europe: new ChartProjection(667.2406461645551, -1029.522214181987, 3493.4, 1, 10),
   'icon-d2': new ChartProjection(733.2439628710566, -7464.407027195254, 15611.893414386514, 0.7373615976163657,
     13.333333333333334),
+  'chmi-aladin': new ChartProjection(583.0301880413407, -4974.455586752634, 10644.472782536259, 0.7373615976163657, 14.5),
 }
 
 /** Projection of a chart path "window/product", or null for an unknown window. */

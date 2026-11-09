@@ -25,3 +25,9 @@ PROFILE_LEVELS = [500, 600, 700, 850, 925, 1000]
 ICON_NAMES = {"tlat": "clat", "tlon": "clon", "HSURF": "hsurf", "CLCT": "tcc", "prmsl": "msl", "WW": "ww",
               "max_i10fg": "gust", "max_2t": "tmax_2m", "min_2t": "tmin_2m", "ceil": "ceiling",
               "TW_2M": "wbt"}
+# Local parameter numbers of the CHMI ALADIN files, which GRIB 1 tables give no shortName -> the names of its charts.
+# tcc is a fraction, tp in kg/m2 (mm).
+ALADIN_NAMES = {61: "tp", 171: "tcc", 223: "fog_visibility", 229: "ptype_severe", 230: "ptype", 236: "flash", 130: "gust"}
+# GRIB 1 parameters of the 10 m wind components download_chmi_aladin.py derives, and of its gust.
+ALADIN_WIND_PARAMETERS = (33, 34)
+ALADIN_GUST_PARAMETER = 130

@@ -189,6 +189,16 @@ WW_SYMBOLS = (
     ((45, 48), SymbolStyle("fog", FOG_LINES, 8, "#fff060", width=1.4, halo="#404040")),
 )
 WW_SYMBOL_SPACING_PX = 20
+# CHMI ALADIN has no ww: its precipitation types as ECMWF ptype codes (2xx are the intermittent ones, 193 wet snow
+# with rain), the lightning density of one hour that counts as a thunderstorm (flashes per km2; not calibrated, the
+# November run tried had no storm over land), the lowest visibility due to cloud below which there is fog (m; 700 m
+# gives the fog area of ICON-D2 ww 45/48 over Austria and Bavaria, 11.8 % against 11.4 % over the 48 h of run
+# 2026110906, where 1000 m gives 14.4 %) and its codes of graupel and hail.
+ALADIN_PTYPE = {3: (3,), 5: (5, 205), 6: (6, 206), 7: (7, 193, 207, 213), 8: (8,), 12: (12,)}
+ALADIN_STORM_FLASHES_KM2 = 0.02
+ALADIN_FOG_VISIBILITY_M = 700.0
+ALADIN_GRAUPEL, ALADIN_HAIL = 9, 10
+ALADIN_CLOUD_PERCENT = 100.0
 # Gusts from Beaufort 9 (75 km/h, the "Sturmböen" of the DWD warnings) are printed in km/h.
 STORM_GUST_KMH = 75.0
 GUST_SPACING_PX = 60

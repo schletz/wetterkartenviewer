@@ -221,11 +221,32 @@ export interface TccFile {
   ecmwf: EcmwfBlock & { tcc: number[] }
 }
 
+/** CHMI ALADIN T2m at the grid points of Hungary and its margin, with their position and model orography. */
+export interface T2mAladinFile {
+  version: string
+  /** Run, YYYYMMDDHH in UTC. */
+  run: string
+  /** Steps in hours after the run. */
+  steps: number[]
+  scale: number
+  /** Number of grid points: the length of one time in `t2m`. */
+  points: number
+  coord_scale: number
+  /** Deltas along the list of points, in `coord_scale` degrees. */
+  lat: number[]
+  lon: number[]
+  /** Model orography in m. */
+  hsurf: number[]
+  t2m: number[]
+}
+
 export interface SeriesFiles {
   t850: T850File
   t2m: T2mFile
   /** Without it the diagram has no ICON-D2 line. */
   heights?: HeightsFile
+  /** Without it locations without ICON-D2 have no regional line. */
+  t2m_aladin?: T2mAladinFile
   /** Missing in manifests of older pipelines. */
   td2m?: Td2mFile
   /** Missing in manifests of older pipelines. */

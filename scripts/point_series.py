@@ -1,6 +1,6 @@
 """Write the temperature series of Austria and Hungary that the start page of the viewer draws for its location.
 
-Thirteen JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
+Fourteen JSON files in maps/austria/ (published like the videos, listed in the manifest under ``series``):
 
     t850.json      ECMWF T850 of every step on the 0.1 deg grid of the region, with the ERA5
                    climatology of T850 (mean, stdev) for the days of the run
@@ -23,6 +23,8 @@ Thirteen JSON files in maps/austria/ (published like the videos, listed in the m
                    the class of its type (snow, wet snow, freezing) from ptype, drawn as symbols above it
     tcc.json       ECMWF total cloud cover in % at each step with the bands of the weather_summary chart,
                    fills the blocks of the precipitation bar that stay dry
+    t2m_aladin.json CHMI ALADIN T2m of the grid points of Hungary and their position and model height,
+                   in one file per ALADIN run; the app draws it where ICON-D2 has no cell
 
 Every series is stored as whole tenths of a degree (of a dam for the
 thickness; rh850, rh700 and tcc as whole percent, gust10m as whole km/h,
@@ -73,8 +75,8 @@ from scipy.spatial import cKDTree
 from lib import chart_styles
 from lib.chart_products import TCC_PERCENT, ChartProducts
 from lib.climate_archive import DIRECTORY as CLIMATE_DIRECTORY, ClimateArchive
-from lib.constants import ICON_NAMES, IFS_GUST_NAMES, KELVIN, KMH_PER_MS
-from lib.country_mask import austria_rings, mask_runs, nearest_point_mask
+from lib.constants import ALADIN_NAMES, GRAVITY, ICON_NAMES, IFS_GUST_NAMES, KELVIN, KMH_PER_MS
+from lib.country_mask import austria_rings, hungary_rings, mask_runs, nearest_point_mask
 from lib.era5_orography import era5_orography
 from lib.forecast_grib import ForecastGrib
 from lib.missing_field_error import MissingFieldError
@@ -82,6 +84,10 @@ from maps_manifest import SERIES_FILES, read_version
 
 # Austria with a margin of about 10 km on every side, in degrees; the ICON-D2 cells are searched in it.
 ICON_BOX = {"north": 49.1, "south": 46.3, "west": 9.5, "east": 17.2}
+# Hungary with a margin of about 15 km on every side, in degrees; the ALADIN points are searched in it.
+HUNGARY_BOX = {"north": 48.75, "south": 45.6, "west": 16.0, "east": 23.1}
+# Part of the version of t2m_aladin.json: another selection of points needs a new file, as for REGION.
+ALADIN_REGION = "hu"
 # Around Austria and Hungary, in degrees; the ECMWF and ERA5 points are searched in it.
 ECMWF_BOX = {"north": 49.1, "south": 45.7, "west": 9.5, "east": 22.9}
 # Part of every version of a file with ECMWF data: another region needs new files, and new URLs for them, even within
@@ -90,7 +96,7 @@ REGION = "at-hu"
 # A place served by an ECMWF point lies at most one ECMWF grid step (degrees) beyond the border: the point lies within
 # half a step of the border, the place within half a step of the point. Its ERA5 point has to be in the files too.
 ERA5_BORDER_MARGIN = 0.1
-# ICON cells farther from Austria than this (degrees of latitude) are left out.
+# ICON cells farther from Austria and ALADIN points farther from Hungary than this (degrees of latitude) are left out.
 BORDER_MARGIN = 0.15
 # Values are stored as multiples of SCALE (0.1 K), coordinates of COORD_SCALE degrees.
 SCALE, COORD_SCALE = 0.1, 1e-4
@@ -231,16 +237,15 @@ def colour_bands(scale) -> list[list]:
     return [[lower, upper, "#{:02x}{:02x}{:02x}".format(*rgb)] for lower, upper, rgb in scale.bands]
 
 
-def austria_cells(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
-    """Indices of the ICON cells within ``BORDER_MARGIN`` of Austria, in file order."""
-    in_box = np.flatnonzero((lat <= ICON_BOX["north"]) & (lat >= ICON_BOX["south"])
-                            & (lon >= ICON_BOX["west"]) & (lon <= ICON_BOX["east"]))
+def points_near(lat: np.ndarray, lon: np.ndarray, box: dict, rings) -> np.ndarray:
+    """Indices of the points within ``BORDER_MARGIN`` of a country, given by its outer rings, in file order."""
+    in_box = np.flatnonzero((lat <= box["north"]) & (lat >= box["south"]) & (lon >= box["west"]) & (lon <= box["east"]))
     # Distances in degrees of latitude: longitudes shrink with the cosine of the latitude.
-    shrink = np.cos(np.radians((ICON_BOX["north"] + ICON_BOX["south"]) / 2))
+    shrink = np.cos(np.radians((box["north"] + box["south"]) / 2))
     points = np.column_stack([lat[in_box], lon[in_box] * shrink])
     inside = np.zeros(len(in_box), bool)
-    for ring in austria_rings():
-        # Only the outer ring: Austria has no holes that matter at 2 km.
+    for ring in rings:
+        # Only the outer ring: neither country has holes that matter at 2 km.
         inside |= Polygon(ring[:, ::-1] * [1, shrink]).contains_points(points)
     distance, _ = cKDTree(points[inside]).query(points, distance_upper_bound=BORDER_MARGIN)
     return in_box[np.isfinite(distance)]
@@ -248,8 +253,21 @@ def austria_cells(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
 
 def icon_cells(grib: ForecastGrib) -> np.ndarray:
     """Indices of the ICON cells of the series; cells without values in any field (boundary zone) are dropped."""
-    cells = austria_cells(grib.field("clat", 0), grib.field("clon", 0))
+    cells = points_near(grib.field("clat", 0), grib.field("clon", 0), ICON_BOX, austria_rings())
     return cells[np.isfinite(grib.field("hsurf", 0)[cells])]
+
+
+def aladin_document(grib: ForecastGrib, version: str) -> dict:
+    """T2m of the ALADIN grid points of Hungary with their positions (deltas along the list) and model heights."""
+    lat, lon = grib.lambert.latlon()
+    points = points_near(lat, lon, HUNGARY_BOX, hungary_rings())
+    coordinate = lambda values: np.diff(np.rint(values[points] / COORD_SCALE).astype(np.int64),  # noqa: E731
+                                        prepend=0).tolist()
+    steps = grib.steps("2t")
+    return {"version": version, "scale": SCALE, "coord_scale": COORD_SCALE, "points": len(points), "run": run_of(grib),
+            "steps": steps, "lat": coordinate(lat), "lon": coordinate(lon),
+            "hsurf": np.rint(grib.field("z", 0)[points] / GRAVITY).astype(np.int64).tolist(),
+            "t2m": time_major_deltas([grib.field("2t", step)[points] - KELVIN for step in steps])}
 
 
 def icon_block(grib: ForecastGrib, cells: np.ndarray) -> dict:
@@ -310,11 +328,16 @@ def write_document(path: Path, document: dict) -> None:
     print(f"{path}: {path.stat().st_size / 1e6:.1f} MB")
 
 
-def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | None, force: bool = False) -> None:
+def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | None, force: bool = False,
+                 aladin_grib: Path | None = None) -> None:
     """Write the series files whose runs changed; without an ICON file t2m.json has no ICON part."""
     ecmwf_run = ecmwf_grib.stem.split("_")[-1]
     icon_run = icon_grib.stem.split("_")[-1] if icon_grib else "none"
     targets = {name: maps / file for name, file in SERIES_FILES.items()}
+    if aladin_grib is not None:
+        aladin_version = f"{aladin_grib.stem.split('_')[-1]}-{ALADIN_REGION}"
+        if force or read_version(targets["t2m_aladin"]) != aladin_version:
+            write_document(targets["t2m_aladin"], aladin_document(ForecastGrib(aladin_grib, ALADIN_NAMES), aladin_version))
     ecmwf_version = f"{ecmwf_run}-{REGION}"
     versions = {"t850": ecmwf_version, "t2m": f"{ecmwf_run}-{icon_run}-{REGION}", "thickness": ecmwf_version,
                 "t500": ecmwf_version, "rh850": ecmwf_version, "rh700": ecmwf_version, "thetae850": ecmwf_version,
@@ -395,9 +418,9 @@ def write_series(data: Path, maps: Path, ecmwf_grib: Path, icon_grib: Path | Non
         write_document(targets["t2m"], document)
 
 
-def newest(data: Path, prefix: str) -> Path | None:
+def newest(data: Path, prefix: str, suffix: str = ".grb2") -> Path | None:
     """Newest finished GRIB of a model in data/; unfinished downloads end in .part and do not match."""
-    files = sorted(data.glob(f"{prefix}*.grb2"))
+    files = sorted(data.glob(f"{prefix}*{suffix}"))
     return files[-1] if files else None
 
 
@@ -410,7 +433,8 @@ def main() -> None:
     ecmwf_grib = newest(args.data, "ecmwf_")
     if ecmwf_grib is None:
         raise SystemExit(f"no ecmwf_*.grb2 in {args.data}")
-    write_series(args.data, args.maps, ecmwf_grib, newest(args.data, "icon-d2_"), args.force)
+    write_series(args.data, args.maps, ecmwf_grib, newest(args.data, "icon-d2_"), args.force,
+                 newest(args.data, "chmi-aladin_", ".grb"))
 
 
 if __name__ == "__main__":

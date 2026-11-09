@@ -16,6 +16,7 @@ class BaseMap:
 
     The outlines come from ``projection.borders``, a GeoJSON whose features
     are countries unless their property LEVEL is "state" (build_borders.py).
+    ``projection.inner_borders`` adds lines (build_county_lines.py) to the states.
 
     Attributes:
         rings: country polygon rings as (n, 2) pixel arrays; their outlines
@@ -30,6 +31,9 @@ class BaseMap:
         features = json.loads(Path(borders or projection.borders).read_text(encoding="utf-8"))["features"]
         self.rings = self._visible_rings(f for f in features if f["properties"].get("LEVEL") != "state")
         self.state_rings = self._visible_rings(f for f in features if f["properties"].get("LEVEL") == "state")
+        if projection.inner_borders is not None:
+            self.state_rings += self._visible_rings(
+                json.loads(projection.inner_borders.read_text(encoding="utf-8"))["features"])
         step = projection.graticule_step
         # Parallels are sampled every 0.5 deg from -180, meridians every 0.5 deg from 0 deg N.
         self.parallels = {lat: self._line(np.full(721, lat), np.linspace(-180, 180, 721))
@@ -41,9 +45,15 @@ class BaseMap:
         return [ring for ring in self._rings(features) if self._visible(ring)]
 
     def _rings(self, features):
-        """Every polygon ring of GeoJSON features in pixel coordinates (lon/lat order, EPSG:4326)."""
+        """Every polygon ring or line of GeoJSON features in pixel coordinates (lon/lat order, EPSG:4326)."""
         for feature in features:
             geometry = feature["geometry"]
+            if geometry["type"] in ("LineString", "MultiLineString"):
+                lines = geometry["coordinates"] if geometry["type"] == "MultiLineString" else [geometry["coordinates"]]
+                for line in lines:
+                    coords = np.asarray(line, dtype=float)
+                    yield self._line(coords[:, 1], coords[:, 0])
+                continue
             polygons = geometry["coordinates"] if geometry["type"] == "MultiPolygon" else [geometry["coordinates"]]
             for polygon in polygons:
                 for ring in polygon:

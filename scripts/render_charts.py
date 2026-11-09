@@ -40,9 +40,18 @@ with the borders of the Austrian states):
     tmax, tmin       as above, from the 6-hourly extremes of the model (lib/icon_extremes.py)
     orography        model orography, one static chart: how finely ICON-D2 resolves valleys
 
+A CHMI ALADIN file (Lambert grid, lib/aladin_products.py) has its own products,
+hourly to T+72 on the window chmi-aladin (Austria and Hungary, Lambert, with the
+borders of the Austrian states and the Hungarian counties):
+
+    t2m_wind10m      as above
+    wind10m          as above, gusts of the last hour
+    weather_summary  as for ICON-D2, thunderstorm, hail and fog put together from lightning density,
+                     precipitation type and visibility
+
 --projection chooses the chart window (default: opencharts_europe, icon-d2 for
-ICON files). Without --products each window gets its default selection
-(ChartProducts.DEFAULTS, IconProducts.DEFAULTS): opencharts_europe
+ICON files, chmi-aladin for ALADIN files). Without --products each window gets its default selection
+(ChartProducts.DEFAULTS, IconProducts.DEFAULTS, AladinProducts.DEFAULTS): opencharts_europe
 the large scale flow (z500_t850, t500, z700_t700, z850_rh700, z850_thetae850, thickness_mslp, dt850_24h),
 opencharts_central_europe (2.6 times enlarged, Ireland to Romania)
 z850_thetae850 and everything else, the latter with isobars every 2 hPa and printed values.
@@ -78,42 +87,51 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import eccodes  # noqa: E402
 
+from lib.aladin_products import AladinProducts  # noqa: E402
+from lib.aladin_surface import AladinSurface  # noqa: E402
 from lib.base_map import BaseMap  # noqa: E402
 from lib.chart_products import ChartProducts  # noqa: E402
 from lib.climate_archive import DIRECTORY as CLIMATE_DIRECTORY, ClimateArchive  # noqa: E402
-from lib.constants import ICON_NAMES  # noqa: E402
+from lib.constants import ALADIN_NAMES, ICON_NAMES  # noqa: E402
 from lib.contact_sheet import ContactSheet  # noqa: E402
 from lib.forecast_grib import ForecastGrib  # noqa: E402
 from lib.icon_products import IconProducts  # noqa: E402
 from lib.icon_surface import IconSurface  # noqa: E402
+from lib.lambert_grid import LambertGrid  # noqa: E402
 from lib.model_surface import ModelSurface  # noqa: E402
 from lib.pixel_grid import PixelGrid  # noqa: E402
 from lib.progress import Progress  # noqa: E402
-from lib.projection import EUROPE, ICON_D2, PROJECTIONS, Projection  # noqa: E402
+from lib.projection import CHMI_ALADIN, EUROPE, ICON_D2, PROJECTIONS, Projection  # noqa: E402
 from lib.t850_climate import T850Climate  # noqa: E402
 from lib.triangle_grid import TriangleGrid  # noqa: E402
 
 # State of a worker process, set once by init_worker.
 _products: ChartProducts | None = None
+# gridType of the first message of a forecast file -> the model it comes from.
+UNSTRUCTURED, LAMBERT = "unstructured_grid", "lambert"
 
 
-def is_icon(grib_path: Path) -> bool:
-    """Whether a forecast file holds ICON fields on the unstructured grid (download_icon_d2.py)."""
+def grid_type(grib_path: Path) -> str:
+    """gridType of a forecast file: unstructured_grid is ICON-D2, lambert CHMI ALADIN, anything else the IFS."""
     with Path(grib_path).open("rb") as fh:
         gid = eccodes.codes_grib_new_from_file(fh, headers_only=True)
         try:
-            return eccodes.codes_get(gid, "gridType") == "unstructured_grid"
+            return eccodes.codes_get(gid, "gridType")
         finally:
             eccodes.codes_release(gid)
 
 
 def build_products(grib_path: Path, projection: Projection, climate_dir: Path | None) -> ChartProducts:
     """Wire the chart products of one window; the climatology is loaded only when a product needs it."""
-    if is_icon(grib_path):
+    kind = grid_type(grib_path)
+    if kind == UNSTRUCTURED:
         grib = ForecastGrib(grib_path, ICON_NAMES)
         surface = IconSurface(grib)
         return IconProducts(grib, surface, BaseMap(projection),
                             TriangleGrid(surface.lat, surface.lon, projection, surface.valid))
+    if kind == LAMBERT:
+        grib = ForecastGrib(grib_path, ALADIN_NAMES)
+        return AladinProducts(grib, AladinSurface(grib), BaseMap(projection), LambertGrid(grib.lambert, projection))
     grib = ForecastGrib(grib_path)
     climate = climate_pixels = None
     if climate_dir is not None:
@@ -190,17 +208,17 @@ def write_geometry(projection: Projection, products: ChartProducts, sheet: Conta
 def parse_args(argv: list[str]) -> argparse.Namespace:
     """Command line options."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", maxsplit=1)[0])
-    parser.add_argument("grib", type=Path, help="forecast file of download_ecmwf_data.py or download_icon_d2.py")
+    parser.add_argument("grib", type=Path, help="forecast file of download_ecmwf_data.py, download_icon_d2.py or download_chmi_aladin.py")
     parser.add_argument("outdir", type=Path, help="target directory")
     parser.add_argument("--climate", type=Path, help="directory of the climatology (default: era5_means next to grib)")
     parser.add_argument("--projection", choices=sorted(PROJECTIONS),
-                        help=f"chart window (default: {EUROPE.name}, {ICON_D2.name} for ICON files)")
+                        help=f"chart window (default: {EUROPE.name}, {ICON_D2.name} for ICON, {CHMI_ALADIN.name} for ALADIN files)")
     parser.add_argument("--products", help="comma separated products or 'all' (default: selection of the window)")
     parser.add_argument("--workers", type=int, default=os.cpu_count(), help="render processes (default: CPUs)")
     args = parser.parse_args(argv)
-    icon = is_icon(args.grib)
-    products = IconProducts if icon else ChartProducts
-    args.projection = args.projection or (ICON_D2 if icon else EUROPE).name
+    products, default = {UNSTRUCTURED: (IconProducts, ICON_D2), LAMBERT: (AladinProducts, CHMI_ALADIN)}.get(
+        grid_type(args.grib), (ChartProducts, EUROPE))
+    args.projection = args.projection or default.name
     if args.climate is None:
         args.climate = args.grib.parent / CLIMATE_DIRECTORY
     if not args.products:

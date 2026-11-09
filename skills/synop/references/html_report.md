@@ -16,7 +16,7 @@ für Diagramm und Tabelle den wichtigsten Punkt.
 Schreib die Analyse nach `<arbeitsverzeichnis>/analyse_<ort>.md`:
 
 ```
-# Synoptische Analyse <Ort> – ECMWF <TT.MM.JJJJ HH>z, ICON-D2 <TT.MM. HH>z
+# Synoptische Analyse <Ort> – ECMWF <TT.MM.JJJJ HH>z, <ICON-D2 und/oder ALADIN> <TT.MM. HH>z
 
 <Absatz für Endkunden: das Wetter am Boden für die 10 Tage>
 

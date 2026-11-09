@@ -6,7 +6,7 @@ import numpy as np
 
 from .constants import KELVIN
 from .forecast_grib import ForecastGrib
-from .location_tables import MIXED_LAPSE_K_PER_100M, NEAR_GROUND_M, number, table, wind
+from .location_tables import NEAR_GROUND_M, height_note, number, table, wind
 from .point_sampler import PointSampler
 
 # tmax_2m/tmin_2m restart every 6 h from the run start, although the GRIB header claims "since T+0".
@@ -37,10 +37,7 @@ class IconLocationTables:
         lines = [f"# {label or 'Location'} {lat:.2f} N {lng:.2f} E, ICON-D2 run {self.grib.base_time:%d.%m.%Y %H} UTC",
                  "", f"- Model ground: height {height:.0f} m (cells about 2.2 km apart), land fraction {land:.2f}"]
         if elevation is not None:
-            difference = height - elevation
-            lines.append(f"- Real height {elevation:.0f} m: the model ground lies {abs(difference):.0f} m "
-                         f"{'higher' if difference >= 0 else 'lower'}. In well mixed air that alone shifts T2m by "
-                         f"{MIXED_LAPSE_K_PER_100M * difference / 100:+.1f} K for the real height; not under inversions.")
+            lines.append(height_note(height, elevation))
         clearance = np.mean([row["height850"] for row in rows]) - height
         if clearance < NEAR_GROUND_M:
             lines.append(f"- 850 hPa lies on average only {clearance:.0f} m above the model ground: T850 follows "

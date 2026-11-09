@@ -30,6 +30,10 @@
           "icon-d2/t2m_wind10m",
           "opencharts_central_europe/t2m_wind10m"
         ],
+        [
+          "chmi-aladin/t2m_wind10m",
+          "opencharts_central_europe/t2m_wind10m"
+        ],
         "opencharts_central_europe/t2m_wind10m",
         [
           "icon-d2/mountain_2000",
@@ -43,6 +47,10 @@
           "icon-d2/weather_summary",
           "opencharts_central_europe/weather_summary"
         ],
+        [
+          "chmi-aladin/weather_summary",
+          "opencharts_central_europe/weather_summary"
+        ],
         "opencharts_central_europe/weather_summary"
       ]
     },
@@ -50,6 +58,10 @@
       "layers": [
         [
           "icon-d2/wind10m",
+          "opencharts_central_europe/wind10m"
+        ],
+        [
+          "chmi-aladin/wind10m",
           "opencharts_central_europe/wind10m"
         ],
         "opencharts_central_europe/wind10m",

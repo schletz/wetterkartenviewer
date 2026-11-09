@@ -2,7 +2,7 @@
 .diagram {
   --t850: var(--text);
   --t2m-ecmwf: var(--text);
-  --t2m-icon: var(--text);
+  --t2m-regional: var(--text);
   --thickness: var(--text);
   /* Darker than the grey zero line of the Showalter areas, which it crosses. */
   --rh700: #6f6e69;
@@ -103,8 +103,8 @@
 }
 
 /* Same colour as ECMWF: only the dashes tell the two T2m lines apart. */
-.t2mIcon {
-  stroke: var(--t2m-icon);
+.t2mRegional {
+  stroke: var(--t2m-regional);
   stroke-dasharray: 6 3;
 }
 

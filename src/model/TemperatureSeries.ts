@@ -4,8 +4,8 @@ import {
   type ColourBand, type DailyClimateBlock, type EcmwfBlock, type GridPoint, type SeriesFiles, type TermClimateBlock,
 } from './seriesFiles'
 
-/** An ICON cell centre is never farther from a location inside its cells than this (degrees of latitude). */
-const MAX_CELL_DISTANCE = 0.03
+/** An ICON cell centre or ALADIN grid point is never farther from a location it serves than this (degrees of latitude). */
+const MAX_POINT_DISTANCE = 0.03
 const HOUR_MS = 3_600_000
 const DAY_MS = 24 * HOUR_MS
 
@@ -34,6 +34,12 @@ export interface PointSeries {
   values: ValuePoint[]
 }
 
+/** T2m of a regional model at one location. */
+export interface RegionalSeries extends PointSeries {
+  /** Name of the model for the legend and the tooltip. */
+  model: string
+}
+
 /** Every series the start page draws for one location. */
 export interface LocationTemperatures {
   t850: PointSeries
@@ -44,8 +50,8 @@ export interface LocationTemperatures {
   climate2m: DailyClimate[]
   /** ERA5 orography of the T2m climate point, m; undefined if the file has none. */
   climate2mHeight?: number
-  /** Null if the files hold no ICON-D2 run or no ICON-D2 cell lies near the location. */
-  t2mIcon: PointSeries | null
+  /** ICON-D2 if a cell lies near the location (Austria), else CHMI ALADIN (Hungary); null where neither has a point. */
+  t2mRegional: RegionalSeries | null
   /** ECMWF 2 m dew point in °C; null without td2m file. */
   td2m: PointSeries | null
   /** ECMWF 2 m wet-bulb temperature in °C; null without tw2m file. */
@@ -78,17 +84,21 @@ export interface LocationTemperatures {
   tcc: { series: PointSeries; colours: ColourBand[]; transparentBelow: number } | null
 }
 
-/** Picks the series of one location out of the files of the region (Austria and Hungary, ICON-D2 only Austria). */
+/** Picks the series of one location out of the files of the region (Austria and Hungary; ICON-D2 Austria, ALADIN Hungary). */
 export class TemperatureSeries {
   private readonly files: SeriesFiles
   private readonly cellLat: Float64Array
   private readonly cellLon: Float64Array
+  private readonly aladinLat: Float64Array
+  private readonly aladinLon: Float64Array
 
   constructor(files: SeriesFiles) {
     this.files = files
-    const { heights } = files
+    const { heights, t2m_aladin: aladin } = files
     this.cellLat = heights === undefined ? new Float64Array(0) : cumulative(heights.lat, heights.coord_scale)
     this.cellLon = heights === undefined ? new Float64Array(0) : cumulative(heights.lon, heights.coord_scale)
+    this.aladinLat = aladin === undefined ? new Float64Array(0) : cumulative(aladin.lat, aladin.coord_scale)
+    this.aladinLon = aladin === undefined ? new Float64Array(0) : cumulative(aladin.lon, aladin.coord_scale)
   }
 
   /** The series of the location; null where the ECMWF files hold no point for it. */
@@ -110,7 +120,7 @@ export class TemperatureSeries {
       t2mEcmwf: t2mSeries,
       climate2m: climate2m.values,
       climate2mHeight: climate2m.height,
-      t2mIcon: this.iconSeries(location),
+      t2mRegional: this.iconSeries(location) ?? this.aladinSeries(location),
       td2m: td2m === undefined ? null : ecmwfSeries(td2m.ecmwf, td2m.ecmwf.td2m, td2m.scale, point),
       tw2m: tw2m === undefined ? null : ecmwfSeries(tw2m.ecmwf, tw2m.ecmwf.tw2m, tw2m.scale, point),
       thickness: thickness === undefined
@@ -150,15 +160,16 @@ export class TemperatureSeries {
     }
   }
 
-  /** ICON-D2 T2m of the nearest cell; null without an ICON-D2 run or a cell within MAX_CELL_DISTANCE. */
-  private iconSeries(location: GeoLocation): PointSeries | null {
+  /** ICON-D2 T2m of the nearest cell; null without an ICON-D2 run or a cell within MAX_POINT_DISTANCE. */
+  private iconSeries(location: GeoLocation): RegionalSeries | null {
     const { t2m: { icon, scale }, heights } = this.files
     // A heights.json of another cell selection does not fit the ICON series.
     if (icon === undefined || heights === undefined || icon.cells !== heights.cells) return null
-    const cell = this.nearestCell(location)
+    const cell = nearestPoint(this.cellLat, this.cellLon, location)
     if (cell === null) return null
     const start = runTime(icon.run).getTime()
     return {
+      model: 'ICON-D2',
       point: { lat: this.cellLat[cell], lon: this.cellLon[cell] },
       height: heights.hsurf[cell],
       values: pointSeries(icon.t2m, icon.cells, cell, scale)
@@ -166,20 +177,36 @@ export class TemperatureSeries {
     }
   }
 
-  /** Index of the nearest ICON cell, null if none lies within MAX_CELL_DISTANCE. */
-  private nearestCell(location: GeoLocation): number | null {
-    const shrink = Math.cos((location.lat * Math.PI) / 180)
-    let best: number | null = null
-    let bestDistance = MAX_CELL_DISTANCE ** 2
-    for (let i = 0; i < this.cellLat.length; i++) {
-      const distance = (this.cellLat[i] - location.lat) ** 2 + ((this.cellLon[i] - location.lon) * shrink) ** 2
-      if (distance <= bestDistance) {
-        best = i
-        bestDistance = distance
-      }
+  /** CHMI ALADIN T2m of the nearest grid point; null without its file or a point within MAX_POINT_DISTANCE. */
+  private aladinSeries(location: GeoLocation): RegionalSeries | null {
+    const { t2m_aladin: aladin } = this.files
+    if (aladin === undefined) return null
+    const point = nearestPoint(this.aladinLat, this.aladinLon, location)
+    if (point === null) return null
+    const start = runTime(aladin.run).getTime()
+    return {
+      model: 'ALADIN',
+      point: { lat: this.aladinLat[point], lon: this.aladinLon[point] },
+      height: aladin.hsurf[point],
+      values: pointSeries(aladin.t2m, aladin.points, point, aladin.scale)
+        .map((value, i) => ({ valid: new Date(start + aladin.steps[i] * HOUR_MS), value })),
     }
-    return best
   }
+}
+
+/** Index of the nearest point of a list, null if none lies within MAX_POINT_DISTANCE. */
+function nearestPoint(lats: Float64Array, lons: Float64Array, location: GeoLocation): number | null {
+  const shrink = Math.cos((location.lat * Math.PI) / 180)
+  let best: number | null = null
+  let bestDistance = MAX_POINT_DISTANCE ** 2
+  for (let i = 0; i < lats.length; i++) {
+    const distance = (lats[i] - location.lat) ** 2 + ((lons[i] - location.lon) * shrink) ** 2
+    if (distance <= bestDistance) {
+      best = i
+      bestDistance = distance
+    }
+  }
+  return best
 }
 
 /** The series of an ECMWF grid point. */

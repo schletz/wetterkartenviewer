@@ -33,10 +33,7 @@ class LocationTables:
                  f"- Model grid point: height {height:.0f} m, sub-grid std. dev. of the orography {roughness:.0f} m, "
                  f"land fraction {land:.2f}"]
         if elevation is not None:
-            difference = height - elevation
-            lines.append(f"- Real height {elevation:.0f} m: the model ground lies {abs(difference):.0f} m "
-                         f"{'higher' if difference >= 0 else 'lower'}. In well mixed air that alone shifts T2m by "
-                         f"{MIXED_LAPSE_K_PER_100M * difference / 100:+.1f} K for the real height; not under inversions.")
+            lines.append(height_note(height, elevation))
         # Close above the ground, daytime heating and nighttime cooling reach the level,
         # so a 12 h change shows the diurnal cycle rather than a change of air mass.
         clearance = np.mean([row["grib"]["gh850"] for row in rows]) - height
@@ -96,6 +93,14 @@ class LocationTables:
 
     def _time(self, row: dict) -> str:
         return f"{self.grib.valid_time(row['step']):%d.%m. %H}"
+
+
+def height_note(height: float, elevation: float) -> str:
+    """Header line: how far the model ground lies from the real height and what that alone does to T2m."""
+    difference = height - elevation
+    return (f"- Real height {elevation:.0f} m: the model ground lies {abs(difference):.0f} m "
+            f"{'higher' if difference >= 0 else 'lower'}. In well mixed air that alone shifts T2m by "
+            f"{MIXED_LAPSE_K_PER_100M * difference / 100:+.1f} K for the real height; not under inversions.")
 
 
 def gust_windows(rows: list[dict]) -> str:

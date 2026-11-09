@@ -29,6 +29,15 @@ For icon-d2_<run>.grb2 (T+0 to T+48, hourly) the tables are
 Values are linear inside the triangle of the three cell centres around the
 location; the weather code and the cloud base come from the nearest cell.
 
+For chmi-aladin_<run>.grb (T+0 to T+72, hourly, near-surface fields only) the tables are
+
+    weather at the ground   per hour: T2m, 10 m wind, gust, MSLP, cloud cover, precipitation
+                            of the last hour and its type, thunderstorm, hail or fog
+    daily extremes          highest hourly T2m 06-18 UTC and lowest 18-06 UTC
+
+Values are bilinear between the four surrounding grid points; the
+precipitation type and the visibility come from the nearest one.
+
 With --tsv every parameter of the forecast file is written per step, in
 GRIB units: columns valid_utc and step_h, then the GRIB shortName, local or
 ICON name, with the level appended on pressure levels (t850, gh500, uf1000)
@@ -43,6 +52,7 @@ Example::
 
     python location_table.py <data>/ecmwf_2026102900.grb2 --lat 47.27 --lng 11.39 --elevation 574 --tsv data_innsbruck_ecmwf.tsv
     python location_table.py <data>/icon-d2_2026102909.grb2 --lat 47.27 --lng 11.39 --elevation 574 --tsv data_innsbruck_icon.tsv
+    python location_table.py <data>/chmi-aladin_2026102906.grb --lat 47.50 --lng 19.04 --elevation 105 --tsv data_budapest_aladin.tsv
 """
 
 import argparse
@@ -55,12 +65,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import numpy as np  # noqa: E402
 
+from lib.aladin_location_tables import AladinLocationTables  # noqa: E402
+from lib.aladin_step_sampler import AladinStepSampler  # noqa: E402
 from lib.cell_point_sampler import CellPointSampler  # noqa: E402
 from lib.forecast_grib import ForecastGrib  # noqa: E402
 from lib.forecast_tsv import ForecastTsv  # noqa: E402
 from lib.grid_point_sampler import GridPointSampler  # noqa: E402
 from lib.icon_location_tables import IconLocationTables  # noqa: E402
 from lib.icon_step_sampler import IconStepSampler  # noqa: E402
+from lib.lambert_point_sampler import LambertPointSampler  # noqa: E402
 from lib.location_tables import LocationTables  # noqa: E402
 from lib.point_sampler import PointSampler  # noqa: E402
 from lib.step_sampler import StepSampler  # noqa: E402
@@ -70,18 +83,22 @@ _sampler: StepSampler | None = None
 
 
 def locate(grib: ForecastGrib, lat: float, lng: float) -> PointSampler:
-    """The location on the grid of the file: bilinear on the ECMWF grid, in the triangle of ICON cells.
+    """The location on the grid of the file: bilinear on the ECMWF and ALADIN grids, in the triangle of ICON cells.
 
     Raises:
         ValueError: if the location lies outside the forecast area.
     """
     if grib.grid is not None:
         return GridPointSampler(grib.grid, lat, lng)
+    if grib.lambert is not None:
+        return LambertPointSampler(grib.lambert, lat, lng)
     return CellPointSampler(grib.field("clat", 0), grib.field("clon", 0), ~np.isnan(grib.field("2t", 0)), lat, lng)
 
 
 def step_sampler(grib: ForecastGrib, point: PointSampler) -> StepSampler:
     """The sampler of the model of the file."""
+    if grib.lambert is not None:
+        return AladinStepSampler(grib, point)
     return (StepSampler if grib.grid is not None else IconStepSampler)(grib, point)
 
 
@@ -99,7 +116,7 @@ def sample_step(step: int) -> dict:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", maxsplit=1)[0])
-    parser.add_argument("grib", type=Path, help="forecast file ecmwf_<run>.grb2 or icon-d2_<run>.grb2")
+    parser.add_argument("grib", type=Path, help="forecast file ecmwf_<run>.grb2, icon-d2_<run>.grb2 or chmi-aladin_<run>.grb")
     parser.add_argument("--lat", type=float, required=True, help="latitude in degrees north")
     parser.add_argument("--lng", type=float, required=True, help="longitude in degrees east")
     parser.add_argument("--elevation", type=float, help="real height of the location in m")
@@ -121,8 +138,11 @@ def main(argv: list[str]) -> int:
         return 1
     with ProcessPoolExecutor(max_workers=args.workers, initializer=init_worker,
                              initargs=(args.grib, args.lat, args.lng)) as pool:
-        rows = list(pool.map(sample_step, grib.steps("t")))
-    if grib.grid is not None:
+        # The ALADIN file has no temperature on levels of the free atmosphere.
+        rows = list(pool.map(sample_step, grib.steps("2t" if grib.lambert is not None else "t")))
+    if grib.lambert is not None:
+        print_aladin(AladinLocationTables(grib, point), args, rows)
+    elif grib.grid is not None:
         print_ecmwf(LocationTables(grib, point), args, rows)
     else:
         print_icon(IconLocationTables(grib, point), args, rows)
@@ -149,6 +169,14 @@ def print_icon(tables: IconLocationTables, args: argparse.Namespace, rows: list[
     print("\n## Free atmosphere\n")
     print(tables.upper_table(rows))
     print("\n## Daily extremes at 2 m (model height)\n")
+    print(tables.extremes_table(rows))
+
+
+def print_aladin(tables: AladinLocationTables, args: argparse.Namespace, rows: list[dict]) -> None:
+    print(tables.header(args.label, args.lat, args.lng, args.elevation))
+    print("\n## Weather at the ground\n")
+    print(tables.surface_table(rows))
+    print("\n## Daily extremes at 2 m (model height, from hourly values)\n")
     print(tables.extremes_table(rows))
 
 

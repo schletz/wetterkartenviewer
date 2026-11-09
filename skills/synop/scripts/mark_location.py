@@ -6,7 +6,7 @@ The charts carry borders but no place names, and without a marker it is
 easy to misjudge whether a trough or a humidity band reaches the location.
 
 Every WebP below <data>/<window> (every folder with a geometry.json, i.e.
-opencharts_europe, opencharts_central_europe and icon-d2) is copied to the same
+opencharts_europe, opencharts_central_europe, icon-d2 and chmi-aladin) is copied to the same
 relative path below --out; geometry.json gives the projection and the
 tiles of the contact sheets in sheets/, each of which gets the marker.
 Charts on which the location does not lie are copied unmarked.

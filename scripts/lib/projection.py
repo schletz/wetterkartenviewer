@@ -38,6 +38,7 @@ IMAGE_HEIGHT = 600
 EARTH_RADIUS_KM = 6371.0
 WORLD_COUNTRIES = Path(__file__).with_name("world_countries.geojson")
 AUSTRIA_BORDERS = Path(__file__).with_name("borders_austria.geojson")
+HUNGARY_COUNTIES = Path(__file__).with_name("borders_hungary_counties.geojson")
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,7 @@ class Projection:
         borders: GeoJSON of the country (and state) outlines drawn on the window.
         label_lon: meridian along which the parallels are labelled.
         label_lat: parallel along which the meridians are labelled.
+        inner_borders: GeoJSON of further lines inside a country, drawn like state borders; None for no such lines.
     """
 
     name: str
@@ -68,6 +70,7 @@ class Projection:
     borders: Path = WORLD_COUNTRIES
     label_lon: float = 0.0
     label_lat: float = 40.0
+    inner_borders: Path | None = None
 
     @classmethod
     def lambert(cls, name: str, parallels: tuple[float, float], lon0: float, centre: tuple[float, float],
@@ -150,4 +153,11 @@ CENTRAL_EUROPE = Projection("opencharts_central_europe", pole_x=435.35, pole_y=-
 ICON_D2 = Projection.lambert("icon-d2", parallels=(46.0, 49.0), lon0=13.0 + 1.0 / 3.0, centre=(47.6, 12.0),
                              km_per_px=0.75, graticule_step=2, borders=AUSTRIA_BORDERS, label_lon=7.0,
                              label_lat=46.0)
-PROJECTIONS = {p.name: p for p in (EUROPE, CENTRAL_EUROPE, ICON_D2)}
+# CHMI ALADIN for Austria and Hungary: the parallels of icon-d2, its central meridian in the middle of the window.
+# The window keeps the 265 km of upstream area west of Austria that icon-d2 has, and more than that in the north
+# (195 km, for north-westerly weather reaching Hungary over Czechia and Slovakia); it spans 6-23.5 E, 44.8-50.8 N.
+# 1.1 km/px is about 2.1 px per grid length of 2.325 km, enough to show the smallest wave the model carries.
+CHMI_ALADIN = Projection.lambert("chmi-aladin", parallels=(46.0, 49.0), lon0=14.5, centre=(47.8, 14.75), km_per_px=1.1,
+                                 graticule_step=2, borders=AUSTRIA_BORDERS, label_lon=7.0, label_lat=46.0,
+                                 inner_borders=HUNGARY_COUNTIES)
+PROJECTIONS = {p.name: p for p in (EUROPE, CENTRAL_EUROPE, ICON_D2, CHMI_ALADIN)}

@@ -1,7 +1,7 @@
 """Bring the data cache of the skill up to date with the blob container the viewer pipeline fills.
 
-The container holds one data directory (ECMWF and ICON-D2 GRIB, charts, climatology,
-charts.md) and is readable without credentials. The cache <skill-dir>/.cache mirrors it:
+The container holds one data directory (ECMWF, ICON-D2 and CHMI ALADIN GRIB, charts,
+climatology, charts.md) and is readable without credentials. The cache <skill-dir>/.cache mirrors it:
 only blobs that are new or changed are downloaded (size and Last-Modified, kept as the
 modification time of the local file), files the container no longer holds are deleted, so
 the cache keeps exactly one run of each model and the climatology is fetched only once.
@@ -141,7 +141,9 @@ def main() -> None:
                  "runs; run this script again in a few minutes, it fetches only what changed")
     removed = remove_obsolete(args.cache, blobs)
     size = sum(blobs[name][0] for name in stale) / MB
-    print(f"runs {', '.join(grib_files(runs))} (uploaded {runs.get('updated')})")
+    # From the listing: RUN_FILE does not name the ALADIN file.
+    gribs = sorted(name for name in blobs if "/" not in name and name.endswith((".grb", ".grb2")))
+    print(f"runs {', '.join(gribs)} (uploaded {runs.get('updated')})")
     print(f"downloaded {len(stale) - len(failed)} of {len(blobs)} files ({size:.0f} MB), "
           f"removed {removed} in {time.monotonic() - started:.0f} s")
     if failed:

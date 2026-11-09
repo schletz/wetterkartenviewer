@@ -77,13 +77,17 @@ class IconProducts(ChartProducts):
     def weather_summary(self, step: int) -> ChartCanvas:
         """The weather summary of ECMWF plus thunderstorms, hail, fog and storm gusts."""
         canvas = super().weather_summary(step)
-        ww = self.pixels.nearest(self.grib.field("ww", step))
+        ww = self.significant_weather(step)
         for codes, style in styles.WW_SYMBOLS:
             canvas.symbols(np.isin(ww, codes), styles.WW_SYMBOL_SPACING_PX, style)
         gust = self.field("gust", step, factor=KMH_PER_MS)
         canvas.values(gust, styles.GUST_SPACING_PX, gust >= styles.STORM_GUST_KMH, "{:.0f}",
                       f"numbers: gusts ≥ {styles.STORM_GUST_KMH:g} km/h in the last hour (km/h)")
         return canvas
+
+    def significant_weather(self, step: int) -> np.ndarray:
+        """Pixels of the significant weather in the codes of ww (WMO 4677)."""
+        return self.pixels.nearest(self.grib.field("ww", step))
 
     def cloud_cover(self, step: int) -> np.ndarray:
         # Outside the domain nothing is shaded; draw paints it grey on top.

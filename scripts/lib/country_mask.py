@@ -31,11 +31,16 @@ def austria_rings() -> list[np.ndarray]:
 
 
 @cache
-def region_rings() -> tuple[np.ndarray, ...]:
-    """Outer rings of Austria and Hungary; cached, as the world outlines take a while to parse."""
+def hungary_rings() -> tuple[np.ndarray, ...]:
+    """Outer rings of Hungary from the generalized world outlines; cached, as they take a while to parse."""
     features = json.loads(WORLD_COUNTRIES.read_text(encoding="utf-8"))["features"]
-    hungary = next(f["geometry"] for f in features if f["properties"].get("ISO") == "HU")
-    return (*austria_rings(), *outer_rings(hungary))
+    return tuple(outer_rings(next(f["geometry"] for f in features if f["properties"].get("ISO") == "HU")))
+
+
+@cache
+def region_rings() -> tuple[np.ndarray, ...]:
+    """Outer rings of Austria and Hungary."""
+    return (*austria_rings(), *hungary_rings())
 
 
 def along_ring(ring: np.ndarray) -> np.ndarray:

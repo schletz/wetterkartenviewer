@@ -1,7 +1,7 @@
 # Datenordner: Karten und GRIB
 
-Diesen Ordner erzeugt der Wetterkartenviewer (`scripts/update_maps.py`) für einen Lauf des
-ECMWF-Modells IFS und einen Lauf des DWD-Modells ICON-D2. Er enthält die Vorhersagedateien (IFS mit
+Diesen Ordner erzeugt der Wetterkartenviewer (`scripts/update_maps.py`) für je einen Lauf des
+ECMWF-Modells IFS, des DWD-Modells ICON-D2 und von CHMI ALADIN. Er enthält die Vorhersagedateien (IFS mit
 allen abgeleiteten Größen), die Karten aller Fenster und die Klimatologie. Die Datei hier beschreibt, was drinsteht und wie man es
 liest. Lies nur die Abschnitte, die du gerade brauchst.
 
@@ -19,6 +19,8 @@ liest. Lies nur die Abschnitte, die du gerade brauchst.
 - Statisch: [orography](#orography)
 - ICON-D2 (Österreich, stündlich bis +48 h): [ICON-D2-Datei](#icon-d2-datei),
   [Produkte im Fenster icon-d2](#produkte-im-fenster-icon-d2), [icon-d2/weather_summary](#icon-d2weather_summary)
+- CHMI ALADIN (Österreich und Ungarn, stündlich bis +72 h): [ALADIN-Datei](#aladin-datei),
+  [Produkte im Fenster chmi-aladin](#produkte-im-fenster-chmi-aladin)
 
 ## Dateien
 
@@ -29,6 +31,8 @@ liest. Lies nur die Abschnitte, die du gerade brauchst.
 | `opencharts_central_europe/` | die Produkte für Mitteleuropa (Liste unter [Allgemeines](#allgemeines)) |
 | `icon-d2_<YYYYMMDDHH>.grb2` | ICON-D2-Lauf auf dem Modellgitter ([ICON-D2-Datei](#icon-d2-datei)) |
 | `icon-d2/` | die ICON-D2-Produkte für Österreich und Umgebung |
+| `chmi-aladin_<YYYYMMDDHH>.grb` | CHMI-ALADIN-Lauf, auf die Karten zugeschnitten ([ALADIN-Datei](#aladin-datei)) |
+| `chmi-aladin/` | die ALADIN-Produkte für Österreich und Ungarn |
 | `<fenster>/<produkt>/<YYYYMMDDHH>.webp` | Karte zur Gültigkeitszeit in UTC (Tmax/Tmin: `<YYYYMMDD>.webp`) |
 | `<fenster>/sheets/<produkt>.webp` | Kontaktabzug: 12-UTC-Karte jedes Tages (ICON-D2: 03, 09, 15, 21 UTC) |
 | `<fenster>/orography.webp` | Modellorografie, statisch |
@@ -36,7 +40,8 @@ liest. Lies nur die Abschnitte, die du gerade brauchst.
 | `era5_means/*.grb2` | Klimatologie 1991–2020: `HHz` je Tageszeit, `daily`, `monthly` |
 
 Der Ordner hält genau einen Lauf je Modell. Ein neuer Lauf ersetzt GRIB und Karten seines Modells.
-ICON-D2 rechnet alle 3 h, IFS alle 12 h; die Läufe der beiden Modelle sind also meist verschieden.
+ICON-D2 rechnet alle 3 h, ALADIN alle 6 h, IFS alle 12 h; die Läufe der Modelle sind also meist
+verschieden.
 
 ## GRIB-Datei
 
@@ -95,7 +100,7 @@ demselben Code wie die Karten. Karte und Zahl am Ort passen deshalb zusammen.
 **Fenster.** Die beiden IFS-Fenster sind polarstereografisch wie ECMWF open charts, Europa mit
 dem Zentralmeridian 0°, Mitteleuropa mit 10° E (der Meridian durch Deutschland, nahe der Bildmitte,
 steht senkrecht). `icon-d2` ist eine Lambert-Kegelprojektion (Standardparallelen 46° und 49° N, Zentralmeridian
-13°20′ E wie die österreichische Lambert-Projektion). Alle haben eine Kartenfläche von 1200×600 px,
+13°20′ E wie die österreichische Lambert-Projektion), `chmi-aladin` ebenso mit dem Zentralmeridian 14°30′ E. Alle haben eine Kartenfläche von 1200×600 px,
 darunter liegt ein Legendenstreifen von 90 px. `geometry.json` gibt die Formel mit `cone` und `lon0`;
 bei den IFS-Fenstern ist `cone` 1.
 
@@ -104,6 +109,7 @@ bei den IFS-Fenstern ist `cone` 1.
 | `opencharts_europe` | Atlantik bis Westrussland, Nordafrika bis Nordkap | 7,6 (35° N) bis 9,4 (70° N) | alle Produkte |
 | `opencharts_central_europe` | 36,5–57,2° N, 22,9° W–37,4° E (Lissabon bis Kiew, Dänemark bis Neapel) | etwa 3,2 | alle außer `z500_t850`, `t500`, `z700_t700`, `z850_rh700`, `thickness_mslp`, `dt850_24h` (`z850_thetae850` gibt es in beiden Fenstern) |
 | `icon-d2` | 45,3–49,6° N, 5,7–18,2° E (Burgund bis Bratislava, Mailand bis Würzburg) | 0,75 | `t2m_wind10m`, `wind10m`, `mountain_2000`, `weather_summary`, `tmax`, `tmin`, `orography` (ICON-D2) |
+| `chmi-aladin` | etwa 44,8–50,8° N, 6–23,5° E (Genf bis Westrumänien, Rijeka bis Prag) | 1,1 | `t2m_wind10m`, `wind10m`, `weather_summary` (ALADIN) |
 
 Europa zeigt, was stromauf liegt und in den nächsten Tagen ankommt. Mitteleuropa zeigt Fronten
 etwa zwei Tage im Voraus und die Grenzschicht im Detail. Für einen Ort nördlich von 57° N oder
@@ -481,3 +487,40 @@ ICON-D2 für Österreich und Umgebung, stündlich von T+1 bis T+48. Inhalt wie
 - `icon-d2/orography.webp` zeigt, wie fein ICON-D2 Täler und Gipfel auflöst (ohne Schraffur, ICON
   liefert keine Subgitter-Rauigkeit). Vergleiche sie mit der IFS-Orografie, bevor du Talwetter
   aus einer der beiden Karten liest.
+
+## ALADIN-Datei
+
+Ein Lauf von CHMI ALADIN (Open Data des tschechischen Wetterdienstes, 2,3 km) in GRIB 1 auf dem
+Lambert-Gitter des Modells, zugeschnitten auf das Fenster `chmi-aladin`: ein Wert je Gitterpunkt,
+zeilenweise von Süden. Stündlich von T+0 bis T+72. Es gibt nur Felder am Boden, keine Druckflächen.
+Für einen Teil der Felder hat ecCodes keinen Namen (`unknown`); dort steht die GRIB-1-Parameternummer
+in Klammern, der Name davor ist der des Skills und des Viewers.
+
+| Name | Schritte | Einheit | Bedeutung |
+|---|---|---|---|
+| `z`, `lsm` | nur T+0 | m²/s², 0–1 | Geopotential des Modellbodens (÷ 9,81 = m), Landanteil |
+| `2t` | 0–72 | K | Temperatur in 2 m |
+| `msl` | 0–72 | Pa | Luftdruck auf Meeresniveau |
+| `tcc` (171) | 0–72 | 0–1 | Gesamtbewölkung (nicht % wie bei ICON-D2) |
+| `fog_visibility` (223) | 0–72 | m | geringste Sicht durch Wolken in der Stunde vor dem Termin |
+| `tp` (61) | 1–72 | kg/m² = mm | Niederschlag seit T+0; bei T+1 also die erste Stunde |
+| `ptype` (230) | 1–72 | Code | häufigste Niederschlagsart der letzten Stunde: 1 Regen, 3 gefrierender Regen, 5 Schnee, 6 nasser Schnee, 7 Regen und Schnee, 8 Eiskörner, 9 Graupel, 10 Hagel, 11 Niesel, 12 gefrierender Niesel, 193 nasser Schnee und Regen, 2xx dieselben Arten mit Unterbrechungen |
+| `ptype_severe` (229) | 1–72 | Code | gefährlichste Niederschlagsart der letzten Stunde, gleiche Codes |
+| `flash` (236) | 1–72 | Blitze/km² | Blitzdichte seit T+0 |
+| `10u`, `10v` | 0–72 | m/s | Wind in 10 m, Ostkomponente und Nordkomponente; aus Windstärke und Windrichtung des Modells |
+| `gust` (130) | 1–72 | m/s | stärkste Böe in 10 m während der Stunde vor dem Termin |
+
+## Produkte im Fenster chmi-aladin
+
+ALADIN für Österreich und Ungarn, stündlich von T+1 (`weather_summary`) bzw. T+0 bis T+72. Die
+Karten lesen sich wie die des Fensters `icon-d2`, mit diesen Unterschieden:
+
+- [weather_summary](#icon-d2weather_summary): ALADIN hat keinen Wetterschlüssel `ww`. Gewitter
+  sind Stunden mit mindestens 0,02 Blitzen pro km² (Schwelle nicht an echten Gewittern geprüft),
+  Hagel die gefährlichste Niederschlagsart `Hagel` oder `Graupel` mit Gewitter, Nebel eine Sicht
+  durch Wolken unter 700 m (ergibt über Österreich und Bayern dieselbe Nebelfläche wie ICON-D2).
+- Niederschlag und Art gelten für die letzte Stunde.
+- Keine `mountain_2000`, `tmax`, `tmin` und `orography`: Dafür fehlen Druckflächen, Extreme bzw.
+  der Mehrwert gegenüber `icon-d2`.
+- Landesgrenzen schwarz, Bundesländer und ungarische Komitate gestrichelt.
+- Der Kontaktabzug zeigt die Karten um 03, 09, 15 und 21 UTC, also 12 Kacheln über 72 h.
