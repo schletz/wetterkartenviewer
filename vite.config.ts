@@ -7,7 +7,8 @@ export default defineConfig({
   // Relative paths: GitHub Pages serves the app below /wetterkartenviewer/.
   base: './',
   server: {
-    // data/ and maps/ are rewritten by scripts/update_maps.py; reloading on every write would be useless.
-    watch: { ignored: ['**/data/**', '**/maps/**'] },
+    // data/ and maps/ are rewritten by scripts/update_maps.py, api/ is the build of the Azure function;
+    // reloading on every write would be useless.
+    watch: { ignored: ['**/data/**', '**/maps/**', '**/api/**'] },
   },
 })

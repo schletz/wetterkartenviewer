@@ -1,39 +1,45 @@
 import { useEffect, useState } from 'react'
+import { stationKey, type WeatherStation } from '../model/WeatherStation'
+import type { StationDataSource, StationLoader } from '../services/StationDataSource'
+import { STATION_SOURCES } from '../services/stationSources'
 
 /** Reload interval: the stations send every 10 min, so half of that keeps the current value at most 15 min old. */
 const REFRESH_MS = 5 * 60 * 1000
 
-/** Outcome of the latest request; `stationId` tells a stale outcome from the current one. */
-export type StationDataState<T> = { stationId: string } & ({ data: T } | { error: string })
+/** Outcome of the latest request; `key` tells a stale outcome from the current one. */
+export type StationDataState<T> = { key: string } & ({ data: T } | { error: string })
 
 /**
- * Data of a station, loaded on mount and every `REFRESH_MS`.
+ * Data of a station, loaded from its network on mount and every `REFRESH_MS`.
  * Null while the first request for the station runs. A failed reload keeps the values of the last successful one
  * (their times show their age); only a station without any values shows the error.
  *
- * @param stationId the station; a change discards the data of the previous one
- * @param load requests the data as of a time; must be a stable function, every change starts a new request
+ * @param station the station; a change discards the data of the previous one
+ * @param loaderOf picks the kind of data from a network; must be a stable function
  */
 export function useStationData<T>(
-  stationId: string,
-  load: (stationId: string, now: Date, signal: AbortSignal) => Promise<T>,
+  station: WeatherStation,
+  loaderOf: (source: StationDataSource) => StationLoader<T>,
 ): StationDataState<T> | null {
   const [state, setState] = useState<StationDataState<T> | null>(null)
+  const key = stationKey(station)
+  const { id, source } = station
 
   useEffect(() => {
+    const load = loaderOf(STATION_SOURCES[source])
     let controller = new AbortController()
     const reload = () => {
       controller.abort()
       controller = new AbortController()
       const { signal } = controller
-      load(stationId, new Date(), signal)
-        .then((data) => setState({ stationId, data }))
+      load(id, new Date(), signal)
+        .then((data) => setState({ key, data }))
         .catch((error: unknown) => {
           if (signal.aborted) return
           const message = error instanceof Error ? error.message : String(error)
-          setState((previous) => previous?.stationId === stationId && 'data' in previous
+          setState((previous) => previous?.key === key && 'data' in previous
             ? previous
-            : { stationId, error: message })
+            : { key, error: message })
         })
     }
     reload()
@@ -42,7 +48,7 @@ export function useStationData<T>(
       clearInterval(timer)
       controller.abort()
     }
-  }, [stationId, load])
+  }, [key, id, source, loaderOf])
 
-  return state?.stationId === stationId ? state : null
+  return state?.key === key ? state : null
 }

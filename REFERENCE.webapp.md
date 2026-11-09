@@ -12,7 +12,7 @@ The API sections follow Javadoc: intro, fields, methods per module.
 
 - Static single-page app (React 19, Vite, TypeScript) on GitHub Pages: https://schletz.github.io/wetterkartenviewer/
 - Start page: for a location in Austria or Hungary a temperature diagram (T850 of ECMWF with its anomaly against ERA5, θe850 as a green line and the ECMWF precipitation per step as a colour bar above its time axis with the ECMWF total cloud cover in its dry blocks, T2m of ECMWF (with bars of the anomaly of its daily mean against the ERA5 daily mean) and of a regional model (ICON-D2 in Austria, CHMI ALADIN in Hungary), the ECMWF 2 m dew point (blue) and wet-bulb temperature (green), ECMWF 10 m gusts as a colour bar above the time axis of the T2m panel, 1000–500 hPa thickness of ECMWF with the Showalter index of a parcel lifted from 850 hPa with its dew point from RH850 as layered blue/red areas and RH700 as a grey line) from the pipeline's series files, beside it ECMWF ENS meteograms for the location, queried live by the browser; a button saves the temperature diagram as a standalone SVG; on wide screens all in one row of the window height that scrolls with the mouse at its edges; each opens in a new tab.
-- Start page header: live air temperature of a GeoSphere Austria TAWES station chosen independently of the location (current value, minimum and maximum since 00 UTC, times in local time), queried live by the browser; see diagram `station`. A click on the station name opens a window with the 10 min diagram of the last 3 full UTC days and the current one, the hourly values and a Leaflet map of the stations around it; see diagram `station_viewer`.
+- Start page header: live air temperature of a station chosen independently of the location, from GeoSphere Austria (TAWES) or HungaroMet (through the Azure function in `api/`, REFERENCE.api.md), with current value, minimum and maximum since 00 UTC, times in local time, queried live by the browser; see diagram `station`. A click on the station name opens a window with the 10 min diagram of the last 3 full UTC days and the current one, the hourly values and a Leaflet map of the stations around it; see diagram `station_viewer`.
 - Map page (`#/maps`): a grid of tiles with the charts of one ECMWF IFS run (to +240 h), one ICON-D2 run (Austria, to +48 h) and one CHMI ALADIN run (Austria and Hungary, to +72 h), and a step slider 0–240 h.
   Every chart path is an AV1 video with one frame per step; the app seeks the frame with `currentTime`.
   A tile layer can be a fallback chain of paths (ICON-D2 within its 48 h, ECMWF otherwise).
@@ -253,7 +253,7 @@ TemperaturePanel ..> colourBands : bandColour()
 @enduml
 ```
 
-### station: live temperatures of a GeoSphere station
+### station: live temperatures of a station
 
 Solid arrow: renders or calls the hook, dashed: uses.
 
@@ -269,7 +269,7 @@ class StationPanel <<component>> {
 }
 class StationPicker <<component>> {
  Text field with datalist over
- the active stations.
+ the active stations of all networks.
 }
 class StationReadings <<component>> {
  Current, min and max with local time;
@@ -281,35 +281,50 @@ class useStoredStation <<hook>> {
  null removes it.
 }
 class useStationData <<hook>> {
- Generic: loads on mount and every
- 5 min; keeps values on a failed reload.
+ Generic over the kind of data: loads from the
+ network of the station on mount and every 5 min;
+ keeps values on a failed reload.
 }
 class useStationList <<hook>> {
  The active stations or an error text.
 }
 class WeatherStation <<interface>> {
- id, name, state, altitude;
- label unique by height.
+ source, id, name, state, altitude;
+ label unique by height, stationKey.
 }
 class stationTemperatures <<module>> {
  Current, min and max of the
  10 min series, nulls skipped.
 }
-class geosphereStations <<module>> {
- GeoSphere data hub: cached station list,
- historical series, current values.
+interface StationDataSource {
+ One network: names, cached station list,
+ day temperatures, series, current values.
+}
+class dataHubSource <<module>> {
+ createDataHubSource: client of the
+ data hub API for a URL and a dataset.
+}
+class stationSources <<module>> {
+ STATION_SOURCES per network;
+ fetchAllStations merges the lists.
 }
 cloud "GeoSphere data hub" as hub
+cloud "Azure function api/" as proxy
 StationPanel --> useStoredStation
 StationPanel --> StationPicker
 StationPanel --> StationReadings
 StationPicker --> useStationList
 StationPicker ..> WeatherStation : stationLabel()
 StationReadings --> useStationData
-StationReadings ..> geosphereStations : fetchDayTemperatures\nas the loader
-useStationList ..> geosphereStations : fetchStations()
-geosphereStations ..> stationTemperatures : summarizeTemperatures()
-geosphereStations ..> hub : GET metadata,\nhistorical, current
+StationReadings ..> StationDataSource : fetchDayTemperatures\nas the loader
+StationReadings ..> stationSources : name, attribution
+useStationData ..> stationSources : STATION_SOURCES
+useStationList ..> stationSources : fetchAllStations()
+stationSources ..> dataHubSource : createDataHubSource()
+dataHubSource ..|> StationDataSource
+dataHubSource ..> stationTemperatures : summarizeTemperatures()
+dataHubSource ..> hub : GeoSphere
+dataHubSource ..> proxy : HungaroMet,\nsame API
 useStoredStation ..> WeatherStation : isValidStation()
 @enduml
 ```
@@ -357,13 +372,15 @@ class temperatureBands <<module>> {
 }
 class useStationData << (D,#fdebd1) station >>
 class useStationList << (D,#fdebd1) station >>
-class geosphereStations << (D,#fdebd1) station >>
+class StationDataSource << (D,#fdebd1) station >>
+class stationSources << (D,#fdebd1) station >>
+class dataHubSource << (D,#fdebd1) station >>
 class ValueAxis << (D,#fdebd1) temperature >>
 class colourBands << (D,#fdebd1) temperature >>
 cloud "OpenStreetMap tiles" as osm
 StationViewer --> useStationData
 StationViewer --> useStationList
-StationViewer ..> geosphereStations : fetchTemperatureSeries\nas the loader
+StationViewer ..> StationDataSource : fetchTemperatureSeries\nas the loader
 StationViewer --> StationChart
 StationViewer --> StationValueTable
 StationViewer --> StationLegend
@@ -376,9 +393,10 @@ StationLegend ..> temperatureBands : TEMPERATURE_BANDS,\nbandLabel()
 StationMap --> useCurrentTemperatures
 StationMap ..> temperatureBands : temperatureColour()
 StationMap ..> osm : tiles at zoom 10
-useCurrentTemperatures ..> geosphereStations : fetchCurrentTemperatures()
+StationLegend ..> stationSources : attribution of\nevery network
+useCurrentTemperatures ..> stationSources : one request\nper network
 temperatureBands ..> colourBands : bandColour()
-geosphereStations ..> stationSeries : seriesStart()
+dataHubSource ..> stationSeries : seriesStart()
 @enduml
 ```
 
@@ -429,7 +447,8 @@ t850.json and t2m.json: `ecmwf {run, steps, grid, orog, t850|t2m}`, `climate {pe
 
 ### GeoSphere Austria data hub (TAWES 10 min)
 
-Public, no key, CORS `*`; docs https://dataset.api.hub.geosphere.at/v1/docs/. Base `DATASET_URL` + `DATASET = tawes-v1-10min` (geosphereStations.ts). Trusted, not validated. Rate limit per client (response headers, 2026-11): 5 requests/s, **240 requests/h**.
+Public, no key, CORS `*`; docs https://dataset.api.hub.geosphere.at/v1/docs/. Base URL and dataset `tawes-v1-10min` in `STATION_SOURCES` (stationSources.ts). Trusted, not validated.
+The Azure function in `api/` answers the same three requests for the Hungarian stations, dataset `hungaromet-10min` (REFERENCE.api.md); what follows about the shape holds for both, the numbers of stations and the rate limit only for GeoSphere. Rate limit per client (response headers, 2026-11): 5 requests/s, **240 requests/h**.
 - `GET …/station/current/tawes-v1-10min/metadata` (≈ 87 KB): `stations[] {id, name, state, lat, lon, altitude, is_active, …}`, 288 stations, 286 active; names in capitals as GeoSphere spells them (e.g. „WIEN/HOHE WARTE“); two active stations named „NEUSIEDL AM SEE“ (117 and 148 m), hence `stationLabel` adds the height.
 - `GET …/station/historical/tawes-v1-10min?parameters=TL,TLMAX,TLMIN&station_ids=<id>&start=YYYY-MM-DDTHH:MM&end=…` (UTC, `end` required, else 422; unknown id → 400): `timestamps[]` (`2026-11-07T18:20+00:00`, every 10 min from `start`), `features[0].properties.parameters.<P>.data[]` aligned with them, °C. Values not yet transmitted are `null` (the last one or two slots before `end`, every slot right after 00 UTC).
 - `GET …/station/current/tawes-v1-10min?parameters=TL&station_ids=<id>,<id>,…`: latest values of many stations in one request; same shape with one `timestamps` entry, or two when the stations have not all sent the newest slot (`data` e.g. `[null, 2.4]` and `[2.8, null]`), so take the last non-null value per station; `features[].properties.station` is the id; one unknown id → 400 for the whole request.
@@ -443,7 +462,7 @@ Currently 6 tiles (tile 3: `z850_thetae850`, `z850_rh700`, `z700_t700` on opench
 
 ## API: src/ (app)
 
-No router, no state management, no UI library, no tests. External services called by the browser: Nominatim, ECMWF epsgram, GeoSphere data hub, OpenStreetMap tiles. Every path goes through `import.meta.env.BASE_URL` (`base: './'` for the Pages subpath). Vite does not watch `data/` and `maps/` (vite.config.ts); the dev server serves `maps/` from the repo root, a new manifest needs a reload. StrictMode runs effects twice in dev (meteogram requests abort and restart).
+No router, no state management, no UI library, no tests. External services called by the browser: Nominatim, ECMWF epsgram, GeoSphere data hub, the Azure function in `api/`, OpenStreetMap tiles. Every path goes through `import.meta.env.BASE_URL` (`base: './'` for the Pages subpath). Vite does not watch `data/` and `maps/` (vite.config.ts); the dev server serves `maps/` from the repo root, a new manifest needs a reload. StrictMode runs effects twice in dev (meteogram requests abort and restart).
 
 ### ChartIndex (src/model/ChartIndex.ts)
 
@@ -503,16 +522,17 @@ Totals ≥ saturated for every RH. Below 0 °C RH 100 % in the IFS partly means 
 
 `anomalyBands.ts` is a port of `AnomalyBands` (skills/synop/scripts/lib/anomaly_bands.py): crossings are inserted so areas end exactly at the threshold; a null point breaks lines and areas. `thresholdPolygons(points, above, below)` does the same for fixed thresholds (the Showalter classes).
 
-### Station temperatures (src/components/StationPanel.tsx, StationPicker.tsx, StationReadings.tsx, src/hooks/useStoredStation.ts, useStationData.ts, useStationList.ts, src/model/WeatherStation.ts, stationTemperatures.ts, src/services/geosphereStations.ts)
+### Station temperatures (src/components/StationPanel.tsx, StationPicker.tsx, StationReadings.tsx, src/hooks/useStoredStation.ts, useStationData.ts, useStationList.ts, src/model/WeatherStation.ts, stationTemperatures.ts, src/services/StationDataSource.ts, dataHubSource.ts, stationSources.ts)
 
-`StationPanel` sits in the start page header between LocationForm and „Zu den Karten“ (the header wraps on narrow screens; at 1900 px one row). The station is independent of the location (per user: the nearest station may lie 400 m higher than the place). localStorage `wetterkartenviewer.station` holds `WeatherStation {id, name, state, altitude}`, enough to show the readings without the station list; `isValidStation` guards the stored value, `save(null)` removes the entry („Station wechseln“).
-`fetchStations` caches the promise of the list for the page lifetime (a failure is cleared and tried again by the next call), so picker and viewer share one request; it returns `LocatedStation` (a `WeatherStation` with `lat`, `lon`), and a picked station is stored with these extra fields, which nothing reads. `StationPicker` reads the list through `useStationList` (input disabled while loading or after an error, which shows as text); `<datalist>` options `stationLabel` = „NAME (H m)“ with the state as label. A value equal to a label selects at once (a picked suggestion arrives as its full label); Enter takes the exact label, else the first station whose label contains the text, case-insensitive (`matchStation`).
-`useStationData(id, load)` calls the stable function `load(id, new Date(), signal)` on mount and every `REFRESH_MS` 5 min (stations send every 10 min); null while the first request for the station runs; a failed reload keeps the previous values (their times show the age), an error shows only without values. `StationReadings` passes `fetchDayTemperatures`, `StationViewer` `fetchTemperatureSeries`.
-`fetchDayTemperatures` requests from 00 UTC of the current UTC day to now (per user; between 00 and 01/02 local time this is still the previous local day's data since 00 UTC). `summarizeTemperatures(timestamps, tl, tlmin, tlmax)`: `current` = last non-null TL; `min` = lowest TLMIN (TL where TLMIN is null), `max` = highest TLMAX likewise, each with the time stamp of its 10 min slot, the earliest on a tie; all null when the series has no value. `StationReadings` formats values `de-AT` with one decimal and times `HH:MM` in the browser's local time zone; min blue #1f5fbf, max red; the station name is the button that opens the viewer.
+`StationPanel` sits in the start page header between LocationForm and „Zu den Karten“ (the header wraps on narrow screens; at 1900 px one row). The station is independent of the location (per user: the nearest station may lie 400 m higher than the place). localStorage `wetterkartenviewer.station` holds `WeatherStation {source, id, name, state, altitude}`, enough to show the readings without the station list; `load` adds `source: 'geosphere'` to an entry without one, `isValidStation` guards the stored value, `save(null)` removes the entry („Station wechseln“).
+A network is a `StationDataSource` (`name` for the header, `attribution` the citation its terms ask for, four loaders that are plain functions); `STATION_SOURCES: Record<StationSourceId, StationDataSource>` (stationSources.ts) holds both, built by `createDataHubSource(config)` (dataHubSource.ts), since the function in `api/` copies the API of the hub. `HUNGARIAN_STATIONS_URL` is the deployed function, `VITE_HUNGARIAN_STATIONS_URL` in `.env.local` overrides it for a local one (http://localhost:7071/v1/station). Ids are unique per network only, so anything keyed across networks uses `stationKey` (`source:id`).
+`fetchStations` caches the promise of the list per network for the page lifetime (a failure is cleared and tried again by the next call), so picker and viewer share one request; it returns `LocatedStation` (a `WeatherStation` with `lat`, `lon`), and a picked station is stored with these extra fields, which nothing reads. `fetchAllStations` merges the networks sorted by name; a network that fails is left out silently, only when all fail the picker shows the error. `StationPicker` reads the list through `useStationList` (input disabled while loading or after an error, which shows as text); `<datalist>` options `stationLabel` = „NAME (H m)“ with the state as label. A value equal to a label selects at once (a picked suggestion arrives as its full label); Enter takes the exact label, else the first station whose label contains the text, case-insensitive (`matchStation`).
+`useStationData(station, loaderOf)` takes the loader that the stable function `loaderOf` picks from the network of the station and calls it on mount and every `REFRESH_MS` 5 min (stations send every 10 min); null while the first request for the station runs; a failed reload keeps the previous values (their times show the age), an error shows only without values. `StationReadings` picks `fetchDayTemperatures`, `StationViewer` `fetchTemperatureSeries`.
+`fetchDayTemperatures` requests from 00 UTC of the current UTC day to now (per user; between 00 and 01/02 local time this is still the previous local day's data since 00 UTC). `summarizeTemperatures(timestamps, tl, tlmin, tlmax)`: `current` = last non-null TL; `min` = lowest TLMIN (TL where TLMIN is null), `max` = highest TLMAX likewise, each with the time stamp of its 10 min slot, the earliest on a tie; all null when the series has no value. `StationReadings` formats values `de-AT` with one decimal and times `HH:MM` in the browser's local time zone; min blue #1f5fbf, max red; the station name is the button that opens the viewer; „Quelle: <name>“ follows the readings with the full citation as tooltip (the terms of HungaroMet ask for the source wherever its data is used).
 
 ### Station viewer (src/components/StationViewer.tsx, StationChart.tsx, StationValueTable.tsx, StationLegend.tsx, StationMap.tsx, src/hooks/useCurrentTemperatures.ts, src/model/stationSeries.ts, temperatureBands.ts)
 
-`StartPage` holds the viewed station and loads `StationViewer` with `React.lazy`; while it is open `useEdgeScroll(strip, false)` stops the meteogram row behind it. The window is a dimmed backdrop with a box of at most 1560 × 900 px (made for a wide screen, per user): chart above map (7 : 3) on the left, a 300 px column with table and legend on the right; below 700 px viewport the same arrangement, squeezed, with a 150 px column (per user: phones are no target). Closes with ×, Escape or a press on the backdrop (on `pointerdown`: a map drag released outside the window would be a click on the backdrop). The shown station is state of the viewer, initialised once: a click on the map changes it without touching localStorage (per user).
+`StartPage` holds the viewed station and loads `StationViewer` with `React.lazy`; while it is open `useEdgeScroll(strip, false)` stops the meteogram row behind it. The window is a dimmed backdrop with a box of at most 1560 × 900 px (made for a wide screen, per user): chart above map (7 : 3) on the left, a 300 px column with table and legend on the right; below 700 px viewport the same arrangement, squeezed, with a 150 px column (per user: phones are no target). Closes with ×, Escape or a press on the backdrop (on `pointerdown`: a map drag released outside the window would be a click on the backdrop). The shown station is state of the viewer, initialised once: a click on the map changes it without touching localStorage (per user). The map shows the stations of both networks together, so `StationLegend` cites both.
 
 Time span (`seriesStart`, per user): 00 UTC, 3 days before the current UTC day, until the moment of the request, e.g. 2026-11-08T07:40Z → from 2026-11-05T00:00Z.
 
@@ -522,7 +542,7 @@ Time span (`seriesStart`, per user): 00 UTC, 3 days before the current UTC day, 
 
 `StationMap`: plain Leaflet in effects, without react-leaflet. `ZOOM` 10 fixed (`minZoom` = `maxZoom`, every zoom control off, about 100 m per pixel; per user, to limit the stations per view: about 40 in a full HD window), OSM tiles with the required attribution. The map opens around the first station (`DEFAULT_LOCATION` if it is not in the list) and is not moved by a selection. Stations are `L.circleMarker`s with a permanent `bindTooltip` as name label (red for the selected one, through `styles.selected` on the tooltip element); clicks count on the point only, labels let them through. A marker is added once its station has an entry in `temperatures`, so white always means „not available“ and never „still loading“. Requests: all active stations within the view + `LOAD_MARGIN` 25 % on each side, `MOVE_DELAY_MS` 300 ms after `moveend`/`resize`, and every `REFRESH_MS` 5 min.
 
-`useCurrentTemperatures().request(ids)` asks only for ids without entry or older than `MAX_AGE_MS` 4 min (below the map's 5 min so a timer firing early skips no interval), in one request; `requestedAt` is set before the answer, so a move in the meantime does not ask again. A failure forgets those times (next move retries), keeps known values and enters null for unknown ones.
+`useCurrentTemperatures().request(stations)` asks only for stations without entry or older than `MAX_AGE_MS` 4 min (below the map's 5 min so a timer firing early skips no interval), in one request per network, `temperatures` keyed by `stationKey`; `requestedAt` is set before the answer, so a move in the meantime does not ask again. A failure forgets those times (next move retries), keeps known values and enters null for unknown ones.
 
 ### Other model, config and services
 
@@ -573,6 +593,7 @@ CSS that must match the image size: `aspect-ratio: 1200 / 690` in ChartImage.mod
 - **Fallback chains switch videos**: before the first and after the last ICON frame the tile shows the ECMWF video, loaded only at that moment; `resolve` does not check that a video loads.
 - **Steps hang on the ECMWF run**: relating steps to the ICON run means changing `ChartIndex`, `currentStep` and the pipeline's `chart_frames` together.
 - **Time zones**: run, steps and file names are UTC; the slider, chart legends and the time axis of the station diagram show UTC; only the station readings and the value table of the station viewer show local time.
+- **Azure function URL**: `HUNGARIAN_STATIONS_URL` in stationSources.ts must match the deployed function; a wrong one only makes the Hungarian stations disappear from the picker, without an error.
 - **GeoSphere rate limit**: 240 requests/h per client are shared by the header readings (12/h), the viewer's series (12/h) and map values (12/h plus one per map move that reveals new stations); new features must batch and cache like `useCurrentTemperatures`.
 - **OpenStreetMap tiles**: the attribution must stay visible (`ATTRIBUTION` in StationMap.tsx), and the tile usage policy requires a Referer, so do not add `referrerPolicy: no-referrer` to the page.
 - **Meteograms** are queried again on every location change, no cache except the browser image cache.
@@ -590,6 +611,7 @@ CSS that must match the image size: `aspect-ratio: 1200 / 690` in ChartImage.mod
 - **Location fields** (e.g. name, altitude): `GeoLocation` and `isValidLocation`; stored old objects pass `isValidLocation` in `load`.
 - **Meteogram**: a name in `meteograms`; the row takes any number of cells.
 - **Temperature colour class**: `TEMPERATURE_BANDS` in temperatureBands.ts; table, legend and map follow.
-- **Another station parameter in the viewer**: add it to the `parameters` of `fetchTemperatureSeries`, a field in `TemperatureSample`, then a line in `StationChart`; map and table read only TL.
+- **Another station parameter in the viewer**: add it to the `parameters` of `fetchTemperatureSeries`, a field in `TemperatureSample`, then a line in `StationChart`, for Hungary also `ParameterValues` and `Measurement` in `api/`; map and table read only TL.
+- **Another station network**: an id in `STATION_SOURCE_IDS` (WeatherStation.ts), then the compiler asks for its entry in `STATION_SOURCES`; a service without the API of the hub implements `StationDataSource` itself.
 - **New chart window**: its values in `PROJECTIONS` of ChartProjection.ts, besides the pipeline changes.
 - **Another line in the temperature diagram**: field in point_series.py (REFERENCE.scripts.md), type in seriesFiles.ts, a new file also in `OPTIONAL` of useSeriesFiles.ts (or `REQUIRED`), series in `LocationTemperatures`/`TemperatureSeries.at`, a `PanelLine` (and legend entry) in an existing `PanelSpec` (`scaledLines` for a series without axis, with its `range` from the axis range, `colourBar` for a series shown in the colours of a chart scale, whose bands the file carries via `colour_bands`) or a new panel in `panels` of TemperatureDiagram.tsx, its tooltip text in `tooltipParts` under the panel key, colour in TemperatureDiagram.module.css.

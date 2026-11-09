@@ -1,7 +1,8 @@
 import { useStationData } from '../hooks/useStationData'
 import type { TemperatureReading } from '../model/stationTemperatures'
 import { stationLabel, type WeatherStation } from '../model/WeatherStation'
-import { fetchDayTemperatures } from '../services/geosphereStations'
+import type { StationDataSource } from '../services/StationDataSource'
+import { STATION_SOURCES } from '../services/stationSources'
 import styles from './StationReadings.module.css'
 
 interface StationReadingsProps {
@@ -16,6 +17,8 @@ interface StationReadingsProps {
 const TIME_FORMAT = new Intl.DateTimeFormat('de-AT', { hour: '2-digit', minute: '2-digit' })
 
 const VALUE_FORMAT = new Intl.NumberFormat('de-AT', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+
+const dayTemperatures = (source: StationDataSource) => source.fetchDayTemperatures
 
 /** One value with its local time; a dash while the series has none. */
 function Reading({ label, reading, className }: { label: string, reading: TemperatureReading | null, className: string }) {
@@ -33,8 +36,9 @@ function Reading({ label, reading, className }: { label: string, reading: Temper
  * its name as the entry to the station viewer, and a button that forgets the station.
  */
 export default function StationReadings({ station, onOpen, onClear }: StationReadingsProps) {
-  const state = useStationData(station.id, fetchDayTemperatures)
+  const state = useStationData(station, dayTemperatures)
   const temperatures = state && 'data' in state ? state.data : null
+  const source = STATION_SOURCES[station.source]
 
   return (
     <div className={styles.panel}>
@@ -51,6 +55,7 @@ export default function StationReadings({ station, onOpen, onClear }: StationRea
           <Reading label="Max" reading={temperatures.max} className={styles.max} />
         </>
       )}
+      <span className={styles.caption} title={source.attribution}>Quelle: {source.name}</span>
       <button className={styles.clear} onClick={onClear}>Station wechseln</button>
     </div>
   )

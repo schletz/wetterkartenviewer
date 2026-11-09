@@ -1,8 +1,8 @@
 import { useEffect, useState, type PointerEvent } from 'react'
 import { useStationData } from '../hooks/useStationData'
 import { useStationList } from '../hooks/useStationList'
-import { stationLabel, type WeatherStation } from '../model/WeatherStation'
-import { fetchTemperatureSeries } from '../services/geosphereStations'
+import { stationKey, stationLabel, type WeatherStation } from '../model/WeatherStation'
+import type { StationDataSource } from '../services/StationDataSource'
 import StationChart from './StationChart'
 import StationLegend from './StationLegend'
 import StationMap from './StationMap'
@@ -14,6 +14,8 @@ interface StationViewerProps {
   initialStation: WeatherStation
   onClose: () => void
 }
+
+const temperatureSeries = (source: StationDataSource) => source.fetchTemperatureSeries
 
 /** Text in place of data that is not there: the error, or a note while loading. */
 function Status({ error }: { error?: string }) {
@@ -27,7 +29,7 @@ function Status({ error }: { error?: string }) {
  */
 export default function StationViewer({ initialStation, onClose }: StationViewerProps) {
   const [station, setStation] = useState(initialStation)
-  const seriesState = useStationData(station.id, fetchTemperatureSeries)
+  const seriesState = useStationData(station, temperatureSeries)
   const series = seriesState && 'data' in seriesState ? seriesState.data : null
   const seriesError = seriesState && 'error' in seriesState ? seriesState.error : undefined
   const list = useStationList()
@@ -58,11 +60,11 @@ export default function StationViewer({ initialStation, onClose }: StationViewer
           </section>
           <section className={styles.map}>
             {list && 'stations' in list
-              ? <StationMap stations={list.stations} selectedId={station.id} onSelect={setStation} />
+              ? <StationMap stations={list.stations} selectedKey={stationKey(station)} onSelect={setStation} />
               : <Status error={list?.error} />}
           </section>
           <aside className={styles.side}>
-            {series ? <StationValueTable key={station.id} samples={series.samples} /> : <div className={styles.grow} />}
+            {series ? <StationValueTable key={stationKey(station)} samples={series.samples} /> : <div className={styles.grow} />}
             <StationLegend />
           </aside>
         </div>

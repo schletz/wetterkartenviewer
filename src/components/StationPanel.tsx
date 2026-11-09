@@ -9,7 +9,7 @@ interface StationPanelProps {
 }
 
 /**
- * Live temperatures of a GeoSphere station in the header of the start page:
+ * Live temperatures of a station in the header of the start page:
  * the picker while no station is stored, its readings afterwards.
  */
 export default function StationPanel({ onOpenStation }: StationPanelProps) {

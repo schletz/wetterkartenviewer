@@ -1,5 +1,9 @@
 import { bandLabel, NO_VALUE_COLOUR, TEMPERATURE_BANDS } from '../model/temperatureBands'
+import { STATION_SOURCES } from '../services/stationSources'
 import styles from './StationLegend.module.css'
+
+/** The map shows the stations of every network, so each of them is cited. */
+const ATTRIBUTIONS = Object.values(STATION_SOURCES).map((source) => source.attribution).join('; ')
 
 /** One colour swatch with its text. */
 function Entry({ colour, text }: { colour: string, text: string }) {
@@ -19,7 +23,7 @@ export default function StationLegend() {
         {TEMPERATURE_BANDS.map((band) => <Entry key={band[2]} colour={band[2]} text={bandLabel(band)} />)}
         <Entry colour={NO_VALUE_COLOUR} text="nicht verfügbar" />
       </ul>
-      <div className={styles.note}>ungeprüfte Rohdaten, Quelle: GeoSphere Austria</div>
+      <div className={styles.note}>ungeprüfte Rohdaten, Quelle: {ATTRIBUTIONS}</div>
     </div>
   )
 }

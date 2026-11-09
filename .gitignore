@@ -35,3 +35,7 @@ dist-ssr
 /maps/*
 !/maps/manifest.json
 __pycache__/
+# Build output of the Azure function and its local settings.
+/api/bin/
+/api/obj/
+/api/local.settings.json

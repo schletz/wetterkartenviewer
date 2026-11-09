@@ -4,6 +4,7 @@
 
 - Vor Änderungen an `scripts/`: `REFERENCE.scripts.md` lesen.
 - Vor Änderungen an `src/` (App): `REFERENCE.webapp.md` lesen.
+- Vor Änderungen an `api/` (Azure Function): `REFERENCE.api.md` lesen.
 - `REFERENCE.md` ist das Inhaltsverzeichnis.
 - Die Referenzen beschreiben Aufbau, Datenfluss, Verträge, Konstanten, Erweiterungspunkte und Fallstricke. Quellcode daher nur gezielt nachlesen.
 - Ändert sich etwas, das in der Referenz beschrieben ist: Referenz samt Diagrammen im selben Arbeitsgang nachziehen. Dafür den Skill `document-software` laden.

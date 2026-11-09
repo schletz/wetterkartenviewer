@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from 'react'
 import { useStationList } from '../hooks/useStationList'
-import { stationLabel, type WeatherStation } from '../model/WeatherStation'
+import { stationKey, stationLabel, type WeatherStation } from '../model/WeatherStation'
 import styles from './StationPicker.module.css'
 
 interface StationPickerProps {
@@ -21,7 +21,7 @@ function matchStation(stations: WeatherStation[], text: string, takeFirst: boole
 }
 
 /**
- * Text field with autocompletion (native datalist) over the active TAWES stations, loaded once on mount.
+ * Text field with autocompletion (native datalist) over the active stations of all networks, loaded once on mount.
  * Choosing a suggestion selects the station at once; Enter takes the first station that contains the text.
  */
 export default function StationPicker({ onSelect }: StationPickerProps) {
@@ -54,7 +54,7 @@ export default function StationPicker({ onSelect }: StationPickerProps) {
       </label>
       <datalist id={listId}>
         {stations.map((station) => (
-          <option key={station.id} value={stationLabel(station)}>{station.state}</option>
+          <option key={stationKey(station)} value={stationLabel(station)}>{station.state}</option>
         ))}
       </datalist>
       {list && 'error' in list && <span className={styles.error}>{list.error}</span>}

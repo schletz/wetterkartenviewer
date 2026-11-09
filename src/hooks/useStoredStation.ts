@@ -5,8 +5,10 @@ const STORAGE_KEY = 'wetterkartenviewer.station'
 
 function load(): WeatherStation | null {
   try {
-    const stored: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null')
-    return isValidStation(stored) ? stored : null
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as object | null
+    // Entries written before there was a second network have no source and are GeoSphere stations.
+    const station: unknown = stored && { source: 'geosphere', ...stored }
+    return isValidStation(station) ? station : null
   } catch {
     return null
   }

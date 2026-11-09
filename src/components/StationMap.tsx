@@ -4,13 +4,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useCurrentTemperatures } from '../hooks/useCurrentTemperatures'
 import { DEFAULT_LOCATION } from '../model/GeoLocation'
 import { temperatureColour } from '../model/temperatureBands'
-import type { LocatedStation } from '../model/WeatherStation'
+import { stationKey, type LocatedStation } from '../model/WeatherStation'
 import styles from './StationMap.module.css'
 
 interface StationMapProps {
   /** All active stations. */
   stations: LocatedStation[]
-  selectedId: string
+  /** `stationKey` of the station shown in the viewer. */
+  selectedKey: string
   onSelect: (station: LocatedStation) => void
 }
 
@@ -30,14 +31,14 @@ const MARKER_RADIUS = 7
  * temperature. A station appears once its value (or the lack of one) is known, so white always means „not available“.
  * The values follow the moved map. A click on a point selects the station; the map itself stays where it is.
  */
-export default function StationMap({ stations, selectedId, onSelect }: StationMapProps) {
+export default function StationMap({ stations, selectedKey, onSelect }: StationMapProps) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const markers = useRef(new Map<string, L.CircleMarker>())
   const { temperatures, request } = useCurrentTemperatures()
   // The map opens around the first station and is not moved by later selections.
   const [centre] = useState<L.LatLngTuple>(() => {
-    const { lat, lon } = stations.find((station) => station.id === selectedId) ?? DEFAULT_LOCATION
+    const { lat, lon } = stations.find((station) => stationKey(station) === selectedKey) ?? DEFAULT_LOCATION
     return [lat, lon]
   })
 
@@ -61,7 +62,7 @@ export default function StationMap({ stations, selectedId, onSelect }: StationMa
     const requestVisible = () => {
       const bounds = map.getBounds().pad(LOAD_MARGIN)
       const visible = stations.filter((station) => bounds.contains([station.lat, station.lon]))
-      if (visible.length > 0) request(visible.map((station) => station.id))
+      if (visible.length > 0) request(visible)
     }
     let moveTimer: ReturnType<typeof setTimeout> | undefined
     const onMove = () => {
@@ -86,9 +87,10 @@ export default function StationMap({ stations, selectedId, onSelect }: StationMa
     const map = mapRef.current
     if (map === null) return
     for (const station of stations) {
-      const temperature = temperatures.get(station.id)
+      const key = stationKey(station)
+      const temperature = temperatures.get(key)
       if (temperature === undefined) continue
-      let marker = markers.current.get(station.id)
+      let marker = markers.current.get(key)
       if (marker === undefined) {
         marker = L.circleMarker([station.lat, station.lon], {
           radius: MARKER_RADIUS, color: '#1d2228', weight: 1.5, fillOpacity: 1,
@@ -98,12 +100,12 @@ export default function StationMap({ stations, selectedId, onSelect }: StationMa
           })
           .on('click', () => onSelect(station))
           .addTo(map)
-        markers.current.set(station.id, marker)
+        markers.current.set(key, marker)
       }
       marker.setStyle({ fillColor: temperatureColour(temperature) })
-      marker.getTooltip()?.getElement()?.classList.toggle(styles.selected, station.id === selectedId)
+      marker.getTooltip()?.getElement()?.classList.toggle(styles.selected, key === selectedKey)
     }
-  }, [stations, temperatures, selectedId, onSelect])
+  }, [stations, temperatures, selectedKey, onSelect])
 
   return <div ref={container} className={styles.map} />
 }
