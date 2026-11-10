@@ -509,9 +509,6 @@
   "icon-d2/t2m_wind10m": {
    "file": "icon-d2/t2m_wind10m.mp4",
    "steps": [
-    6,
-    7,
-    8,
     9,
     10,
     11,
@@ -557,10 +554,13 @@
     51,
     52,
     53,
-    54
+    54,
+    55,
+    56,
+    57
    ],
-   "run": "2026111018",
-   "end": 54
+   "run": "2026111021",
+   "end": 57
   },
   "opencharts_central_europe/t2m_wind10m": {
    "file": "opencharts_central_europe/t2m_wind10m.mp4",
@@ -717,9 +717,6 @@
   "icon-d2/mountain_2000": {
    "file": "icon-d2/mountain_2000.mp4",
    "steps": [
-    6,
-    7,
-    8,
     9,
     10,
     11,
@@ -765,10 +762,13 @@
     51,
     52,
     53,
-    54
+    54,
+    55,
+    56,
+    57
    ],
-   "run": "2026111018",
-   "end": 54
+   "run": "2026111021",
+   "end": 57
   },
   "opencharts_central_europe/mountain_2000": {
    "file": "opencharts_central_europe/mountain_2000.mp4",
@@ -845,9 +845,6 @@
   "icon-d2/weather_summary": {
    "file": "icon-d2/weather_summary.mp4",
    "steps": [
-    7,
-    8,
-    9,
     10,
     11,
     12,
@@ -892,10 +889,13 @@
     51,
     52,
     53,
-    54
+    54,
+    55,
+    56,
+    57
    ],
-   "run": "2026111018",
-   "end": 54
+   "run": "2026111021",
+   "end": 57
   },
   "opencharts_central_europe/weather_summary": {
    "file": "opencharts_central_europe/weather_summary.mp4",
@@ -1050,9 +1050,6 @@
   "icon-d2/wind10m": {
    "file": "icon-d2/wind10m.mp4",
    "steps": [
-    7,
-    8,
-    9,
     10,
     11,
     12,
@@ -1097,10 +1094,13 @@
     51,
     52,
     53,
-    54
+    54,
+    55,
+    56,
+    57
    ],
-   "run": "2026111018",
-   "end": 54
+   "run": "2026111021",
+   "end": 57
   },
   "opencharts_central_europe/wind10m": {
    "file": "opencharts_central_europe/wind10m.mp4",
@@ -1404,7 +1404,7 @@
   },
   "t2m": {
    "file": "austria/t2m.json",
-   "version": "2026111012-2026111018-at-hu"
+   "version": "2026111012-2026111021-at-hu"
   },
   "td2m": {
    "file": "austria/td2m.json",
