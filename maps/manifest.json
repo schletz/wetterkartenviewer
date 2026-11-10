@@ -637,12 +637,6 @@
   "chmi-aladin/t2m_wind10m": {
    "file": "chmi-aladin/t2m_wind10m.mp4",
    "steps": [
-    6,
-    7,
-    8,
-    9,
-    10,
-    11,
     12,
     13,
     14,
@@ -709,10 +703,16 @@
     75,
     76,
     77,
-    78
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84
    ],
-   "run": "2026111006",
-   "end": 78
+   "run": "2026111012",
+   "end": 84
   },
   "icon-d2/mountain_2000": {
    "file": "icon-d2/mountain_2000.mp4",
@@ -971,12 +971,6 @@
   "chmi-aladin/weather_summary": {
    "file": "chmi-aladin/weather_summary.mp4",
    "steps": [
-    7,
-    8,
-    9,
-    10,
-    11,
-    12,
     13,
     14,
     15,
@@ -1042,10 +1036,16 @@
     75,
     76,
     77,
-    78
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84
    ],
-   "run": "2026111006",
-   "end": 78
+   "run": "2026111012",
+   "end": 84
   },
   "icon-d2/wind10m": {
    "file": "icon-d2/wind10m.mp4",
@@ -1176,12 +1176,6 @@
   "chmi-aladin/wind10m": {
    "file": "chmi-aladin/wind10m.mp4",
    "steps": [
-    7,
-    8,
-    9,
-    10,
-    11,
-    12,
     13,
     14,
     15,
@@ -1247,10 +1241,16 @@
     75,
     76,
     77,
-    78
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84
    ],
-   "run": "2026111006",
-   "end": 78
+   "run": "2026111012",
+   "end": 84
   },
   "opencharts_central_europe/inversion": {
    "file": "opencharts_central_europe/inversion.mp4",
@@ -1452,7 +1452,7 @@
   },
   "t2m_aladin": {
    "file": "austria/t2m_aladin.json",
-   "version": "2026111006-hu"
+   "version": "2026111012-hu"
   }
  }
 }
