@@ -190,7 +190,7 @@ Anomaly shading: for every k in `SIGMA_STEPS` (0, 1, 2, 3; generate_diagram.py:3
 | `IFS_GUST_NAMES` | lib/constants.py | `10fg`, `10fg3`: names of the ECMWF 10 m gust by step (1 h to T+90, 3 h to T+144, then 6 h); a copy of the viewer's `constants.IFS_GUST_NAMES` |
 | `ICON_NAMES` | lib/constants.py | ecCodes shortName → viewer name of the ICON fields (`tlat`→`clat`, `CLCT`→`tcc`, `prmsl`→`msl`, `WW`→`ww`, `max_i10fg`→`gust`, `ceil`→`ceiling`, …); a copy of the viewer's `constants.ICON_NAMES` |
 | `ALADIN_NAMES` | lib/constants.py | GRIB 1 parameter number → name for fields ecCodes calls `unknown` (61 `tp`, 171 `tcc`, 223 `fog_visibility`, 229 `ptype_severe`, 230 `ptype`, 234 `wbt`, 236 `flash`, 130 `gust`) and shortName → name for the extremes (`mx2t6` → `tmax_2m`, `mn2t6` → `tmin_2m`, 12 h despite the name); a copy of the viewer's `constants.ALADIN_NAMES` |
-| `ALADIN_STORM_FLASHES_KM2`, `ALADIN_FOG_VISIBILITY_M`, `ALADIN_GRAUPEL`, `ALADIN_HAIL` | lib/constants.py | 0.02 flashes/km²/h (not checked against observed storms), 700 m, codes 9 and 10; copies of the viewer's `chart_styles` |
+| `ALADIN_STORM_FLASHES_KM2`, `ALADIN_FOG_VISIBILITY_M`, `ALADIN_GRAUPEL`, `ALADIN_HAIL` | lib/constants.py | 0.1 flashes/km²/h (not checked against observed storms), 700 m, codes 9 and 10; copies of the viewer's `chart_styles` |
 | `PRECIP_TYPES` | lib/aladin_location_tables.py | code → text of ALADIN's `ptype` |
 | `LOCAL_CATEGORY`, `LOCAL_NAMES` | lib/forecast_grib.py:25-27 | 192; parameterNumber → name, fixed by the viewer |
 | `CACHED_FIELDS` | lib/forecast_grib.py:29 | 64 decoded fields per instance |

@@ -27,6 +27,6 @@ ALADIN_NAMES = {61: "tp", 171: "tcc", 223: "fog_visibility", 229: "ptype_severe"
 # ALADIN has no ww. Copies of the viewer's chart_styles, so that table and chart name the same weather: lightning
 # density of one hour that counts as a thunderstorm (flashes per km2), lowest visibility due to cloud below which
 # there is fog (m), codes of graupel and hail in ptype_severe.
-ALADIN_STORM_FLASHES_KM2 = 0.02
+ALADIN_STORM_FLASHES_KM2 = 0.1
 ALADIN_FOG_VISIBILITY_M = 700.0
 ALADIN_GRAUPEL, ALADIN_HAIL = 9, 10

@@ -1449,7 +1449,7 @@ chart_styles.py holds every scale and threshold:
 | `WW_SYMBOLS`, `WW_SYMBOL_SPACING_PX = 20` | lightning (yellow, dark red edge), hail triangle, fog three lines with halo |
 | `ALADIN_PTYPE` | 3 ← 3; 5 ← 5, 205; 6 ← 6, 206; 7 ← 7, 193, 207, 213; 8 ← 8; 12 ← 12 |
 | `ALADIN_FOG_VISIBILITY_M = 700` | same fog area as ICON-D2 ww 45/48 over Austria and Bavaria: 11.8 % against 11.4 %, mean of 48 h, run 2026110906; 1000 m gives 14.4 % |
-| `ALADIN_STORM_FLASHES_KM2 = 0.02` | flashes per km² in the last hour, **not calibrated**: the run tried had no storm over land; check it on a summer case |
+| `ALADIN_STORM_FLASHES_KM2 = 0.1` | flashes per km² in the last hour (≈ 0.5 per 2.3 km cell), **not checked against observed storms**. Run 2026111000, T+68 (moist, near-neutral warm sector, embedded convection): 0.02 marked 7 % of the Alps and eastern Austria at 0.02–0.18, 0.1 marks 0.35 % and keeps the stronger cells (up to 2). Check it on a summer case and against ICON-D2 ww 95 |
 | `ALADIN_GRAUPEL, ALADIN_HAIL = 9, 10`, `ALADIN_CLOUD_PERCENT = 100` | |
 | `STORM_GUST_KMH = 75`, `GUST_SPACING_PX = 60` | Bft 9, DWD "Sturmböen" |
 | `GUST10M` | gusts of wind10m in km/h, bands = Beaufort limits; also copied into gust10m.json |
