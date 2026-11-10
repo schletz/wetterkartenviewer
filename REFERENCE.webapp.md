@@ -475,6 +475,7 @@ Types: `ChartVideo {file, steps, run?, end?}`, `ChartFrame {index, step}`, `Seri
 | `firstStep`, `lastStep` | |
 | `steps(layers) -> number[]` | every step of every path of the layers (arrow keys) |
 | `resolve(layer, step) -> ChartPath` | first path with a frame, else last path with a video, else last path (its placeholder explains); only checks frames, not whether the video loads |
+| `nextLayer(layers, current, step) -> number` | layer a click switches to: the next one, cyclically, whose `resolve` at `step` differs from the current one (chains of ICON-D2 and ALADIN both end on ECMWF); if all are equal, simply the next. The `n/m` badge shows the config index, so it can jump (1/5 → 4/5) |
 | `videoUrl(path)` | `<BASE_URL>maps/<file>?run=<charts.run ?? run>`: every run reuses file names; a new ECMWF run keeps the URL of an unchanged ICON video |
 | `frameTime(frame)` | `(index + 0.5) / fps`: the frame centre, so browser rounding never lands on the neighbour |
 
@@ -577,7 +578,7 @@ Time span (`seriesStart`, per user): 00 UTC, 3 days before the current UTC day, 
 | `TemperatureChart`, `TemperatureDiagram` | see *Temperature diagram* |
 | `StartPage`, `LocationForm`, `Meteogram` | form: one row „Ort [ ] [ ]°N [ ]°E OK“ that never wraps, also at 360 px (per user): only the place field shrinks (down to 4em), the number inputs are 3.4em for „48.21“ (2 decimals, per user) without spin buttons, the message wraps below; a typed name wins and fills the coordinates (`DECIMALS = 2`, ≈ 1 km; number inputs `step="any"`); meteogram: `AbortController` on location change, stale answers dropped by request key, retry button increments `attempt`; the image is a link to itself (`target="_blank"`) |
 | `MapViewer` (src/components/MapViewer.tsx) | |
-| `ChartGrid` (src/components/ChartGrid.tsx) | state step, layer per tile, enlarged; start step `currentStep` = hours since run, floored, clamped 0…240; arrow keys jump to the next/previous step any path of a *visible* layer has (native 1 h on a focused slider input); Escape closes the large view |
+| `ChartGrid` (src/components/ChartGrid.tsx) | state step, layer per tile (a click advances it by `index.nextLayer` at the current step, also from the large view), enlarged; start step `currentStep` = hours since run, floored, clamped 0…240; arrow keys jump to the next/previous step any path of a *visible* layer has (native 1 h on a focused slider input); Escape closes the large view |
 | `StepSlider` (src/components/StepSlider.tsx) | `MAX_STEP = 240`; label „So, 1. 00Z“ (`WEEKDAYS`, no month), `+N h` tooltip, day bar at 00 UTC (`midnightSteps`), Sundays and holidays red |
 | `ChartTile` (src/components/ChartTile.tsx) | path = `index.resolve(layer, step)` every step |
 | `ChartImage` (src/components/ChartImage.tsx) | `time = frameTime(frame)` only when `shown.url === url`; `<video muted playsInline preload="auto">`, `currentTime` set once metadata are there; placeholders (`placeholderText`): „ab +N h“, „bis +N h“, „keine Karten in diesem Lauf“, „<path> konnte nicht geladen werden“ (also on `onError`, e.g. no AV1 decoder); marker in % of 1200×690, fixed 10 px |

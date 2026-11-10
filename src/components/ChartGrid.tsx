@@ -27,7 +27,7 @@ export default function ChartGrid({ index, location, onBack }: ChartGridProps) {
   const [enlarged, setEnlarged] = useState<number | null>(null)
 
   const nextLayer = (tile: number) =>
-    setLayers((current) => current.map((layer, i) => (i === tile ? (layer + 1) % tiles[tile].layers.length : layer)))
+    setLayers((current) => current.map((layer, i) => (i === tile ? index.nextLayer(tiles[tile].layers, layer, step) : layer)))
 
   // Arrow keys jump to the previous/next step that has a chart in any visible layer;
   // on the focused slider they keep their native 1 h steps.

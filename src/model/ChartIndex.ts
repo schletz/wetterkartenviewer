@@ -98,6 +98,21 @@ export class ChartIndex {
   }
 
   /**
+   * Index of the layer a click switches to: the next one, cyclically, that shows another chart at
+   * ``step`` than ``current``. Fallback chains can make several layers resolve to the same path
+   * (e.g. ICON-D2 and ALADIN both to ECMWF after their range), which would look like a dead click.
+   * If every layer shows the same chart, simply the next one.
+   */
+  nextLayer(layers: LayerConfig[], current: number, step: number): number {
+    const shown = this.resolve(layers[current], step)
+    for (let offset = 1; offset < layers.length; offset++) {
+      const candidate = (current + offset) % layers.length
+      if (this.resolve(layers[candidate], step) !== shown) return candidate
+    }
+    return (current + 1) % layers.length
+  }
+
+  /**
    * URL of the video of a product relative to the page, or null if the run has none.
    * Every run reuses the file name; the run of the video's model in the query keeps the browser cache apart.
    */
