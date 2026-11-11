@@ -403,13 +403,14 @@ folgt. Ob der Leser dem Wert trauen kann, ist Teil der Prognose.
 Die Daten zeigen absolute Werte. Ob −6 °C in 850 hPa Ende März normal sind oder ein
 Kaltluftvorstoß, sagt erst der Vergleich mit dem Klima. Dafür liegt in `<data>/era5_means/` eine
 Klimatologie 1991–2020 aus ERA5 auf einem 0,25°-Gitter über dem Europafenster, pro Kalendertag und
-Tageszeit (alle 3 h).
+Tageszeit (alle 3 h). Sie enthält T2m sowie Temperatur, geopotentielle Höhe und relative Feuchte in
+850, 700 und 500 hPa.
 
 - **T850 als Karte:** Das Produkt `t850_anomaly` zeigt die Abweichung zu jedem Termin.
   Für „wo wird es abnormal kalt“ reicht meist sein Kontaktabzug.
 - **T850 am Ort:** Das Diagramm im Bericht zeigt die Abweichung über alle Termine, der Tooltip
   nennt σ.
-- **Alles andere** (T2m, Jahresgang, Vergleich von Monaten): Lies die Klimatologie mit der Klasse
+- **Alles andere** (T2m, Z500, Feuchte, Jahresgang, Vergleich von Monaten): Lies die Klimatologie mit der Klasse
   `GribAnalyze` aus `scripts/lib/`. Sie ist bewusst kein fertiges Skript. Schreib dir damit im
   Arbeitsverzeichnis genau die Auswertung, die die Frage braucht.
 
@@ -423,6 +424,7 @@ archive = ClimateArchive(r"<data>/era5_means")
 point = GribAnalyze(archive)
 point.get_12z_means(850, "avg_t", lat=48.21, lng=16.37, month=1, day=15)   # one value at the location
 point.get_daily_means(2, "avg_2t", lat=48.21, lng=16.37)                   # annual cycle at the location
+point.get_monthly_means(500, "avg_gh", lat=48.21, lng=16.37, month=1)      # Z500 in gpm
 
 region = GribAnalyze(archive, bbox=(46.4, 49.0, 9.5, 17.2))      # south, north, west, east
 region.get_term_means(15, 2, "std_2t", month=1, day=15)          # every point of the region, 15 UTC
@@ -435,13 +437,17 @@ region.get_term_means(15, 2, "std_2t", month=1, day=15)          # every point o
 | `get_00z_means` … `get_18z_means` | Kurzform für 0, 6, 12 und 18 UTC |
 | `get_monthly_means` | pro Monat, aus Tagesmitteln, ohne `day` |
 
-Die Parameter sind `level=850` mit `avg_t` bzw. `std_t` und `level=2` mit `avg_2t` bzw. `std_2t`.
+Die Parameter sind `level=850`, `700` oder `500` mit `avg_t`/`std_t` (Temperatur), `avg_gh`/`std_gh`
+(geopotentielle Höhe) und `avg_r`/`std_r` (relative Feuchte), dazu `level=2` mit `avg_2t`/`std_2t`.
 
 - **Zuschnitt:** `lat`/`lng` und `month`/`day` sind optional. Was du weglässt, kommt vollständig,
   ohne Ort also jeder Gitterpunkt (mit `bbox` nur die darin).
 - **Ergebnis:** Jede Abfrage liefert einen DataFrame mit den Spalten
   `month, day, lat, lon, <param>`. Mittel und Streuung führst du deshalb mit `merge` zusammen.
-  `avg_*` ist in °C, `std_*` in K. Für einen Punkt nimmt die Klasse den nächsten Gitterpunkt.
+  Für einen Punkt nimmt die Klasse den nächsten Gitterpunkt.
+- **Einheiten:** Temperaturmittel in °C, ihre Streuung in K. Die geopotentielle Höhe ist in gpm,
+  die Karten zeigen Z500 aber in dam, also durch 10 teilen, bevor du vergleichst. Die relative
+  Feuchte ist in %. Mittel über 100 % sind kein Fehler: ERA5 bezieht sie unter 0 °C anteilig auf Eis.
 - **Glättung:** Die Kalendertage fassen jeweils ±5 Tage zusammen, sonst schwankten Mittel und
   Streuung zufällig um fast 1 K.
 - **Vorhersage dazu:** Die Felder liefert `ForecastGrib` aus `lib.forecast_grib`

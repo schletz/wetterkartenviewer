@@ -59,10 +59,10 @@ liegen nur im Release.
 
 ## Klimatologie
 
-`t850_anomaly` und der Skill `synop` brauchen die ERA5-Klimatologie 1991–2020 (422 MB). Sie ist
-nicht im Repo. Nach dem Klonen einmal von
-[Google Drive](https://drive.google.com/open?id=1kwR15ysJSWGjBXqyzyteZSQCXaQPgVXa) laden und als
-`data/era5_means/era5_means.grb2` ablegen. Ohne sie bricht `download_data` vor dem Download ab.
+`t850_anomaly` und der Skill `synop` brauchen die ERA5-Klimatologie 1991–2020 (2,3 GB). Sie ist
+nicht im Repo und entsteht aus den Daten des Copernicus CDS (siehe „ERA5-Klimatologie“ unter
+„Quellen“). Die fertige Datei als `data/era5_means/era5_means.grb2` ablegen. Ohne sie bricht
+`download_data` vor dem Download ab.
 
 ## Grenzen der Bundesländer
 
@@ -140,8 +140,10 @@ liest den Index und holt die passenden Byte-Bereiche.
   https://cds.climate.copernicus.eu/how-to-api). Im Profil muss außerdem die Lizenz
   **„CC-BY licence“** akzeptiert sein, sonst antwortet der CDS mit *403 required licences not accepted*.
 - Geladen wird über den Climate Data Store mit dem Python-Paket `cdsapi` (`pip install cdsapi`).
-  Die Daten sind T850 und T2m 1991–2020, alle 3 h, im 0,25°-Gitter, zugeschnitten auf die Box
-  des Europafensters plus 1° Rand. Pro Anfrage wurden 10 Jahre geladen:
+  Die Daten sind T2m sowie Temperatur, geopotentielle Höhe und relative Feuchte in 850, 700 und
+  500 hPa, 1991–2020, alle 3 h, im 0,25°-Gitter, zugeschnitten auf die Box des Europafensters
+  plus 1° Rand. T2m und T850 wurden in Anfragen zu 10 Jahren geladen, die Druckflächen wegen der
+  Grenze von 60 000 Feldern pro Anfrage in Blöcken zu 2 Jahren:
 
 ```python
 import cdsapi
@@ -161,10 +163,15 @@ client.retrieve("reanalysis-era5-pressure-levels",
                 {**common, "variable": ["temperature"], "pressure_level": ["850"]}, "t850_1991-2000.grib")
 client.retrieve("reanalysis-era5-single-levels",
                 {**common, "variable": ["2m_temperature"]}, "t2m_1991-2000.grib")
+client.retrieve("reanalysis-era5-pressure-levels",
+                {**common, "year": ["1991", "1992"],  # 15 blocks of 2 years
+                 "variable": ["geopotential", "temperature", "relative_humidity"],
+                 "pressure_level": ["500", "700", "850"]}, "era5_pl.1991-1992.grib")
 ```
 
-Aus diesen Rohdaten (rund 75 MB pro Monat und Variable) entstehen Mittel und Streuung pro
-Kalendertag, Termin und Monat in `era5_means.grb2`. Das Skript dafür ist nicht in diesem Repo.
+Aus diesen Rohdaten entstehen Mittel und Streuung pro Kalendertag, Termin und Monat in
+`era5_means.grb2`: 66 120 Felder, die geopotentielle Höhe in gpm. Die Skripte dafür sind nicht in
+diesem Repo.
 
 Die Geländehöhe von ERA5 (`scripts/lib/era5_orography.grib`, im Repo) ist das zeitlich konstante
 Geopotential im selben Gebiet, ein einziges Feld:

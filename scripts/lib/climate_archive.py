@@ -1,8 +1,11 @@
 """The climatology GRIB files of a directory (data/era5_means/): which fields exist, their grid and their values.
 
 Every ``*.grb2`` of the directory is read, however the fields are spread
-over files. Each message is the mean or standard deviation of T850
-(level 850) or T2m (level 2) in K, for one kind and calendar day. A kind ``HHz`` holds the
+over files. Each message is the mean or standard deviation of one variable
+on one level, for one kind and calendar day: temperature ``t`` in K (2 m
+and 850, 700, 500 hPa), geopotential height ``gh`` in gpm and relative
+humidity ``r`` in % (850, 700, 500 hPa). T850, Z850 and RH850 share their
+level, so the variable is part of every key. A kind ``HHz`` holds the
 climatology of one time of day (UTC) per calendar day, ``daily`` the one
 of the daily means per calendar day and ``monthly`` the one per calendar
 month. The term hours are taken from the messages present, so a finer
@@ -39,6 +42,8 @@ LEVEL_DIVISOR = {100: 100, 103: 1}  # isobaric surface in Pa -> hPa, height abov
 KIND_BY_RANGES = {2: "daily", 3: "monthly"}
 # Statistical process of the outermost time range (GRIB2 code table 4.10).
 STATISTIC = {0: "mean", 6: "std"}
+# (parameter category, parameter number) of discipline 0 -> variable name (GRIB2 code table 4.2).
+VARIABLE = {(0, 0): "t", (1, 1): "r", (3, 5): "gh"}
 
 
 class ClimateArchive:
@@ -58,7 +63,7 @@ class ClimateArchive:
         self._files = sorted(self._directory.glob("*.grb2"))
         if not self._files:
             raise FileNotFoundError(f"no *.grb2 in {self._directory}")
-        self._index = None   # (kind, statistic, level, month, day) -> (path, offset, length)
+        self._index = None   # (kind, statistic, variable, level, month, day) -> (path, offset, length)
         self._values = {}    # same key -> decoded field
         self._grid = None
 
@@ -82,23 +87,30 @@ class ClimateArchive:
             raise ValueError(f"no climatology for {hour:02d} UTC; the archive has {self.term_hours} UTC")
         return f"{hour:02d}z"
 
-    def keys(self, kind: str) -> list[tuple]:
-        """(statistic, level, month, day) of every field of one kind; day is None for monthly values."""
-        return [key[1:] for key in self._load() if key[0] == kind]
+    @property
+    def variables(self) -> tuple[tuple[str, int], ...]:
+        """(variable, level) of every variable present, e.g. ("gh", 500), ..., ("t", 2), ("t", 850)."""
+        return tuple(sorted({key[2:4] for key in self._load()}))
 
-    def field(self, kind: str, statistic: str, level: int, month: int, day: int | None) -> np.ndarray:
-        """Decoded values of one message in K as a flat float32 array, in GRIB order (rows north to south).
+    def keys(self, kind: str, variable: str = "t") -> list[tuple]:
+        """(statistic, level, month, day) of every field of one kind and variable; day is None for monthly values."""
+        return [(key[1],) + key[3:] for key in self._load() if key[0] == kind and key[2] == variable]
+
+    def field(self, kind: str, statistic: str, level: int, month: int, day: int | None,
+              variable: str = "t") -> np.ndarray:
+        """Decoded values of one message as a flat float32 array, in GRIB order (rows north to south).
 
         Args:
             kind: "HHz", "daily" or "monthly".
             statistic: "mean" or "std".
-            level: 850 (T850) or 2 (T2m).
+            level: 2 (2 m) or 850, 700, 500 (hPa).
             day: None for monthly values.
+            variable: "t" (K), "gh" (gpm) or "r" (%); gh and r exist on the pressure levels only.
 
         Raises:
             KeyError: if the archive has no such field.
         """
-        key = (kind, statistic, level, month, day)
+        key = (kind, statistic, variable, level, month, day)
         if key not in self._values:
             self._values[key] = self._read_values(key)
         return self._values[key]
@@ -181,20 +193,23 @@ def _headers(path: Path):
 
 
 def _key(identification: bytes, product: bytes) -> tuple:
-    """(kind, statistic, level, month, day) of a message from its sections 1 and 4.
+    """(kind, statistic, variable, level, month, day) of a message from its sections 1 and 4.
 
     Byte positions are the octets of the GRIB2 specification minus one.
     Section 1 holds the reference time (octets 13-19); its year is the
     first year of the period and irrelevant here. Template 4.8 holds the
-    first fixed surface (octets 23-28), the number of time ranges (octet
-    42) and from octet 47 one 12-octet specification per range, outermost
-    first, each starting with its statistical process.
+    parameter category and number (octets 10-11), the first fixed surface
+    (octets 23-28), the number of time ranges (octet 42) and from octet 47
+    one 12-octet specification per range, outermost first, each starting
+    with its statistical process. A parameter without a name in VARIABLE is
+    indexed as "category.number".
     """
     template = int.from_bytes(product[7:9], "big")
     if template != STATISTICS_TEMPLATE:
         raise ValueError(f"product definition template 4.{template}, expected 4.{STATISTICS_TEMPLATE}")
     month, day, hour = identification[14], identification[15], identification[16]
+    variable = VARIABLE.get((product[9], product[10]), f"{product[9]}.{product[10]}")
     level = int.from_bytes(product[24:28], "big") // 10 ** product[23] // LEVEL_DIVISOR[product[22]]
     ranges = product[41]
     kind = KIND_BY_RANGES.get(ranges) or f"{hour:02d}z"
-    return kind, STATISTIC[product[46]], level, month, None if kind == "monthly" else day
+    return kind, STATISTIC[product[46]], variable, level, month, None if kind == "monthly" else day

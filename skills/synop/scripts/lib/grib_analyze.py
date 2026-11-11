@@ -4,8 +4,10 @@ Every query returns a DataFrame with the same columns,
 
     month, day, lat, lon, <param>
 
-so results can be merged and compared directly. ``avg_*`` values are in deg C,
-``std_*`` values in K. ``day`` is empty (<NA>) for monthly values. A query
+so results can be merged and compared directly. Temperatures (``avg_t``,
+``avg_2t``) are in deg C and their ``std_*`` in K, geopotential height
+(``*_gh``) in gpm, relative humidity (``*_r``) in %. ``day`` is empty (<NA>)
+for monthly values. A query
 for a point (lat, lng) returns the nearest grid point; without a point every
 grid point comes back, or those inside the bbox given to the constructor.
 
@@ -27,7 +29,10 @@ import pandas as pd
 from .climate_archive import ClimateArchive
 from .constants import KELVIN
 
-PARAMS = {850: ("avg_t", "std_t"), 2: ("avg_2t", "std_2t")}
+PRESSURE_PARAMS = ("avg_t", "std_t", "avg_gh", "std_gh", "avg_r", "std_r")
+PARAMS = {850: PRESSURE_PARAMS, 700: PRESSURE_PARAMS, 500: PRESSURE_PARAMS, 2: ("avg_2t", "std_2t")}
+# Parameter name without its statistic -> variable of the ClimateArchive; T2m is the temperature at level 2.
+VARIABLE = {"t": "t", "2t": "t", "gh": "gh", "r": "r"}
 
 
 class GribAnalyze:
@@ -54,8 +59,9 @@ class GribAnalyze:
         """Climatology per calendar day based on daily means.
 
         Args:
-            level: 850 for 850 hPa or 2 for 2 m above ground.
-            param: avg_t / std_t at 850 hPa, avg_2t / std_2t at 2 m.
+            level: 850, 700 or 500 hPa, or 2 for 2 m above ground.
+            param: avg_t / std_t, avg_gh / std_gh, avg_r / std_r on the pressure levels,
+                avg_2t / std_2t at 2 m.
             lat, lng: a single location in degrees; both or neither.
             month, day: restrict the calendar days; each may be given alone.
 
@@ -96,16 +102,17 @@ class GribAnalyze:
         if param not in PARAMS.get(level, ()):
             options = ", ".join(f"level={lv}: {' / '.join(ps)}" for lv, ps in PARAMS.items())
             raise ValueError(f"unknown combination level={level}, param={param!r}; use {options}")
-        statistic = "mean" if param.startswith("avg") else "std"
-        keys = sorted(k for k in self._archive.keys(kind) if k[:2] == (statistic, level)
+        prefix, name = param.split("_", 1)
+        statistic, variable = "mean" if prefix == "avg" else "std", VARIABLE[name]
+        keys = sorted(k for k in self._archive.keys(kind, variable) if k[:2] == (statistic, level)
                       and (month is None or k[2] == month) and (day is None or k[3] == day))
         if not keys:
-            raise ValueError(f"no {kind} values for month={month}, day={day}")
+            raise ValueError(f"no {kind} values of {param} at level {level} for month={month}, day={day}")
         index = self._point_index(lat, lng)
 
         # float64, so that rounding to 0.01 yields clean decimal values.
-        fields = np.stack([self._archive.field(kind, *key)[index] for key in keys]).astype(np.float64)
-        if param.startswith("avg"):
+        fields = np.stack([self._archive.field(kind, *key, variable=variable)[index] for key in keys]).astype(np.float64)
+        if statistic == "mean" and variable == "t":
             fields = fields - KELVIN
         points = self._points.iloc[index]
         n_points = len(index)

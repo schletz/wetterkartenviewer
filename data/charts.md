@@ -38,7 +38,7 @@ liest. Lies nur die Abschnitte, die du gerade brauchst.
 | `<fenster>/weather_summary_24h/<YYYYMMDDHH>.webp` | Nur IFS: die Kacheln des Kontaktabzugs von `weather_summary`, mit 24-h-Niederschlag |
 | `<fenster>/orography.webp` | Modellorografie, statisch |
 | `<fenster>/geometry.json` | Modell, Lauf, Projektion und Kachelpositionen der Kontaktabzüge, zum Markieren eines Orts |
-| `era5_means/*.grb2` | Klimatologie 1991–2020: `HHz` je Tageszeit, `daily`, `monthly` |
+| `era5_means/*.grb2` | Klimatologie 1991–2020 von T2m sowie T, Z und RH in 850/700/500 hPa: `HHz` je Tageszeit, `daily`, `monthly` |
 
 Der Ordner hält genau einen Lauf je Modell. Ein neuer Lauf ersetzt GRIB und Karten seines Modells.
 ICON-D2 rechnet alle 3 h, ALADIN alle 6 h, IFS alle 12 h; die Läufe der Modelle sind also meist

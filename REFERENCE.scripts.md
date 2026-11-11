@@ -36,7 +36,7 @@ title download_data.cmd / download_data_with_reset.sh: update_maps.py, then publ
 cloud "ECMWF Open Data" as ecmwf
 cloud "DWD Open Data" as dwd
 cloud "CHMI Open Data" as chmi
-cloud "Google Drive" as gdrive
+cloud "ERA5 build (outside repo)" as era5build
 component update_maps [
  **update_maps.py**
  Orchestrates downloads, renders stale
@@ -125,7 +125,7 @@ update_maps ..> maps_manifest : write_manifest()
 ecmwf --> download_ecmwf
 dwd --> download_icon
 chmi --> download_aladin
-gdrive --> era5 : by hand
+era5build --> era5 : by hand
 download_ecmwf --> ecmwf_grib
 download_icon --> icon_grib
 download_aladin --> aladin_grib
@@ -655,7 +655,7 @@ Values in °C (T) and K (std); `box` and `scale` at the top of t850/t2m.
 | `ecmwf_<run>.grb2` | download_ecmwf_data.py | one IFS run, see *Forecast file (IFS)*; 1.5–1.6 GB |
 | `icon-d2_<run>.grb2` | download_icon_d2.py | one ICON-D2 run without compression, 1277 messages, ≈ 1.43 GB |
 | `chmi-aladin_<run>.grb` | download_chmi_aladin.py | one ALADIN run on the whole model grid, GRIB edition 1, 1834 messages, ≈ 2.8 GB; see *CHMI ALADIN file* |
-| `era5_means/*.grb2` | by hand from Google Drive (link in README.md) | ERA5 1991–2020, 422 MB, 13 224 fields; `check_climate` requires it |
+| `era5_means/*.grb2` | by hand, built outside the repo from CDS data (README.md, ERA5-Klimatologie) | ERA5 1991–2020, 2.27 GB, 66 120 fields (T2m; t, gh, r at 850/700/500 hPa); `check_climate` requires it |
 | `<window>/<product>/<YYYYMMDDHH>.webp` | render_charts.py | step charts named by valid time; daily products `<YYYYMMDD>.webp` |
 | `<window>/orography.webp`, `sheets/<product>.webp`, `geometry.json` | render_charts.py | static chart (no folder), contact sheets, geometry |
 | `<window>/weather_summary_24h/<YYYYMMDDHH>.webp` | render_charts.py | IFS only, 12 UTC of each day with 24 h of `tp` before it: the tiles of `sheets/weather_summary.webp`; no layer of the viewer |
@@ -1249,15 +1249,16 @@ ICON's `max_2t`/`min_2t` restart every `RESTART_HOURS = 6` h from the run start 
 
 ### ClimateArchive, T850Climate (climate_archive.py, t850_climate.py)
 
-`ClimateArchive(directory, period=PERIOD)` indexes **every** `<dir>/*.grb2` on first access without ecCodes, from the bytes of each header (`_headers`, `_key`): section 1 month/day/hour (year ignored), template 4.8 first surface (type 100 Pa → hPa, 103 m), number of time ranges (1 = term, 2 = `daily`, 3 = `monthly`) and statistic of the **outermost** range (0 mean, 6 std). ecCodes needs ≈ 4.8 s for the 13 224 headers, the bytes ≈ 0.09 s, and every render worker builds its own archive. Do not use shortName: ecCodes calls the std `avg_t` too. Another template or a header beyond `HEADER_BYTES = 512` → `ValueError`. No archive → `FileNotFoundError`.
-Keys `(kind, statistic, level, month, day)`: kind `HHz` (term hours present), `daily`, `monthly`; statistic `mean`/`std`; level 850 (T850) or 2 (T2m); day None for monthly; values in K. Fields are decoded on demand, cache unbounded. `PERIOD = '1991–2020'` (label only), `DIRECTORY = 'era5_means'`.
+`ClimateArchive(directory, period=PERIOD)` indexes **every** `<dir>/*.grb2` on first access without ecCodes, from the bytes of each header (`_headers`, `_key`): section 1 month/day/hour (year ignored), template 4.8 parameter category/number (octets 10-11, → `VARIABLE`), first surface (type 100 Pa → hPa, 103 m), number of time ranges (1 = term, 2 = `daily`, 3 = `monthly`) and statistic of the **outermost** range (0 mean, 6 std). ecCodes needs ≈ 4.8 s for 13 224 headers, the bytes ≈ 0.5 s for the 66 120 of the current file, and every render worker builds its own archive. Do not use shortName: ecCodes calls the std `avg_t` too. Another template or a header beyond `HEADER_BYTES = 512` → `ValueError`. No archive → `FileNotFoundError`.
+Keys `(kind, statistic, variable, level, month, day)`: kind `HHz` (term hours present), `daily`, `monthly`; statistic `mean`/`std`; variable `t` (K, levels 2, 850, 700, 500), `gh` (gpm) or `r` (%, may exceed 100) on 850, 700, 500; an unknown parameter is indexed as `"category.number"`; day None for monthly. T850, Z850 and RH850 share level 850, so the variable belongs to every key. Fields are decoded on demand, cache unbounded. `PERIOD = '1991–2020'` (label only), `DIRECTORY = 'era5_means'`.
 `T850Climate(archive)`: needs an `HHz` kind for **every** hour of the valid times, else `ValueError` from `term_kind`. Only `t850_anomaly` uses it (`period` in its title). point_series.py reads `ClimateArchive` directly (term kinds of 850, `daily` of 2 m).
 
 | Method | Summary |
 | --- | --- |
 | `ClimateArchive.kinds`, `term_hours`, `term_kind(hour)` | |
-| `ClimateArchive.keys(kind)` | (statistic, level, month, day), used by the skill |
-| `ClimateArchive.field(kind, statistic, level, month, day) -> ndarray` | flat float32 in K, rows north → south |
+| `ClimateArchive.variables` | (variable, level) pairs present |
+| `ClimateArchive.keys(kind, variable='t')` | (statistic, level, month, day) of one variable, used by the skill |
+| `ClimateArchive.field(kind, statistic, level, month, day, variable='t') -> ndarray` | flat float32, rows north → south; the default `t` keeps T850/T2m callers unchanged |
 | `ClimateArchive.grid`, `nearest(lat, lng)` | grid as `ForecastGrib.grid` plus `lat`/`lon` arrays |
 | `T850Climate.at_point(valid_times, lat, lng)`, `field(valid)` | (mean °C, std K) |
 
