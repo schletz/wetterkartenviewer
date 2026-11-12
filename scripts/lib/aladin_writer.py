@@ -14,6 +14,9 @@ from .lambert_plane import LambertPlane
 LAST_STEP_IN_TIME_RANGE = 255
 # Pressure levels in the file names of CHMI: 85000 Pa is 850 hPa, and 1000 hPa is written P00000.
 LEVEL_850, LEVEL_700, LEVEL_1000 = "P85000", "P70000", "P00000"
+# Levels of the wet-bulb profile of the snow line, bottom to top (aladin_products.WET_BULB_LEVELS in hPa): every
+# level CHMI publishes from 1000 hPa up to 600 hPa (about 4200 m), so the snow line is found up to there.
+WET_BULB_LEVELS = (LEVEL_1000, "P95000", "P92500", LEVEL_850, "P80000", LEVEL_700, "P60000")
 
 
 class AladinWriter:
@@ -36,9 +39,12 @@ class AladinWriter:
 
     # Files copied as they are; those accumulated from T+0 or valid for the last hour have no T+0.
     STATIC = ("SURFGEOPOTENTIEL", "SURFIND_TERREMER")
+    # SURFRESERV_NEIGE, THETA_P_W and the heights of the levels without temperature feed snow_line.
     FROM_ZERO = ("CLSTEMPERATURE", "MSLPRESSURE", "SURFNEBUL_TOTALE", "CLS_VISICLD", "CLSDEW_P_TEMPER", "CLSTPRIM_W",
                  *(f"{level}{name}" for level in (LEVEL_850, LEVEL_700)
-                   for name in ("TEMPERATUR", "HUMI_RELAT", "GEOPOTENTI")))
+                   for name in ("TEMPERATUR", "HUMI_RELAT", "GEOPOTENTI")),
+                 "SURFRESERV_NEIGE", *(f"{level}THETA_P_W" for level in WET_BULB_LEVELS),
+                 *(f"{level}GEOPOTENTI" for level in WET_BULB_LEVELS if level not in (LEVEL_850, LEVEL_700)))
     FROM_ONE = ("SURFPREC_TOTAL", "PRECIP_TYPE", "PRECIP_TYPESEV", "SURFDIAG_FLASH")
     WIND = ("CLSWIND_SPEED", "CLSWIND_DIREC")
     GUST = ("CLSU_RAF_MOD_XFU", "CLSV_RAF_MOD_XFU")

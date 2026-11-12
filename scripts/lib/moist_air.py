@@ -1,4 +1,5 @@
-"""Moist air: vapour pressure from the IFS relative humidity, equivalent potential temperature, wet-bulb temperature.
+"""Moist air: vapour pressure from the IFS relative humidity, equivalent potential temperature, wet-bulb temperature,
+and the wet-bulb temperature from the wet-bulb potential temperature along pseudo-adiabats.
 
 The θe formulas are those of src/model/moistAdiabat.ts. The app scales its θe
 line with the θe of dry and of saturated air computed there, so both sides must
@@ -33,6 +34,12 @@ CP_DRY, CP_VAPOUR = 1005.7, 1875.0
 LATENT_HEAT_0, LATENT_HEAT_SLOPE = 2.501e6, 2370.0
 # Bisection steps of the wet-bulb temperature: the interval Td…T of at most ~60 K shrinks below 1e-4 K.
 WET_BULB_ITERATIONS = 20
+# Gas constant of dry air, J/(kg K).
+R_DRY = 287.04
+# Wet-bulb temperatures (K) tabulated per pressure to invert the wet-bulb potential temperature, and the
+# Runge-Kutta steps in ln p along a pseudo-adiabat (1000 to 600 hPa in 50 steps: error well below 0.01 K).
+TABLE_TW_MIN, TABLE_TW_MAX, TABLE_TW_STEP = 213.15, 323.15, 0.05
+PSEUDO_ADIABAT_STEPS = 50
 
 
 def ifs_saturation_vapour_pressure(t: np.ndarray) -> np.ndarray:
@@ -105,3 +112,42 @@ def wet_bulb_temperature(t: np.ndarray, td: np.ndarray, p: np.ndarray) -> np.nda
         # More sensible heat given off than latent heat taken up: the root lies above tw.
         lower, upper = np.where(excess > 0, tw, lower), np.where(excess > 0, upper, tw)
     return (lower + upper) / 2
+
+
+def pseudo_adiabatic_lapse(t: np.ndarray, p: float) -> np.ndarray:
+    """dT/d(ln p) (K) of saturated air moving pseudo-adiabatically, at T (K) and p (hPa).
+
+    (R_d T + L r_s) / (c_pd + L² r_s ε / (R_d T²)) with saturation over water and
+    a constant latent heat, the usual form of the pseudo-adiabat (as in MetPy's moist_lapse).
+    """
+    e = saturation_vapour_pressure(t)
+    rs = EPSILON * e / (p - e)
+    return (R_DRY * t + LATENT_HEAT_0 * rs) / (CP_DRY + LATENT_HEAT_0 ** 2 * rs * EPSILON / (R_DRY * t * t))
+
+
+def pseudo_adiabat(t: np.ndarray, p_from: float, p_to: float) -> np.ndarray:
+    """Temperature (K) at p_to (hPa) of saturated air at T (K) and p_from moved along its pseudo-adiabat (RK4 in ln p)."""
+    t = np.asarray(t, dtype=np.float64)
+    h = (np.log(p_to) - np.log(p_from)) / PSEUDO_ADIABAT_STEPS
+    ln_p = np.log(p_from)
+    for _ in range(PSEUDO_ADIABAT_STEPS):
+        k1 = pseudo_adiabatic_lapse(t, np.exp(ln_p))
+        k2 = pseudo_adiabatic_lapse(t + h / 2 * k1, np.exp(ln_p + h / 2))
+        k3 = pseudo_adiabatic_lapse(t + h / 2 * k2, np.exp(ln_p + h / 2))
+        k4 = pseudo_adiabatic_lapse(t + h * k3, np.exp(ln_p + h))
+        t = t + h / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+        ln_p += h
+    return t
+
+
+def wet_bulb_from_theta_w(theta_w: np.ndarray, p: float) -> np.ndarray:
+    """Wet-bulb temperature (K) at p (hPa) of air with the wet-bulb potential temperature θw (K).
+
+    θw is the temperature the pseudo-adiabat through the wet bulb reaches at
+    1000 hPa, so the wet bulb at p is where that pseudo-adiabat crosses p. The
+    pseudo-adiabats of a table of wet bulbs at p are brought down to 1000 hPa
+    once; θw rises with the wet bulb, so the table is inverted by interpolation.
+    """
+    tw = np.arange(TABLE_TW_MIN, TABLE_TW_MAX, TABLE_TW_STEP)
+    theta = pseudo_adiabat(tw, p, REFERENCE_PRESSURE)
+    return np.interp(theta_w, theta, tw).astype(np.float32)

@@ -268,6 +268,20 @@ PRECIP_RH = 90.0
 # Snow line below the 0 deg C wet-bulb level in m: the melting distance of falling
 # snow (300-400 m; less in heavy precipitation, which cools the layer).
 SNOW_LINE_BELOW_WET_BULB_ZERO_M = 350.0
+# Snow line of ICON-D2 (its snowlmt) and ALADIN: height where the wet-bulb temperature reaches this, deg C.
+SNOW_LINE_WET_BULB_C = 1.3
+# Snow line of ICON-D2 and ALADIN only where the model precipitates in the last hour, in mm: the
+# lowest band of the precipitation on weather_summary, so both layers show the same area.
+SNOW_LINE_PRECIP_MM = 0.2
+# Snow on the ground from this water equivalent in kg/m2 (= mm): about 1-2 cm of snow, the closed
+# snow cover of climatology (1 cm). Smaller values are traces of the models: on 13.11.2026 06 UTC in the
+# eastern Alps ICON-D2 and ALADIN have them on 4 % and 15 % of the points at 500-1000 m, 2 kg/m2 on 0.2 % and
+# 2 %, and from 1500 m up both agree within 10 %. ECMWF Open Data packs sd in steps of 2^-5 m (31 mm), so
+# it shows snow only from about 16 mm (5-15 cm), and thin snow covers stay grey.
+SNOW_COVER_KG_M2 = 2.0
+# Background of snow_line where the snow line is not shaded: snow on the ground, none.
+SNOW_COVER_RGB = (255, 255, 255)
+NO_SNOW_LINE_RGB = (235, 235, 235)
 
 # Mountain weather: height in m (2000 m: ski areas and huts of the Alps) and the
 # relative humidity from which the summits are in cloud.

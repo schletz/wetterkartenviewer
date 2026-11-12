@@ -19,15 +19,17 @@ class IconProducts(ChartProducts):
     summed over 1 h (the model writes every hour), its type comes from ww,
     the profile heights from the geopotential z of 850 and 700 hPa, the
     daily extremes from hourly ones. weather_summary adds what ECMWF has no
-    field for: thunderstorms, hail, fog and storm gusts. orography shows how
-    finely the model resolves valleys and summits (no hatching: ICON has no
-    sdor). Every chart greys what lies outside the model domain.
+    field for: thunderstorms, hail, fog and storm gusts. snow_line takes the
+    model's own snow line (snowlmt) where the model precipitates, and its
+    snow cover in kg/m2. orography shows how finely the model resolves valleys
+    and summits (no hatching: ICON has no sdor). Every chart greys what lies
+    outside the model domain.
 
     It is wired like ChartProducts, with an IconSurface as surface and a
     TriangleGrid as pixel mapping.
     """
 
-    STEP = ("t2m_wind10m", "wind10m", "mountain_2000", "weather_summary")
+    STEP = ("t2m_wind10m", "wind10m", "mountain_2000", "weather_summary", "snow_line")
     # vmax_10m, the maximum of the last hour.
     GUST_NAMES = ("gust",)
     DAY = {"tmax": "max", "tmin": "min"}
@@ -42,9 +44,13 @@ class IconProducts(ChartProducts):
     SHEET_PRODUCTS: dict = {}
     DEFAULTS = {"icon-d2": ALL}
 
+    def keys(self, product: str) -> list:
+        # The snow line needs the precipitation of the last hour, like weather_summary.
+        return super().keys("weather_summary" if product == "snow_line" else product)
+
     def draw(self, product: str, key) -> ChartCanvas:
         canvas = super().draw(product, key)
-        canvas.uncovered(self.pixels.covered, styles.OUTSIDE_RGB, "grey: outside the ICON-D2 domain")
+        canvas.uncovered(self.pixels.covered, styles.OUTSIDE_RGB, f"grey: outside the {self.MODEL} domain")
         return canvas
 
     def profile(self, step: int) -> HeightProfile:
@@ -85,6 +91,24 @@ class IconProducts(ChartProducts):
         canvas.values(gust, styles.GUST_SPACING_PX, gust >= styles.STORM_GUST_KMH, "{:.0f}",
                       f"numbers: gusts ≥ {styles.STORM_GUST_KMH:g} km/h in the last hour (km/h)")
         return canvas
+
+    def precipitation_area(self, step: int) -> tuple[np.ndarray, str, str]:
+        """Pixels where the model precipitated less than SNOW_LINE_PRECIP_MM in the last hour."""
+        dry = self.precipitation(step, 1) < styles.SNOW_LINE_PRECIP_MM
+        return (dry, "where it precipitates",
+                f"less than {styles.SNOW_LINE_PRECIP_MM:g} mm precipitation in the last hour")
+
+    def snow_line_height(self, step: int) -> tuple[np.ndarray, str]:
+        """snowlmt, the model's snow line; where it is missing, the column is colder down to the ground."""
+        ground = self.surface.height
+        line = self.grib.field("snowlmt", step)
+        # Outside the domain the ground is NaN too, so the line stays NaN there.
+        return (np.fmax(np.where(np.isnan(line), ground, line), ground),
+                f"wet-bulb {styles.SNOW_LINE_WET_BULB_C:+g} °C level")
+
+    def snow_water(self, step: int) -> np.ndarray:
+        # w_snow is in kg/m2 already.
+        return self.grib.field("sd", step)
 
     def significant_weather(self, step: int) -> np.ndarray:
         """Pixels of the significant weather in the codes of ww (WMO 4677)."""

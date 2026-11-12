@@ -66,6 +66,7 @@ demselben Code wie die Karten. Karte und Zahl am Ort passen deshalb zusammen.
 | `mx2t3`, `mn2t3`, `mx2t6`, `mn2t6` | 2 m | K | Extreme der letzten 3 h (bis +144 h) bzw. 6 h |
 | `z`, `sdor`, `lsm` | Boden, nur T+0 | m²/s², m, 0–1 | Orografie als Geopotential, ihre Rauigkeit, Landanteil |
 | `tcc`, `tp`, `ptype` | Boden | 0–1, m, Code | Bewölkung, Niederschlag seit T+0, Niederschlagsart (nur `weather_summary`) |
+| `sd` | Boden | m Wasser | Wasseräquivalent der Schneedecke (nur Schneedecke von `snow_line`); in Stufen von 31 mm gepackt, dünne Schneedecken unter etwa 16 mm Wasser (5–15 cm Schnee) stehen als 0 |
 
 **Abgeleitete Felder**
 
@@ -381,7 +382,11 @@ Mitteleuropa. Farben und Zahlen: Schneefallgrenze = Feuchtkugel-Nullgradgrenze �
 der Modellboden. Die Feuchtkugeltemperatur kommt aus T und RH jeder Druckfläche: Fallender Schnee
 kühlt sich durch Verdunstung auf sie ab und schmilzt erst, wo sie über 0 °C liegt. In gesättigter
 Luft ist das die Nullgradgrenze, in trockener Luft unter der Wolke liegt die Grenze tiefer. Eingefärbt ist sie nur dort, wo die Höhe ein Niederschlagssignal zeigt: RH auf 850 oder
-700 hPa ≥ 90 % und Hebung auf 700 hPa. Sonst ist die Fläche grau.
+700 hPa ≥ 90 % und Hebung auf 700 hPa. Sonst ist die Fläche grau, oder weiß, wo Schnee liegt:
+mindestens 2 mm Wasseräquivalent (`sd`), etwa 1–2 cm Schnee. IFS packt `sd` grob, weiß ist es deshalb
+erst ab etwa 16 mm Wasser; eine dünne Schneedecke bleibt grau. Unter der eingefärbten Grenze zeigt die
+Karte die Schneedecke nicht. Die Fenster `icon-d2` und `chmi-aladin` haben eigene Karten
+([Produkte im Fenster icon-d2](#produkte-im-fenster-icon-d2)).
 
 - Das Signal sagt, dass Niederschlag wahrscheinlich ist, nicht wie viel.
 - Bei kräftigem Niederschlag liegt die Schneefallgrenze tiefer (Schmelzabkühlung), bei schwachem
@@ -442,6 +447,8 @@ in Klammern der Name, unter dem der Viewer das Feld liest.
 | `max_2t`, `min_2t` (`tmax_2m`, `tmin_2m`) | 0–48 | K | Extreme in 2 m seit dem letzten Neustart; ICON startet sie alle 6 h ab Laufbeginn neu, obwohl der Kopf „seit T+0“ angibt |
 | `10u`, `10v` | 0–48 | m/s | Wind in 10 m |
 | `ceil` (`ceiling`) | 0–48 | m über NN | Untergrenze der tiefsten Wolkenschicht mit mehr als 50 % Bedeckung; etwa 20 000, wo es keine gibt |
+| `sd` | 0–48 | kg/m² = mm | Wasseräquivalent der Schneedecke (DWD `w_snow`; nicht m wie bei IFS) |
+| `SNOWLMT` (`snowlmt`) | 0–48 | m über NN | Schneefallgrenze des Modells: Höhe, in der die Feuchtkugeltemperatur von oben gesucht +1,3 °C erreicht. Fehlt (Bitmap), wo die Säule bis zum Boden kälter ist, also Schnee bis zum Modellboden; auch dort gesetzt, wo es nicht niederschlägt |
 | `u`, `v` | 1000, 850, 700 hPa | m/s | Wind |
 | `t`, `r`, `z` | 850, 700 hPa | K, %, m²/s² | Temperatur, relative Feuchte, Geopotential (nicht gpm wie `gh` bei IFS) |
 
@@ -470,6 +477,12 @@ Die Karten lesen sich wie ihre IFS-Gegenstücke im Mitteleuropafenster, mit dies
   zwei Tmin-Nächte je Lauf. Bei Läufen um 03, 09, 15 und 21 UTC kommen die ersten drei Stunden
   eines Fensters aus der stündlichen 2-m-Temperatur statt aus den Modellextremen, ein Maximum am
   Morgen oder ein Minimum am Abend kann dort etwas zu schwach sein.
+- [snow_line](#snow_line): die Schneefallgrenze des Modells (`snowlmt`, Feuchtkugel +1,3 °C), wo es
+  in der letzten Stunde mindestens 0,2 mm geregnet oder geschneit hat (dieselbe Fläche wie die Farben
+  von `weather_summary`), stündlich ab T+1. Wo `snowlmt` fehlt, steht der Modellboden. Sonst grau,
+  oder weiß, wo mindestens 2 mm Wasseräquivalent Schnee liegt. Die Grenze liegt im Mittel etwa 200 m
+  unter der Feuchtkugel-Nullgradgrenze, die IFS-Karte rechnet 350 m: Bei gleicher Luftmasse zeigt
+  ICON-D2 die Grenze also etwas höher.
 - Alle Karten färben grau, was außerhalb der Domain liegt; das Fenster liegt derzeit ganz darin.
 
 ## icon-d2/weather_summary
@@ -498,7 +511,8 @@ ICON-D2 für Österreich und Umgebung, stündlich von T+1 bis T+48. Inhalt wie
 Ein Lauf von CHMI ALADIN (Open Data des tschechischen Wetterdienstes, 2,3 km) in GRIB 1 auf dem
 ganzen Lambert-Gitter des Modells (38,6–57,2° N, 4,7° W–34,4° E; Rom, Paris, Berlin und Kiew liegen
 darin, Athen und Oslo nicht): ein Wert je Gitterpunkt, zeilenweise von Süden. Die Karten zeigen nur
-das Fenster `chmi-aladin`. Stündlich von T+0 bis T+72. Druckflächen gibt es auf 850 und 700 hPa, auf 1000 hPa nur den Wind.
+das Fenster `chmi-aladin`. Stündlich von T+0 bis T+72. Druckflächen gibt es auf 850 und 700 hPa, auf 1000 hPa den Wind,
+und für die Schneefallgrenze die Feuchtpotentialtemperatur auf 1000, 950, 925, 850, 800, 700 und 600 hPa.
 Für einen Teil der Felder hat ecCodes keinen Namen (`unknown`); dort steht die GRIB-1-Parameternummer
 in Klammern, der Name davor ist der des Skills und des Viewers.
 
@@ -520,6 +534,9 @@ in Klammern, der Name davor ist der des Skills und des Viewers.
 | `t`, `z` auf 850, 700 hPa | 0–72 | K, m²/s² | Temperatur, Geopotential (÷ 9,81 = m) |
 | `r` auf 850, 700 hPa | 0–72 | 0–1 | relative Feuchte (nicht % wie bei ICON-D2) |
 | `u`, `v` auf 1000, 850, 700 hPa | 0–72 | m/s | Wind, Ostkomponente und Nordkomponente |
+| `sd` (ecCodes: `sf`) | 0–72 | kg/m² = mm | Wasseräquivalent der Schneedecke („Schneereserve“, Parameter 65); ecCodes nennt es fälschlich Schneefall |
+| `thetaw` (ecCodes: `papt`) auf 1000…600 hPa | 0–72 | K | Feuchtpotentialtemperatur θw des Modells; nicht θe wie `papt` der IFS-Datei |
+| `z` auf 1000, 950, 925, 800, 600 hPa | 0–72 | m²/s² | Geopotential der übrigen Flächen von `thetaw` |
 
 ## Produkte im Fenster chmi-aladin
 
@@ -531,6 +548,9 @@ Karten lesen sich wie die des Fensters `icon-d2`, mit diesen Unterschieden:
   Hagel die gefährlichste Niederschlagsart `Hagel` oder `Graupel` mit Gewitter, Nebel eine Sicht
   durch Wolken unter 700 m (ergibt über Österreich und Bayern dieselbe Nebelfläche wie ICON-D2).
 - Niederschlag und Art gelten für die letzte Stunde.
+- [snow_line](#snow_line): wie bei `icon-d2`. ALADIN veröffentlicht keine Schneefallgrenze; der Viewer
+  sucht sie wie ICON-D2 als Höhe der Feuchtkugeltemperatur +1,3 °C, aus `thetaw` der sieben Flächen
+  bis 600 hPa (etwa 4200 m; darüber grau).
 - Keine `mountain_2000`, `tmax`, `tmin` und `orography`: Dafür fehlen Druckflächen, Extreme bzw.
   der Mehrwert gegenüber `icon-d2`.
 - Landesgrenzen schwarz, Bundesländer und ungarische Komitate gestrichelt.

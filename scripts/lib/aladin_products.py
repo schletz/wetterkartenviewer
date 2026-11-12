@@ -3,8 +3,13 @@
 import numpy as np
 
 from . import chart_styles as styles
+from .constants import GRAVITY
+from .height_profile import HeightProfile
 from .icon_products import IconProducts
 from .missing_field_error import MissingFieldError
+
+# Pressure levels (hPa) of the wet-bulb profile of the snow line, bottom to top (aladin_writer.WET_BULB_LEVELS).
+WET_BULB_LEVELS = (1000, 950, 925, 850, 800, 700, 600)
 
 
 class AladinProducts(IconProducts):
@@ -15,13 +20,16 @@ class AladinProducts(IconProducts):
     accumulate from T+1, the type of the precipitation is the most frequent one
     of the last hour, and thunderstorms, hail and fog have no common field
     (ICON-D2 has ww); they are put together from lightning density, the most
-    dangerous precipitation type and visibility in the codes of ww.
+    dangerous precipitation type and visibility in the codes of ww. ALADIN
+    publishes no snow line: snow_line finds it like ICON-D2's snowlmt, as the
+    height of the wet-bulb temperature SNOW_LINE_WET_BULB_C, from the model's
+    wet-bulb potential temperature on seven levels from 1000 to 600 hPa.
 
     It is wired like ChartProducts, with an AladinSurface as surface and a
     LambertGrid as pixel mapping.
     """
 
-    STEP = ("t2m_wind10m", "wind10m", "weather_summary")
+    STEP = ("t2m_wind10m", "wind10m", "weather_summary", "snow_line")
     DAY: dict = {}
     STATIC = ()
     ALL = STEP
@@ -50,6 +58,12 @@ class AladinProducts(IconProducts):
         for code, aladin_codes in styles.ALADIN_PTYPE.items():
             ptype[np.isin(kinds, aladin_codes)] = code
         return ptype
+
+    def snow_line_height(self, step: int) -> tuple[np.ndarray, str]:
+        """Height of the wet-bulb temperature SNOW_LINE_WET_BULB_C, as ICON-D2's snowlmt, from 1000-600 hPa."""
+        profile = HeightProfile(self.grib, step, "z", 1.0 / GRAVITY, levels=WET_BULB_LEVELS)
+        return (profile.wet_bulb_level(self.surface.height, styles.SNOW_LINE_WET_BULB_C),
+                f"wet-bulb {styles.SNOW_LINE_WET_BULB_C:+g} °C level")
 
     def significant_weather(self, step: int) -> np.ndarray:
         """Thunderstorm, hail and fog of the last hour in the codes of ww, which ALADIN does not publish.

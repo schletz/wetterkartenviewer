@@ -23,7 +23,7 @@ defined in lib/chart_products.py; one chart per step unless noted:
     inversion        temperature increase 1000-850 hPa, moist boundary layer hatched, 925 hPa wind line
     mountain_2000    temperature, wind and summits in cloud at 2000 m
     freezing_level   freezing level
-    snow_line        snow line where the upper air signals precipitation
+    snow_line        snow line where the upper air signals precipitation, elsewhere snow cover white
     weather_summary  cloud cover, precipitation since the previous step (3 h, 6 h after T+144) and its
                      type, isobars every 4 hPa (near-surface model weather); from T+3
     tmax, tmin      daily 2 m maximum (06-18 UTC) and minimum (18-06 UTC), one chart per day
@@ -37,6 +37,8 @@ with the borders of the Austrian states):
     wind10m          as above, gusts of the last hour
     mountain_2000    as above, the profile from 850 and 700 hPa
     weather_summary  as above with 1 h precipitation, plus thunderstorm, hail, fog and storm gusts
+    snow_line        the model's snow line (snowlmt) where it precipitated in the last hour, elsewhere
+                     snow cover white
     tmax, tmin       as above, from the 6-hourly extremes of the model (lib/icon_extremes.py)
     orography        model orography, one static chart: how finely ICON-D2 resolves valleys
 
@@ -48,6 +50,8 @@ borders of the Austrian states and the Hungarian counties):
     wind10m          as above, gusts of the last hour
     weather_summary  as for ICON-D2, thunderstorm, hail and fog put together from lightning density,
                      precipitation type and visibility
+    snow_line        as for ICON-D2, the snow line defined like snowlmt from the wet-bulb potential
+                     temperature of 1000-600 hPa
 
 --projection chooses the chart window (default: opencharts_europe, icon-d2 for
 ICON files, chmi-aladin for ALADIN files). Without --products each window gets its default selection

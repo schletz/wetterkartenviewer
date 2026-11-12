@@ -13,16 +13,17 @@ WEATHER_PARAMS = ("tcc", "tp", "ptype")
 IFS_GUST_NAMES = ("10fg", "10fg3")
 
 # ecCodes shortName -> name under which the viewer reads the fields of the ICON-D2 file
-# (charts.md, "ICON-D2-Datei"); with them ICON and ECMWF share tcc, msl, ...
+# (charts.md, "ICON-D2-Datei"); with them ICON and ECMWF share tcc, msl, ... (sd: snow water in kg/m2, not m).
 ICON_NAMES = {"tlat": "clat", "tlon": "clon", "HSURF": "hsurf", "CLCT": "tcc", "prmsl": "msl", "WW": "ww",
               "max_i10fg": "gust", "max_2t": "tmax_2m", "min_2t": "tmin_2m", "ceil": "ceiling",
-              "TW_2M": "wbt"}
+              "TW_2M": "wbt", "SNOWLMT": "snowlmt"}
 
 # Names of the fields of the CHMI ALADIN file (charts.md, "ALADIN-Datei"): GRIB 1 parameter numbers without a shortName,
-# and the 2 m extremes, which ecCodes calls mx2t6/mn2t6 although they cover 12 h. A copy of the viewer's
-# constants.ALADIN_NAMES.
+# and the 2 m extremes, which ecCodes calls mx2t6/mn2t6 although they cover 12 h. ecCodes misnames the snow water
+# (kg/m2) as sf and the wet-bulb potential temperature (K) as papt, which is theta-e in the ECMWF file. A copy of the
+# viewer's constants.ALADIN_NAMES.
 ALADIN_NAMES = {61: "tp", 171: "tcc", 223: "fog_visibility", 229: "ptype_severe", 230: "ptype", 234: "wbt", 236: "flash",
-                130: "gust", "mx2t6": "tmax_2m", "mn2t6": "tmin_2m"}
+                130: "gust", "mx2t6": "tmax_2m", "mn2t6": "tmin_2m", "sf": "sd", "papt": "thetaw"}
 
 # ALADIN has no ww. Copies of the viewer's chart_styles, so that table and chart name the same weather: lightning
 # density of one hour that counts as a thunderstorm (flashes per km2), lowest visibility due to cloud below which

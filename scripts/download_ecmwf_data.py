@@ -12,7 +12,8 @@ orography in m, daily 2 m extremes):
                                              2000 m and the freezing level
     u/v/w 700, u/v 850/925/1000              pressure levels (w: vertical velocity, Pa/s)
     thick                                    1000-500 hPa thickness (gpm), gh500 - gh1000
-    msl, 2t, 2d, sp, 10u, 10v                surface, every step (2d: 2 m dew point, sp: surface pressure in Pa)
+    msl, 2t, 2d, sp, 10u, 10v, sd            surface, every step (2d: 2 m dew point, sp: surface pressure in Pa,
+                                             sd: water equivalent of the snow cover in m, for snow_line only)
     mx2t3/mn2t3 (T+3..144), mx2t6/mn2t6      2 m max/min over the last 3 or 6 hours
     z, sdor, lsm (T+0 only)                  model orography (m2/s2), its sub-grid standard deviation (m),
                                              land-sea mask (0..1)
@@ -21,7 +22,8 @@ orography in m, daily 2 m extremes):
 
 Apart from the 2 m temperature and the wet-bulb temperature (from 2t, 2d
 and sp), the derived fields use no near-surface parameters: the weather at
-the ground is derived from the pressure levels.
+the ground is derived from the pressure levels. The snow cover (sd) is drawn
+as it comes, under the derived snow line.
 Cloud cover and precipitation feed only the weather_summary chart.
 The 925 and 1000 hPa levels describe the boundary layer (inversion,
 moist layer, mixing); where the ground lies above them, their values are

@@ -22,6 +22,9 @@ indexed by ForecastGrib with constants.ALADIN_NAMES):
     CLSMAXI_TEMPERAT, CLSMINI_TEMPERAT   tmax_2m, tmin_2m: 2 m extremes of the last 12 h (K), at 06 and 18 UTC
     P85000..., P70000...                 t (K), r (0..1), z (m2/s2), u, v (m/s, turned to east and north)
     P00000WIND_U_COM, P00000WIND_V_COM   u, v at 1000 hPa (m/s, turned to east and north)
+    SURFRESERV_NEIGE                     sd: water equivalent of the snow cover (kg/m2); ecCodes calls it sf
+    P00000...P60000THETA_P_W             thetaw: wet-bulb potential temperature (K) at 1000, 950, 925, 850,
+                                         800, 700, 600 hPa, with z of these levels; ecCodes calls it papt
 
 If the target is an existing directory, the file is written into it as
 chmi-aladin_<YYYYMMDDHH>.grb; the last line printed is the absolute path of the

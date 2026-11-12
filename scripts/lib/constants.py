@@ -22,13 +22,17 @@ PROFILE_LEVELS = [500, 600, 700, 850, 925, 1000]
 # exists (ForecastGrib aliases). tcc is in % and tp in kg/m2 (mm) there, not 0..1 and m.
 # The 2 m extremes keep the DWD names: they restart every 6 h (icon_extremes.py), unlike any ECMWF field.
 # TW_2M is the DWD name of the derived wet-bulb temperature (GRIB2 0/0/27 on a DWD template, icon_derived_writer.py).
+# w_snow is read by ecCodes as sd like the ECMWF field, but in kg/m2 (ECMWF m of water).
 ICON_NAMES = {"tlat": "clat", "tlon": "clon", "HSURF": "hsurf", "CLCT": "tcc", "prmsl": "msl", "WW": "ww",
               "max_i10fg": "gust", "max_2t": "tmax_2m", "min_2t": "tmin_2m", "ceil": "ceiling",
-              "TW_2M": "wbt"}
+              "TW_2M": "wbt", "SNOWLMT": "snowlmt"}
 # Names of the CHMI ALADIN fields: GRIB 1 parameter numbers without a shortName, and the 2 m extremes, which ecCodes
 # calls mx2t6/mn2t6 although they cover 12 h; the names are those of ICON-D2. tcc is a fraction, tp in kg/m2 (mm).
+# ecCodes misnames two fields: the snow reservoir SURFRESERV_NEIGE (parameter 65, the water equivalent of the snow
+# cover in kg/m2, not a snowfall) as sf, and the wet-bulb potential temperature THETA_P_W (K) as papt, which in the
+# ECMWF file is the equivalent potential temperature.
 ALADIN_NAMES = {61: "tp", 171: "tcc", 223: "fog_visibility", 229: "ptype_severe", 230: "ptype", 234: "wbt", 236: "flash",
-                130: "gust", "mx2t6": "tmax_2m", "mn2t6": "tmin_2m"}
+                130: "gust", "mx2t6": "tmax_2m", "mn2t6": "tmin_2m", "sf": "sd", "papt": "thetaw"}
 # GRIB 1 parameters of the 10 m wind components download_chmi_aladin.py derives, and of its gust.
 ALADIN_WIND_PARAMETERS = (33, 34)
 ALADIN_GUST_PARAMETER = 130

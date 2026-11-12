@@ -66,6 +66,14 @@
         ],
         "opencharts_central_europe/wind10m",
         "opencharts_central_europe/inversion",
+        [
+          "icon-d2/snow_line",
+          "opencharts_central_europe/snow_line"
+        ],
+        [
+          "chmi-aladin/snow_line",
+          "opencharts_central_europe/snow_line"
+        ],
         "opencharts_central_europe/snow_line"
       ]
     }

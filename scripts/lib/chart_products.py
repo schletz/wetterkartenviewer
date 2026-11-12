@@ -454,19 +454,47 @@ class ChartProducts:
         return canvas
 
     def snow_line(self, step: int) -> ChartCanvas:
-        """Snow line where the upper air signals precipitation; elsewhere grey."""
-        canvas = ChartCanvas(self.base_map, "Snow line (m, colours) where precipitation is likely",
+        """Snow line where it precipitates; elsewhere white where snow lies on the ground, else grey.
+
+        The snow line and the area of precipitation come from the hooks
+        snow_line_height and precipitation_area, the snow cover from
+        snow_water: ECMWF derives the first two from the pressure levels, the
+        limited area models take them from their own fields.
+        """
+        dry, where, dry_note = self.precipitation_area(step)
+        canvas = ChartCanvas(self.base_map, f"Snow line (m, colours) {where}, snow cover white",
                              self.step_label(step))
-        diagnostics = self.diagnostics(step)
-        line = self.pixels.resample(diagnostics.snow_line())
-        dry = self.pixels.resample(diagnostics.precipitation_signal().astype(np.float32)) < 0.5
-        canvas.shade(line, styles.SNOW_LINE, mask=dry, mask_colour=(235, 235, 235),
-                     mask_label=f"grey: no precipitation signal (RH850/700 < {styles.PRECIP_RH:g} % or no ascent)")
+        height, definition = self.snow_line_height(step)
+        line = self.pixels.resample(height)
+        canvas.shade(line, styles.SNOW_LINE, mask=dry, mask_colour=styles.NO_SNOW_LINE_RGB,
+                     mask_label=f"grey: {dry_note}")
+        # Bilinear on the pixels, so the edge of the snow cover follows the terrain between grid points.
+        snow = self.pixels.resample(self.snow_water(step)) >= styles.SNOW_COVER_KG_M2
+        canvas.paint(dry & snow, styles.SNOW_COVER_RGB,
+                     f"white: snow on the ground (≥ {styles.SNOW_COVER_KG_M2:g} mm water equivalent)")
         canvas.outlines()
-        self.print_values(canvas, np.round(line, -2), "{:.0f}",
-                          f"numbers: snow line in m (wet-bulb 0 °C level − {styles.SNOW_LINE_BELOW_WET_BULB_ZERO_M:g} m)",
+        self.print_values(canvas, np.round(line, -2), "{:.0f}", f"numbers: snow line in m ({definition})",
                           where=self.land & ~dry & ~np.isnan(line))
         return canvas
+
+    def precipitation_area(self, step: int) -> tuple[np.ndarray, str, str]:
+        """Pixels without precipitation, where the snow line is drawn (for the title) and the legend note of the rest.
+
+        Here the precipitation signal of the upper air: a 9 km global model
+        gets the area of its precipitation less right than its moisture and ascent.
+        """
+        signal = self.pixels.resample(self.diagnostics(step).precipitation_signal().astype(np.float32))
+        return (signal < 0.5, "where precipitation is likely",
+                f"no precipitation signal (RH850/700 < {styles.PRECIP_RH:g} % or no ascent)")
+
+    def snow_line_height(self, step: int) -> tuple[np.ndarray, str]:
+        """Snow line in m on the model grid (NaN above the profile) and its definition for the legend."""
+        return (self.diagnostics(step).snow_line(),
+                f"wet-bulb 0 °C level − {styles.SNOW_LINE_BELOW_WET_BULB_ZERO_M:g} m")
+
+    def snow_water(self, step: int) -> np.ndarray:
+        """Water equivalent of the snow cover in kg/m2 (= mm) on the model grid; sd is in m of water."""
+        return self.grib.field("sd", step) * 1000.0
 
     def weather_summary(self, step: int) -> ChartCanvas:
         """Clouds, precipitation and its type under the isobars, as a chart for people.

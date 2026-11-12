@@ -22,12 +22,16 @@ onto the chart pixels (lib/triangle_grid.py). Parameters, as named by DWD
     u_10m, v_10m                   10 m wind (m/s); 10u, 10v
     ceiling                        base of the lowest cloud layer above 50 % cover (m above sea level,
                                    about 20 km where there is none); ceil -> ceiling
+    w_snow                         water equivalent of the snow cover (kg/m2); sd (snow_line)
+    snowlmt                        snow line: height of the wet-bulb temperature +1.3 deg C, searched
+                                   from the top (m above sea level), missing where the column is colder
+                                   down to the ground; SNOWLMT -> snowlmt (snow_line)
     u, v @1000 hPa                 wind (m/s) for the location tables of the synop skill
     t, relhum, fi, u, v @850, 700  pressure levels for the values at 2000 m (mountain_2000): K, % (r),
                                    geopotential m2/s2 (z), m/s; ICON-D2 has no 925 hPa
 
 Parameters on pressure levels are written "<folder>@<hPa>" (FORECAST_PARAMS). A run
-is about 1228 files and, packed without compression, 1.4 GB as GRIB.
+is about 1326 files and, packed without compression, 1.5 GB as GRIB.
 
 Without --run the newest complete run is taken: the run folders (00/ ... 21/)
 are ordered by the newest time stamp of their parameter folders, and the
@@ -75,7 +79,7 @@ from lib.run_schedule import RunSchedule  # noqa: E402
 # ICON-D2 has no 925 hPa.
 PROFILE_LEVELS = (850, 700)
 FORECAST_PARAMS = ("clct", "tot_prec", "pmsl", "ww", "vmax_10m", "t_2m", "tmax_2m", "tmin_2m", "td_2m", "ps",
-                   "u_10m", "v_10m", "ceiling",
+                   "u_10m", "v_10m", "ceiling", "w_snow", "snowlmt",
                    "u@1000", "v@1000", *(f"{p}@{level}" for level in PROFILE_LEVELS for p in ("t", "relhum", "fi", "u", "v")))
 STATIC_PARAMS = ("clat", "clon", "hsurf", "fr_land")
 PARALLEL_REQUESTS = 8

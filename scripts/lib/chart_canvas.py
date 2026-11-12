@@ -104,13 +104,20 @@ class ChartCanvas:
         if mask is not None:
             self._swatch(mask_colour, mask_label)
 
+    def paint(self, area: np.ndarray, colour: tuple, label: str = "") -> None:
+        """Paint the pixels of a (height, width) mask in one colour over the shading drawn before; ``label`` is a note."""
+        if area.any():
+            rgba = np.zeros((*area.shape, 4), np.uint8)
+            rgba[area] = (*colour, 255)
+            self.ax.imshow(rgba, extent=(0, IMAGE_WIDTH, IMAGE_HEIGHT, 0), interpolation="nearest", zorder=Z_SHADING)
+        if label:
+            self._notes.append(label)
+
     def uncovered(self, covered: np.ndarray, colour: tuple, label: str) -> None:
         """Paint the pixels without model data (outside a limited area model) over every shading."""
         if covered.all():
             return
-        rgba = np.zeros((*covered.shape, 4), np.uint8)
-        rgba[~covered] = (*colour, 255)
-        self.ax.imshow(rgba, extent=(0, IMAGE_WIDTH, IMAGE_HEIGHT, 0), interpolation="nearest", zorder=Z_SHADING)
+        self.paint(~covered, colour)
         self._swatch(colour, label)
 
     def no_data(self, note: str) -> None:

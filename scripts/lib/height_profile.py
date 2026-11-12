@@ -19,7 +19,8 @@ class HeightProfile:
     in height between neighbouring pressure levels.
     """
 
-    def __init__(self, grib: ForecastGrib, step: int, height: str = "gh", height_factor: float = 1.0):
+    def __init__(self, grib: ForecastGrib, step: int, height: str = "gh", height_factor: float = 1.0,
+                 levels: tuple[int, ...] = LEVELS):
         """Profile of one step.
 
         Args:
@@ -27,13 +28,15 @@ class HeightProfile:
             step: its step.
             height: field of the level heights, e.g. "gh" (gpm) or "z" (geopotential, m2/s2).
             height_factor: factor from that field to gpm, e.g. 1 / GRAVITY for "z".
+            levels: pressure levels (hPa) of the profile, bottom to top; a level the file lacks is skipped.
         """
         self.grib, self.step = grib, step
         self.height, self.height_factor = height, height_factor
+        self.levels = levels
 
     def _levels(self, *names: str) -> list[int]:
         """Profile levels, bottom to top, that hold every one of the parameters and the height field."""
-        return [level for level in LEVELS
+        return [level for level in self.levels
                 if all(self.grib.has(name, self.step, level) for name in (*names, self.height))]
 
     def _heights(self, levels: list[int]) -> np.ndarray:
@@ -47,11 +50,18 @@ class HeightProfile:
         return self._heights(levels), values
 
     def _wet_bulb_stack(self) -> tuple[np.ndarray, np.ndarray]:
-        """(heights, wet-bulb temperatures in K) on every profile level that holds t and r, bottom to top.
+        """(heights, wet-bulb temperatures in K) on the profile levels, bottom to top.
 
-        The dew point comes from the IFS relative humidity as in moist_air.py, the
-        wet bulb is the isobaric one at the pressure of the level.
+        A file with the model's wet-bulb potential temperature thetaw (ALADIN)
+        gives the wet bulb of its levels along the pseudo-adiabat. Otherwise it
+        comes from every level that holds t and r: the dew point from the IFS
+        relative humidity as in moist_air.py, the wet bulb the isobaric one at
+        the pressure of the level.
         """
+        if levels := self._levels("thetaw"):
+            tw = [moist_air.wet_bulb_from_theta_w(self.grib.field("thetaw", self.step, level), level)
+                  for level in levels]
+            return self._heights(levels), np.stack(tw)
         levels = self._levels("t", "r")
         tw = []
         for level in levels:
@@ -83,6 +93,14 @@ class HeightProfile:
         lower.
         """
         return self.zero_crossing(*self._wet_bulb_stack(), ground)
+
+    def wet_bulb_level(self, ground: np.ndarray, celsius: float) -> np.ndarray:
+        """Height in m where the wet-bulb temperature falls to ``celsius`` deg C (see zero_crossing).
+
+        ICON-D2 diagnoses its snow line (snowlmt) this way with +1.3 deg C.
+        """
+        heights, tw = self._wet_bulb_stack()
+        return self.zero_crossing(heights, tw - celsius, ground)
 
     @staticmethod
     def zero_crossing(heights: np.ndarray, temperatures: np.ndarray, ground: np.ndarray) -> np.ndarray:

@@ -401,7 +401,7 @@ package "meteorology" {
  }
  class HeightProfile {
  Pressure level profile: value at a fixed
- height, freezing and wet-bulb zero level.
+ height, freezing and wet-bulb levels.
  }
  class Diagnostics {
  Inversion, moist layer, precipitation
@@ -409,7 +409,7 @@ package "meteorology" {
  }
  class "moist_air.py" as moist_air <<module>> {
  Theta-e after Bolton 1980 as the app
- computes it, wet-bulb temperature.
+ computes it, wet-bulb temperature, pseudo-adiabat.
  }
  class IconExtremes {
  Daily 2 m max/min of ICON from
@@ -431,6 +431,7 @@ class ChartProducts << (D,#fdebd1) render >>
 class IconProducts << (D,#fdebd1) render >>
 class AladinProducts << (D,#fdebd1) render >>
 AladinProducts ..> AladinSurface : as surface
+AladinProducts ..> HeightProfile : wet-bulb\nlevels 1000-600
 AladinSurface --> ForecastGrib : grib
 ForecastGrib --> LambertPlane : lambert
 ChartProducts --> ForecastGrib : grib
@@ -448,7 +449,7 @@ missing_values .. MissingFieldError : placeholder\nis read back as
 ModelSurface --> ForecastGrib : grib
 IconSurface --> ForecastGrib : grib
 HeightProfile --> ForecastGrib : grib
-HeightProfile ..> moist_air : wet_bulb_temperature
+HeightProfile ..> moist_air : wet_bulb_temperature,\nwet_bulb_from_theta_w
 Diagnostics --> HeightProfile : profile
 Diagnostics --> ModelSurface : surface
 Diagnostics ..> chart_styles : thresholds
@@ -653,8 +654,8 @@ Values in °C (T) and K (std); `box` and `scale` at the top of t850/t2m.
 | Path | Writer | Content |
 | --- | --- | --- |
 | `ecmwf_<run>.grb2` | download_ecmwf_data.py | one IFS run, see *Forecast file (IFS)*; 1.5–1.6 GB |
-| `icon-d2_<run>.grb2` | download_icon_d2.py | one ICON-D2 run without compression, 1277 messages, ≈ 1.43 GB |
-| `chmi-aladin_<run>.grb` | download_chmi_aladin.py | one ALADIN run on the whole model grid, GRIB edition 1, 1834 messages, ≈ 2.8 GB; see *CHMI ALADIN file* |
+| `icon-d2_<run>.grb2` | download_icon_d2.py | one ICON-D2 run without compression, 1375 messages, ≈ 1.53 GB (run 2026111218) |
+| `chmi-aladin_<run>.grb` | download_chmi_aladin.py | one ALADIN run on the whole model grid, GRIB edition 1, 2783 messages, ≈ 4.24 GB; see *CHMI ALADIN file* |
 | `era5_means/*.grb2` | by hand, built outside the repo from CDS data (README.md, ERA5-Klimatologie) | ERA5 1991–2020, 2.27 GB, 66 120 fields (T2m; t, gh, r at 850/700/500 hPa); `check_climate` requires it |
 | `<window>/<product>/<YYYYMMDDHH>.webp` | render_charts.py | step charts named by valid time; daily products `<YYYYMMDD>.webp` |
 | `<window>/orography.webp`, `sheets/<product>.webp`, `geometry.json` | render_charts.py | static chart (no folder), contact sheets, geometry |
@@ -689,7 +690,7 @@ Steps `STEPS`: 0…141 every 3 h (48) + 144…240 every 6 h (17) = 65.
 | t, gh, r | each × `PROFILE_LEVELS` 1000/925/850/700/600/500 × 65 | 3 × 390 |
 | uvw700 | u, v, w at 700 × 65 | 195 |
 | uv_low | u, v at 850/925/1000 × 65 | 390 |
-| sfc | msl, 2t, 2d, sp, 10u, 10v × 65 (2d 9 bits like the temperatures, sp 12) | 390 |
+| sfc | msl, 2t, 2d, sp, 10u, 10v, sd × 65 (2d 9 bits like the temperatures, sp 12, sd 9 with binary scale −5: steps of 2⁻⁵ m = 31 mm water) | 455 |
 | gust / gust3 | 10fg × 3…90 and 150…240 / 10fg3 × 93…144 (`IFS_HOURLY_LAST_STEP` 90) | 46 / 18 |
 | static | z, sdor, lsm, T+0 only | 3 |
 | minmax3 / minmax6 | mx2t3, mn2t3 × 3…144 / mx2t6, mn2t6 × 150…240 | 96 / 32 |
@@ -698,13 +699,14 @@ Steps `STEPS`: 0…141 every 3 h (48) + 144…240 every 6 h (17) = 65.
 | DerivedWriter per step (`PER_STEP` 23) | t, r, u, v at heightAboveSea 2000/2500/3000; `deg0l` (228024, ecCodes sets isothermal level 273); `inv`, `rhbl`, `psig`, `snowl` (local, surface); `uf`, `vf` at 1000/925 hPa (local); `papt` at 850 hPa (3014 = GRIB2 0/0/3 „pseudo-adiabatic potential temperature or equivalent potential temperature“, K; ecCodes names it `papt`, so the skill's TSV column is `papt850`); `wbt` at 2 m (261023 = GRIB2 0/0/27, K, from `2t`, `2d`, `sp`, template `2t`, 12 bits) | 1495 |
 | DerivedWriter once | `orog` (228002, m) | 1 |
 | DerivedWriter per complete day | `mx2t` (201) / `mn2t` (202), `stepRange` = whole window | 10 + 9 |
-| **Total** (00z and 12z) | | **4115** |
+| **Total** (00z and 12z) | | **4180** |
 
 `RequestPlan.expected_total` computes this total; `output_complete` compares it with the target file.
 Local parameters (`LOCAL_NAMES`): discipline 0, category 192, number 0 `inv`, 1 `rhbl`, 2 `psig`, 3 `snowl`, 4 `uf`, 5 `vf`; ecCodes reads them as `unknown`, `ForecastGrib._name` renames them.
 Missing values: NaN is written as bitmap missing; it occurs for `inv`/`rhbl`/`uf`/`vf` below the model ground, for heights outside the profile levels (wind at 3000 m where gh700 < 3000 m), for `deg0l` where 500 hPa is above 0 °C and for `snowl` where its wet bulb is. `snowl` is set everywhere, not only where `psig`.
 Gusts (`IFS_GUST_NAMES`): Open Data publishes the maximum since the previous model output, so `10fg` covers the last hour to T+90 (hourly output; stepRange 2-3), `10fg3` the last 3 h from T+93 to T+144, `10fg` again the last 6 h from T+150 (checked run 2026110500). The 0.1° files have no `10fg` at T+93…144 and only a constant field at T+0, which is not requested. Readers pick the name per step (`ForecastGrib.pick`) and the window from the start step (`window_hours`).
 `tp` accumulates from T+0 in m. `tcc`, `tp`, `ptype` (`WEATHER_PARAMS`) only feed `weather_summary`: a 9 km global model gets fog and its precipitation wrong.
+`sd` (snow water equivalent, m) only feeds the snow cover of `snow_line`. Its packing hides snow covers below ≈ 16 mm water (5–15 cm of snow): on 13.11.2026 06 UTC ECMWF had snow on 6 % of the eastern Alps at 1500–2000 m, ICON-D2 and ALADIN on 36–37 %.
 Fields lost on the server get a placeholder: a copy of the same field at another step with every value missing (`missing_message`). The file then has the full message count and counts as complete; `ForecastGrib.field` raises `MissingFieldError`, `has()` stays true.
 
 ### ICON-D2 file
@@ -727,10 +729,12 @@ Fields stay on the icosahedral grid (542 040 cells, 1-D arrays; boundary zone wi
 | — (IconDerivedWriter) | `TW_2M` → `wbt` | 2 m wet-bulb temperature (K), derived, appended after the joined files; GRIB2 0/0/27 on the DWD template, which ecCodes names `TW_2M` | 0…48 |
 | tmax_2m, tmin_2m | `tmax_2m`, `tmin_2m` | 2 m extreme since the last 6 h restart (K) | 0…48 |
 | ceiling | `ceiling` | base of the lowest layer with > 50 % cover, m above sea; ≈ 20 km where none | 0…48 |
+| w_snow | `sd` (ecCodes' own name) | snow water equivalent in **kg/m²** (IFS `sd` in m) | 0…48 |
+| snowlmt | `SNOWLMT` → `snowlmt` | snow line: height of the wet-bulb temperature +1.3 °C searched from the top, m above sea; missing (bitmap) where the column is colder down to the ground, never below the ground; also set where it is dry (74 % of the cells, run 2026111218 T+12) | 0…48 |
 | u@1000, v@1000 | `u`, `v` level 1000 | only for the location tables of the synop skill (`skills/synop`); no chart uses them | 0…48 |
 | t, relhum, fi, u, v @850 and @700 | `t`, `r`, `z`, `u`, `v` | profile for `mountain_2000`; no 925 hPa in ICON-D2 | 0…48 |
 
-Total 4 + 24 × 49 + 48 = 1228 files, plus 49 `wbt` = 1277 messages. The aliases give ICON fields the IFS names, so `ChartProducts` methods work; units still differ and `IconProducts` handles them.
+Total 4 + 26 × 49 + 48 = 1326 files, plus 49 `wbt` = 1375 messages. The aliases give ICON fields the IFS names, so `ChartProducts` methods work; units still differ and `IconProducts` handles them.
 
 ### CHMI ALADIN file
 
@@ -753,8 +757,11 @@ GRIB edition 1, centre 89, simple packing, rows from the south. The whole model 
 | CLSMAXI_TEMPERAT, CLSMINI_TEMPERAT | `tmax_2m`, `tmin_2m` (aliases of `mx2t6`, `mn2t6`) | 2 m extremes of the last 12 h, K, time range step−12…step, the first of a run from T+0 | valid at 06 and 18 UTC: 12, 24 … 72 (runs of 06, 18 UTC), 6, 18 … 66 (runs of 00, 12 UTC) |
 | P85000…, P70000… TEMPERATUR, HUMI_RELAT, GEOPOTENTI | `t`, `r`, `z` level 850, 700 | K, **fraction** 0…1 (ICON %), m²/s² | 0…72 |
 | P00000, P85000, P70000 WIND_U_COM, WIND_V_COM | `u`, `v` level 1000, 850, 700 | m/s east and north, `uvRelativeToGrid` 0 | 0…72 |
+| SURFRESERV_NEIGE | `sf` → `sd` | snow water equivalent (snow reservoir) in kg/m², GRIB 1 parameter 65; ecCodes misnames it snowfall; quantum 0.0625 kg/m² | 0…72 |
+| P00000…P60000 THETA_P_W, GEOPOTENTI | `papt` → `thetaw`, `z` level 1000, 950, 925, 850, 800, 700, 600 | wet-bulb potential temperature θ'w (K; ecCodes calls it `papt`, which is θe in the IFS file), geopotential; the profile of the snow line (`WET_BULB_LEVELS`) | 0…72 |
 
-ICON has fields ALADIN does not publish: `ww`, `ceiling`, `sp` (per user: every other ICON field is taken from ALADIN too). Names of the pressure levels are Pa, but 1000 hPa is `P00000`.
+ICON has fields ALADIN does not publish: `ww`, `ceiling`, `sp`, `snowlmt` (no snow line, freezing level or wet-bulb zero among the 154 variables; per user: every other ICON field is taken from ALADIN too).
+Tw from `thetaw` along the pseudo-adiabat against the isobaric Tw from T and RH (run 2026111212 T+18): −0.16 K at 850 hPa, −0.39 K at 700 hPa on average, 5th percentile −0.7/−1.0 K; ALADIN's RH probably refers to ice in the cold, which the IFS formulas of `moist_air` do not assume. Names of the pressure levels are Pa, but 1000 hPa is `P00000`.
 Meaning measured on the runs 2026110818, 00, 06 and 12 (one per cycle): the extremes equal the hourly `2t` of the 12 h before the step, or since T+0 for the first one of a run, within +0.05 K on average and never fall below it (24 h or the time since T+0 do not fit); CLSTPRIM_W differs by 0.1–0.2 K from `wbt` computed like ICON's, surface pressure estimated from `msl` and `z`, without a trend with height (so no potential temperature).
 
 Wind frames (measured on run 2026110900, gust direction minus wind direction against longitude has the trend −sin LaD exactly): CLSWIND_DIREC refers to true north, the gust components to the grid. The gust is stored as a speed, so the frame does not matter; do not derive a gust direction without rotating by `sin(LaD) · (lon − LoV)`. The components on pressure levels refer to the grid as well (the flag is 1 on every field and says nothing; direction minus the direction of the geostrophic wind along the grid axes, 700 hPa, T+24…72: trend ≈ 0 against longitude, +0.72 expected for east/north); `AladinWriter` turns them.
@@ -936,14 +943,14 @@ Measured: 1228 files, 85 s for download and derived field (run 2026110706), less
 | Field | Meaning |
 | --- | --- |
 | `PROFILE_LEVELS = (850, 700)` | enclose 2000 m everywhere; separate from `constants.PROFILE_LEVELS` |
-| `FORECAST_PARAMS`, `STATIC_PARAMS` | 25 DWD folder names, `<folder>@<hPa>` on pressure levels; `clat`, `clon`, `hsurf`, `fr_land` |
+| `FORECAST_PARAMS`, `STATIC_PARAMS` | 27 DWD folder names, `<folder>@<hPa>` on pressure levels; `clat`, `clon`, `hsurf`, `fr_land` |
 | `PARALLEL_REQUESTS = 8`, `PREFIX = 'icon-d2_'` | |
 
 ### download_chmi_aladin.py
 
 `main`: early return with `SCHEDULE` (not with `--run` or `--force`) → `AladinRuns.latest()` (or `has(--run)`) → "already on disk" if the target has `expected_total` messages → `fetch` × `PARALLEL_REQUESTS` (4) unpacks each bz2 into `<out>.raw/` → `AladinWriter.write` into `<out>.part` → rename → delete `.raw/`.
 Every `.grb` in `.raw/` went through `.part` and had the expected message count; a file with too few messages (CHMI still uploading) raises, exit 1, and update_maps only warns. There is no placeholder for lost fields: unlike ICON a run is all-or-nothing, because a file holds every step.
-Measured: 30 files, 80 s download, 2.8 GB and 1834 messages after 37 s of joining and deriving (run 2026110906, dev PC).
+Measured: 43 files, 115 s download, 4.24 GB and 2783 messages after 38 s of joining (run 2026111212, dev PC). The 13 files of the snow line (θw, z, snow reservoir) add ≈ 0.75 GB of bz2 download and 1.45 GB to the file.
 
 | Field | Meaning |
 | --- | --- |
@@ -1004,7 +1011,7 @@ Every request is a cartesian product param × levelist × step; `expected` relie
 
 | Method | Summary |
 | --- | --- |
-| `__init__(steps, base_time)` | groups t, gh, r, uvw700, uv_low, sfc, static, minmax3, minmax6, weather, gust, gust3 |
+| `__init__(steps, base_time)` | groups t, gh, r, uvw700, uv_low, sfc (with `sd`), static, minmax3, minmax6, weather, gust, gust3 |
 | `expected(request) -> int` (static) | messages a request must yield |
 | `fields() -> set[(param, level, step)]` | every expected raw message, for placeholders |
 | `expected_total() -> int` | groups + per step thickness and `PER_STEP` + `orog` + one extreme per complete day (via `ExtremeWindows`) |
@@ -1135,7 +1142,8 @@ Writes in the order STATIC, FROM_ZERO, FROM_ONE, wind, gust, level winds, extrem
 
 | Field | Meaning |
 | --- | --- |
-| `VARIABLES`, `STATIC`, `FROM_ZERO`, `FROM_ONE`, `WIND`, `GUST`, `LEVEL_WINDS`, `EXTREMES`, `EXTREME_HOURS = 12`, `STEPS = 73` | files of a run; `expected_messages(variable)`, `expected_total()` = 1834 |
+| `VARIABLES`, `STATIC`, `FROM_ZERO`, `FROM_ONE`, `WIND`, `GUST`, `LEVEL_WINDS`, `EXTREMES`, `EXTREME_HOURS = 12`, `STEPS = 73` | files of a run; `expected_messages(variable)`, `expected_total()` = 2783 |
+| `WET_BULB_LEVELS` | CHMI level names 1000…600 hPa of `THETA_P_W` (and `GEOPOTENTI` where not yet in 850/700); **same levels as `aladin_products.WET_BULB_LEVELS` in hPa** |
 | `LAST_STEP_IN_TIME_RANGE = 255` | P1 and P2 of GRIB 1 are one byte |
 
 ## API: scripts/lib/ — GRIB access and meteorology
@@ -1147,7 +1155,7 @@ Tangent Lambert on the sphere of GRIB 1 (`EARTH_RADIUS_M = 6367470`), without py
 ### ForecastGrib (forecast_grib.py)
 
 For ALADIN (GRIB edition 1): `aliases` also takes int keys, the GRIB 1 parameter numbers of messages whose shortName is `unknown`; `lambert` holds the `LambertPlane`, `grid` is None and fields are flat like ICON's. Ground and pressure levels share the name `z`: read the ground with level 0.
-On Windows ecCodes reports the offset 0 for a message beyond 2 GiB, so the index takes the end of the previous message (`totalLength`) there; a file must have no gaps beyond 2 GiB (ALADIN is 2.8 GB). Checked: all 1834 fields read through the index equal a sequential read.
+On Windows ecCodes reports the offset 0 for a message beyond 2 GiB, so the index takes the end of the previous message (`totalLength`) there; a file must have no gaps beyond 2 GiB (ALADIN is 4.24 GB, 50 MB below 4 GiB). Checked: all 1834 fields of a 2.8 GB file and 187 sampled fields beyond 2 GiB of the 4.24 GB file (run 2026111212) read through the index equal a sequential read.
 
 Index key `(name, level, endStep)` → `(startStep, byte offset)`, **without typeOfLevel**: `t` at 850 hPa and at 2000 m differ only by level. Name = local name (category 192), else `aliases.get(shortName, shortName)`. `stepUnits` is set to hours (ICON gives static fields as "0m").
 Base time and grid come from the first message; `grid` is None unless `regular_ll`, fields are then 1-D.
@@ -1203,10 +1211,11 @@ Lost static fields raise `MissingFieldError` while the products are built: rende
 
 | Method | Summary |
 | --- | --- |
-| `__init__(grib, step, height='gh', height_factor=1.0)` | IFS `gh` in gpm; ICON `z` × 1/g |
+| `__init__(grib, step, height='gh', height_factor=1.0, levels=LEVELS)` | IFS `gh` in gpm; ICON `z` × 1/g; `levels` bottom to top (ALADIN: its `WET_BULB_LEVELS`) |
 | `_stack(name)` | levels holding the parameter **and** the height field |
 | `at_height(name, height) -> ndarray` | linear in height between neighbour levels; NaN outside |
-| `_levels(*names)`, `_wet_bulb_stack()` | levels holding all names and the height; Tw per level from `t`, `r` via `vapour_pressure` → `dew_point` → `wet_bulb_temperature` at the level pressure |
+| `_levels(*names)`, `_wet_bulb_stack()` | levels holding all names and the height; Tw per level from `thetaw` via `wet_bulb_from_theta_w` where the file has it (ALADIN), else from `t`, `r` via `vapour_pressure` → `dew_point` → `wet_bulb_temperature` at the level pressure |
+| `wet_bulb_level(ground, celsius) -> ndarray` | `zero_crossing` of Tw − celsius: ALADIN's snow line at +1.3 °C, like ICON's `snowlmt` |
 | `freezing_level(ground)`, `wet_bulb_zero(ground) -> ndarray` | `zero_crossing` of the T or Tw profile; Tw ≤ T, so the wet-bulb zero never lies above the freezing level (equal in saturated air). At the crossing T ≥ 0 °C, where IFS RH refers to water like `dew_point` |
 | `zero_crossing(heights, temperatures, ground)` (static) | 0 °C crossing searched from the top (top of a warm layer above a cold pool); all frozen or crossing below ground → ground height; top level (500 hPa) > 0 °C → NaN. Below-ground levels are used unmasked: they can only give a crossing below ground, which is clamped |
 
@@ -1234,6 +1243,8 @@ Pressure levels only; a level counts where its geopotential is more than `ABOVE_
 | `ifs_saturation_vapour_pressure(t)`, `vapour_pressure(t, rh)`, `dew_point(e)` | hPa, hPa, K; arrays |
 | `equivalent_potential_temperature(t, rh, p) -> ndarray` | K, float64; T in K, RH in %, p in hPa. Checked at 850 hPa: 5.1 °C 77 % → 306.08 K, 0.5 °C 99 % → 299.96 K, 14 °C 100 % → 335.98 K |
 | `saturation_vapour_pressure(t)` | hPa over water after Bolton eq. 10, also below 0 °C; the inverse of `dew_point` |
+| `pseudo_adiabatic_lapse(t, p)`, `pseudo_adiabat(t, p_from, p_to)` | dT/d ln p = (R_d T + L r_s)/(c_pd + L² r_s ε/(R_d T²)) (as MetPy's moist_lapse, constant L, saturation over water); RK4 in ln p, `PSEUDO_ADIABAT_STEPS` 50 |
+| `wet_bulb_from_theta_w(theta_w, p) -> ndarray` | Tw (K, float32) at p (**hPa**): the pseudo-adiabats of a table of Tw at p (`TABLE_TW_*`, 213…323 K every 0.05 K) brought to 1000 hPa, inverted with `np.interp`. θw 10 °C → 2.66 °C at 850, −6.92 °C at 700 hPa |
 | `wet_bulb_temperature(t, td, p) -> ndarray` | K, float64; T and Td in K, **p in Pa**. Isobaric (psychrometric) wet bulb: root of (c_pd + r c_pv)(T − Tw) = L(Tw)(r_s(Tw) − r) (`CP_DRY` 1005.7, `CP_VAPOUR` 1875, L = 2.501e6 − 2370·(Tw − 0 °C)), saturation over water also below 0 °C (no ice bulb), by `WET_BULB_ITERATIONS` 20 bisections between Td and T (< 1e-4 K). Td > T counts as T, NaN stays. Checked at 1013 hPa against a psychrometric table: 30/20 °C → 22.94, 35/10 → 19.38, 2/−3 → 0.09, 5/−10 → 0.01 °C. Pressure matters: ±33 hPa change Tw by up to 0.17 K in warm dry air, hence the model `sp` |
 
 ### IconExtremes (icon_extremes.py)
@@ -1272,7 +1283,7 @@ Keys `(kind, statistic, variable, level, month, day)`: kind `HHz` (term hours pr
 
 Product registry: a product is a method with its name, `(self, step)` for STEP products, `(self)` for STATIC; DAY maps a name to `"max"`/`"min"` and draws `daily_extreme`.
 `draw` turns a `MissingFieldError` into a "No data available" chart (title = product, time line from `key_label`, note = the field from the error).
-Hooks for subclasses (data sources only): `profile`, `summit_cloud`, `extreme_days`, `daily_extreme_field`, `cloud_cover`, `precipitation`, `precipitation_type`.
+Hooks for subclasses (data sources only): `profile`, `summit_cloud`, `extreme_days`, `daily_extreme_field`, `cloud_cover`, `precipitation`, `precipitation_type`, `precipitation_area`, `snow_line_height`, `snow_water`.
 Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L window 121 px, H 181 px, `min_depth` 2 dam, 60 km pre-smoothing; MSLP centres (`isobars`) 81/161 px, 2 hPa, 60 km; arrows `rh700_wind700` 30 px, 1.2 px per m/s, reference 20 m/s; `t2m_wind10m` 30 px, 2.5, 10 m/s, grey; `mountain_2000` 30 px, 1.5, 20 m/s.
 
 | Field | Meaning |
@@ -1305,6 +1316,10 @@ Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L w
 | `weather_summary_24h(step)` | `summary_canvas` with `SHEET_PRECIP_HOURS` = 24 |
 | `summary_canvas(step, hours)` | precipitation = `tp(step) − tp(step − hours)`, ≥ 0, mm, `hours` in the legend; ptype symbols where ptype fits and ≥ 0.2 mm |
 | `cloud_cover`, `precipitation`, `precipitation_type`, `extreme_days`, `daily_extreme_field` | hooks |
+| `snow_line(step)` | snow line in `SNOW_LINE` where it precipitates, elsewhere `NO_SNOW_LINE_RGB` grey, painted `SNOW_COVER_RGB` white where the bilinear snow water ≥ `SNOW_COVER_KG_M2`; numbers rounded to 100 m; the snow cover is not shown under the shaded snow line (per user) |
+| `precipitation_area(step) -> (dry, where, note)` | hook: pixels without precipitation, title phrase, grey note; IFS: `psig` < 0.5 after resampling |
+| `snow_line_height(step) -> (height, definition)` | hook: model grid, m; IFS `Diagnostics.snow_line` (wet-bulb zero − 350 m) |
+| `snow_water(step)` | hook: kg/m² on the model grid; IFS `sd` × 1000 |
 | `orography()` | rough terrain hatched only if `surface.sdor` |
 | `wind10m(step)` | gusts of `GUST_NAMES` shaded in `GUST10M` (km/h, Beaufort bands), window from `window_hours` in the title; streamlines of the mean 10 m wind, `MSLP_SUMMARY` isobars |
 | `z850_lines(canvas, step, shaded)` | model ground line `ABOVE_850HPA_M`, Z850 contours, L/H; shared by `z850_rh700` and `z850_thetae850`, so switching between these layers of tile 3 keeps the lines |
@@ -1314,12 +1329,12 @@ Empirical literals in the product methods (per user): Z500/Z700/Z850 centres L w
 ### IconProducts (icon_products.py)
 
 Wired with `IconSurface` and `TriangleGrid`. Only data sources and `draw` are overridden; drawing is `ChartProducts`'. Other IFS products need fields the ICON file lacks (gh, 925 hPa, w, ptype).
-A run gives 3 × 49 + 48 step charts, usually 1 `tmax` and 2 `tmin`, `orography` = 199 charts and 6 sheets.
+A run gives 2 × 49 + 3 × 48 step charts, usually 1 `tmax` and 2 `tmin`, `orography` = 246 charts and 7 sheets.
 `summit_cloud` uses the cloud base because RH at 2000 m is interpolated over ≈ 1500 m between 850 and 700 hPa and reports cloud where the base is higher. Area share and 90 % because the 2 km model's clouds are patchy: the former variant (RH, 0 above the base, smoothed, 95 %) hatched nothing on 01.11.2026 12 UTC while the northern Alps were overcast with a base near 1300 m. `relhum` is over water; ice-saturated cloud has ≈ 95 % at −5 °C, ≈ 91 % at −10 °C. `clcl`/`clcm` do not help (border at 800 hPa near 2000 m; fog leaves summits free); `clc` exists only on model levels.
 
 | Field | Meaning |
 | --- | --- |
-| `STEP = ('t2m_wind10m', 'wind10m', 'mountain_2000', 'weather_summary')`, `DAY`, `STATIC`, `CLIMATE = ()` | |
+| `STEP = ('t2m_wind10m', 'wind10m', 'mountain_2000', 'weather_summary', 'snow_line')`, `DAY`, `STATIC`, `CLIMATE = ()` | |
 | `MODEL = 'ICON-D2'` | |
 | `SHEET_HOURS = (3, 9, 15, 21)` | 15 UTC for afternoon storms, 03/09 for fog |
 | `SHEET_PRODUCTS = {}` | four charts per day already show the course of the rain |
@@ -1327,7 +1342,11 @@ A run gives 3 × 49 + 48 step charts, usually 1 `tmax` and 2 `tmin`, `orography`
 
 | Method | Difference from IFS |
 | --- | --- |
-| `draw` | product, then `canvas.uncovered(pixels.covered, OUTSIDE_RGB, …)`: grey outside the model domain on every chart |
+| `keys` | `snow_line` takes the keys of `weather_summary` (`tp` steps > 0): it needs the last hour |
+| `draw` | product, then `canvas.uncovered(pixels.covered, OUTSIDE_RGB, …)`: grey outside the domain of `MODEL` on every chart |
+| `precipitation_area` | `precipitation(step, 1)` < `SNOW_LINE_PRECIP_MM` (0.2 mm, the lowest band of weather_summary, so both layers show the same area; per user) |
+| `snow_line_height` | `snowlmt`, missing → model ground, at least the ground; NaN outside the domain |
+| `snow_water` | `sd` (w_snow), kg/m² already |
 | `profile` | `HeightProfile(grib, step, "z", 1/GRAVITY)`, 850/700 hPa only |
 | `summit_cloud` | cell in cloud (100) where `ceiling` ≤ height and RH ≥ `ICON_SUMMIT_CLOUD_RH` (90), else 0; hatched where the smoothed share ≥ `SUMMIT_CLOUD_AREA` (50 %) |
 | `extreme_days`, `daily_extreme_field` | `IconExtremes` |
@@ -1340,7 +1359,8 @@ A run gives 3 × 49 + 48 step charts, usually 1 `tmax` and 2 `tmin`, `orography`
 
 ### AladinProducts (aladin_products.py)
 
-Subclass of IconProducts, wired with `AladinSurface` and `LambertGrid`: `t2m_wind10m`, `wind10m`, `weather_summary`, 73 + 72 + 72 = 217 charts. `MODEL = 'CHMI ALADIN'`, `DEFAULTS = {'chmi-aladin': ALL}`, no DAY or STATIC products (per user: three products).
+Subclass of IconProducts, wired with `AladinSurface` and `LambertGrid`: `t2m_wind10m`, `wind10m`, `weather_summary`, `snow_line`, 73 + 3 × 72 = 289 charts. `MODEL = 'CHMI ALADIN'`, `DEFAULTS = {'chmi-aladin': ALL}`, no DAY or STATIC products (per user).
+`WET_BULB_LEVELS = (1000, 950, 925, 850, 800, 700, 600)` hPa: every level CHMI publishes up to ≈ 4200 m; above, the snow line is NaN (grey).
 
 | Method | Difference from ICON |
 | --- | --- |
@@ -1349,6 +1369,7 @@ Subclass of IconProducts, wired with `AladinSurface` and `LambertGrid`: `t2m_win
 | `cloud_cover`, `precipitation` | fraction × `ALADIN_CLOUD_PERCENT`; `last_hour('tp')` |
 | `precipitation_type` | `ptype` via `nearest`, mapped by `ALADIN_PTYPE` to the ptype codes of the legend |
 | `significant_weather` | 45 fog (visibility < `ALADIN_FOG_VISIBILITY_M`), 95 storm (`last_hour('flash')` ≥ `ALADIN_STORM_FLASHES_KM2`), 96 hail (`ptype_severe` 10, or 9 with storm) |
+| `snow_line_height` | ALADIN has no snow line (per user: ICON's definition): `HeightProfile(…, levels=WET_BULB_LEVELS).wet_bulb_level(ground, SNOW_LINE_WET_BULB_C)`. Run 2026111212 T+18: the +1.3 °C level lies 207 m (median) below the 0 °C one; ECMWF's line lies 350 m below its wet-bulb zero |
 
 ### ChartCanvas (chart_canvas.py)
 
@@ -1365,7 +1386,8 @@ One matplotlib figure: map 1200×600 plus a legend strip of 90 px → 1200×690.
 | --- | --- |
 | `__init__(base_map, title, time_label)` | |
 | `background`, `shade(values, scale, mask=None, …)` | mask and NaN pixels get `mask_colour` |
-| `uncovered(covered, colour, label)` | grey over every shading |
+| `paint(area, colour, label='')` | one colour over the shading drawn before, label as a note without swatch (white `snow_line` background) |
+| `uncovered(covered, colour, label)` | `paint` of the pixels outside, plus swatch |
 | `no_data(note)` | "No data available" chart |
 | `outlines()` | coasts and borders (0.6 px black), states dashed `#303030` 0.4 px below them, graticule labels |
 | `contours(values, style, …)`, `isolines`, `extrema`, `hatch` | |
@@ -1461,6 +1483,9 @@ chart_styles.py holds every scale and threshold:
 | `MOIST_LAYER_RH = 90`, `WIND925_CALM = 5` | fog/stratus layer; below 5 m/s an inversion hardly clears |
 | `ASCENT_LINES`, `SUBSIDENCE_LINES` | ω700 −0.6/−0.2 and +0.2 Pa/s |
 | `PRECIP_RH = 90`, `SNOW_LINE_BELOW_WET_BULB_ZERO_M = 350` | also Diagnostics (`psig`, `snowl`) |
+| `SNOW_LINE_WET_BULB_C = 1.3`, `SNOW_LINE_PRECIP_MM = 0.2` | ICON's snowlmt definition, also for ALADIN; ICON/ALADIN snow line only where the last hour had ≥ 0.2 mm |
+| `SNOW_COVER_KG_M2 = 2` | snow on the ground for all three models; ≈ 1–2 cm (ICON density median 158 kg/m³). 13.11.2026 06 UTC, eastern Alps: traces below it on 4 % (ICON) / 15 % (ALADIN) of the points at 500–1000 m, 2 kg/m² leaves 0.2 % / 2 %; from 1500 m up both models agree within 10 %. ECMWF's packing makes it ≈ 16 mm there |
+| `SNOW_COVER_RGB = (255, 255, 255)`, `NO_SNOW_LINE_RGB = (235, 235, 235)` | background of `snow_line` with and without snow on the ground (per user) |
 | `MOUNTAIN_HEIGHT_M = 2000`, `SUMMIT_CLOUD_RH = 95` | chart height (defined apart from `MOUNTAIN_HEIGHTS`), IFS in cloud |
 | `ICON_SUMMIT_CLOUD_RH = 90`, `SUMMIT_CLOUD_AREA = 50` | ICON cell in cloud, hatched share |
 | `VALUE_SPACING_PX = 40`, `VALUE_START_PX = 30` | lattice of the printed values (first row/column at 30 px), detail windows only: ≈ 130 km on central Europe, ≈ 30 km on icon-d2 |
@@ -1511,7 +1536,7 @@ No logging framework, no tests, no cleanup of `.part` files after an exception. 
 
 ## Pitfalls
 
-- **Values that must stay in sync**: projection parameters (Python, TS); image size 1200×690 (chart_canvas.py, tile_videos.py, TS, CSS); `MOUNTAIN_HEIGHT_M` vs `MOUNTAIN_HEIGHTS`; `PER_STEP` vs `step_messages`; `ICON_NAMES` (with `TW_2M` → `wbt`) vs its copy in skills/synop/scripts/lib/constants.py; product names in the classes vs render_charts.py docstring (`--help`) and data/charts.md; window names in `PROJECTIONS`, `WINDOWS`/`ICON_WINDOWS`, `DEFAULTS`, TS `PROJECTIONS`; `PREFIX` vs `ICON_PREFIX`; `PREFIX` of download_chmi_aladin.py vs `ALADIN_PREFIX`; layer format TS vs Python; two profile level lists (IFS `constants.PROFILE_LEVELS`, ICON `PROFILE_LEVELS`).
+- **Values that must stay in sync**: projection parameters (Python, TS); image size 1200×690 (chart_canvas.py, tile_videos.py, TS, CSS); `MOUNTAIN_HEIGHT_M` vs `MOUNTAIN_HEIGHTS`; `PER_STEP` vs `step_messages`; `ICON_NAMES` (with `TW_2M` → `wbt`) vs its copy in skills/synop/scripts/lib/constants.py; product names in the classes vs render_charts.py docstring (`--help`) and data/charts.md; window names in `PROJECTIONS`, `WINDOWS`/`ICON_WINDOWS`, `DEFAULTS`, TS `PROJECTIONS`; `PREFIX` vs `ICON_PREFIX`; `PREFIX` of download_chmi_aladin.py vs `ALADIN_PREFIX`; layer format TS vs Python; three profile level lists (IFS `constants.PROFILE_LEVELS`, ICON `PROFILE_LEVELS`, ALADIN `WET_BULB_LEVELS` in aladin_writer.py and aladin_products.py); `ALADIN_NAMES`, `ICON_NAMES` vs their copies in skills/synop/scripts/lib/constants.py (the copies lack `snowlmt`, `sd`, `thetaw`: the skill reads ALADIN's θw as `papt`).
 - **θe formulas**: scripts/lib/moist_air.py (GRIB field `papt`) vs src/model/moistAdiabat.ts (axis of the θe line).
 - **Series format** (point_series.py vs src/model/seriesFiles.ts, `TemperatureSeries`): encoding, key names, grid convention; `SERIES_FILES` names vs `REQUIRED`/`OPTIONAL` in src/hooks/useSeriesFiles.ts. t2m.json's ICON part must have the cells of heights.json (`cells` equal; the app drops ICON otherwise). Changing the format without changing the runs needs `point_series.py --force` (or `update_maps.py --force`), else the files stay.
 - **Run schedule**: if a provider publishes earlier than `ready_after`, runs are delayed until that time without any error; compare the table under `RunSchedule` when a model seems late. A changed set of fields fetches the run on disk again only with `--force`, otherwise with the next run.

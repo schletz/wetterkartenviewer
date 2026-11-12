@@ -29,8 +29,9 @@ class RequestPlan:
             "r": dict(param="r", levelist=PROFILE_LEVELS, step=steps),
             "uvw700": dict(param=["u", "v", "w"], levelist=700, step=steps),
             "uv_low": dict(param=["u", "v"], levelist=[850, 925, 1000], step=steps),
-            # 2d and sp only feed the derived wet-bulb temperature and the synop skill.
-            "sfc": dict(param=["msl", "2t", "2d", "sp", "10u", "10v"], step=steps),
+            # 2d and sp only feed the derived wet-bulb temperature and the synop skill; sd (snow water
+            # equivalent, m) the snow cover of snow_line.
+            "sfc": dict(param=["msl", "2t", "2d", "sp", "10u", "10v", "sd"], step=steps),
             # Static fields, only in the T+0 file: model orography, its sub-grid roughness and
             # the land-sea mask; levtype keeps z of the pressure levels out.
             "static": dict(param=["z", "sdor", "lsm"], levtype="sfc", step=[0]),

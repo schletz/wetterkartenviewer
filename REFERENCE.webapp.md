@@ -458,7 +458,7 @@ The Azure function in `api/` answers the same three requests for the Hungarian s
 `src/config/viewer.config.json`, edited by hand, read by the app (bundled) and by `tile_chart_paths`.
 `meteograms`: epsgram names in display order (`classical_15d_with_climate`, `classical_plume`, `classical_10d`), after the temperature diagram.
 `tiles[].layers[]`: a layer is a path or a list of paths in order of preference (fallback chain, e.g. `["icon-d2/wind10m", "opencharts_central_europe/wind10m"]`).
-Currently 6 tiles (tile 3: `z850_thetae850`, `z850_rh700`, `z700_t700` on opencharts_europe); ICON is first in the chains of t2m_wind10m, mountain_2000, weather_summary and wind10m; `chmi-aladin` is the next layer of t2m_wind10m, weather_summary and wind10m, with the same chain to `opencharts_central_europe` after its +72 h.
+Currently 6 tiles (tile 3: `z850_thetae850`, `z850_rh700`, `z700_t700` on opencharts_europe); ICON is first in the chains of t2m_wind10m, mountain_2000, weather_summary, wind10m and snow_line; `chmi-aladin` is the next layer of t2m_wind10m, weather_summary, wind10m and snow_line, with the same chain to `opencharts_central_europe` after its +72 h. Tile 6 thus has 7 layers: three of wind10m, inversion, three of snow_line.
 
 ## API: src/ (app)
 
