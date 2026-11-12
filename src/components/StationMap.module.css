@@ -23,3 +23,8 @@
 .selected.selected {
   color: #e00000;
 }
+
+/* Below the value zoom the names would cover each other; only the selected station keeps its label. */
+.hidden.hidden {
+  display: none;
+}

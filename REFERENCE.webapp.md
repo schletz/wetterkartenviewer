@@ -355,8 +355,8 @@ class StationLegend <<component>> {
  Meaning of the colours.
 }
 class StationMap <<component>> {
- Leaflet at fixed zoom, stations as points
- in their colour; a click selects.
+ Leaflet, coloured stations from zoom 10 on,
+ grey points below; a click selects.
 }
 class useCurrentTemperatures <<hook>> {
  Values by station, asks only for
@@ -392,7 +392,7 @@ StationValueTable ..> temperatureBands : temperatureColour()
 StationLegend ..> temperatureBands : TEMPERATURE_BANDS,\nbandLabel()
 StationMap --> useCurrentTemperatures
 StationMap ..> temperatureBands : temperatureColour()
-StationMap ..> osm : tiles at zoom 10
+StationMap ..> osm : tiles at zoom 7 to 13
 StationLegend ..> stationSources : attribution of\nevery network
 useCurrentTemperatures ..> stationSources : one request\nper network
 temperatureBands ..> colourBands : bandColour()
@@ -541,7 +541,7 @@ Time span (`seriesStart`, per user): 00 UTC, 3 days before the current UTC day, 
 
 `StationValueTable`: oldest first, one row per slot at a full hour of the *local* time zone (`hourlySamples`, the value of that slot, no mean, per user), a null before the latest measurement is a white row with „–“, later slots are left out; last row „letzter Wert von“. Mounted with `key` = station and only with data, so it starts scrolled to the bottom and the 5 min reload keeps the position. `TEMPERATURE_BANDS` (`temperatureBands.ts`) hold the colours of the reference screenshot (per user), lower limit inclusive through `bandColour`, so exactly 30 °C is „≥ 30 °C“; white = no value.
 
-`StationMap`: plain Leaflet in effects, without react-leaflet. `ZOOM` 10 fixed (`minZoom` = `maxZoom`, every zoom control off, about 100 m per pixel; per user, to limit the stations per view: about 40 in a full HD window), OSM tiles with the required attribution. The map opens around the first station (`DEFAULT_LOCATION` if it is not in the list) and is not moved by a selection. Stations are `L.circleMarker`s with a permanent `bindTooltip` as name label (red for the selected one, through `styles.selected` on the tooltip element); clicks count on the point only, labels let them through. A marker is added once its station has an entry in `temperatures`, so white always means „not available“ and never „still loading“. Requests: all active stations within the view + `LOAD_MARGIN` 25 % on each side, `MOVE_DELAY_MS` 300 ms after `moveend`/`resize`, and every `REFRESH_MS` 5 min.
+`StationMap`: plain Leaflet in effects, without react-leaflet. Opens at `VALUE_ZOOM` 10 (about 100 m per pixel, about 40 stations in a full HD window), zoomable from `MIN_ZOOM` 7 (all of Austria) to `MAX_ZOOM` 13 by buttons, wheel, double click and touch; Leaflet's keyboard handler stays off. Current values only from `VALUE_ZOOM` on (per user: the zoom limits the stations per request); below it no request is made and every station is a small grey point (`PLAIN_RADIUS` 4, `PLAIN_FILL`), with only the selected station's label shown (`styles.hidden` on the other tooltips). OSM tiles with the required attribution. The map opens around the first station (`DEFAULT_LOCATION` if it is not in the list) and is not moved by a selection. Every station gets an `L.circleMarker` with a permanent `bindTooltip` as name label (red for the selected one, through `styles.selected` on the tooltip element); clicks count on the point only, labels let them through. From `VALUE_ZOOM` on a station with an entry in `temperatures` is drawn in its colour at `MARKER_RADIUS` 7, one without entry (still loading) stays a grey point, so white always means „not available“ and never „still loading“. The `zoom` state follows `zoomend` and restyles all markers. Requests: all active stations within the view + `LOAD_MARGIN` 25 % on each side, `MOVE_DELAY_MS` 300 ms after `moveend`/`resize` (a zoom ends with `moveend` too, so zooming in to `VALUE_ZOOM` loads the view), and every `REFRESH_MS` 5 min; each of them returns without a request below `VALUE_ZOOM`.
 
 `useCurrentTemperatures().request(stations)` asks only for stations without entry or older than `MAX_AGE_MS` 4 min (below the map's 5 min so a timer firing early skips no interval), in one request per network, `temperatures` keyed by `stationKey`; `requestedAt` is set before the answer, so a move in the meantime does not ask again. A failure forgets those times (next move retries), keeps known values and enters null for unknown ones.
 
