@@ -1,0 +1,363 @@
+= ALADIN beim ČHMÚ: Aufbau und aktuelle Entwicklungen
+:source-highlighter: rouge
+:icons: font
+:lang: de
+:hyphens:
+:toc:
+:toc-title: Inhalt
+:figure-caption!:
+:table-caption!:
+ifndef::env-github[:icons: font]
+ifdef::env-github[]
+:caution-caption: :fire:
+:important-caption: :exclamation:
+:note-caption: :paperclip:
+:tip-caption: :bulb:
+:warning-caption: :warning:
+endif::[]
+
+[.lead]
+Der Wetterkartenviewer zeigt Karten aus dem Modell „CHMI ALADIN“ des Tschechischen Hydrometeorologischen Instituts (ČHMÚ, engl. CHMI).
+Dieses Dokument beschreibt, was sich hinter dem Namen verbirgt, wie das Modell aufgebaut ist und woran der ČHMÚ in den Jahren 2024 bis 2026 gearbeitet hat.
+Stand der Recherche: 12. November 2026.
+
+== Ist ALADIN veraltet?
+
+Kurz: nein, aber der Name führt in die Irre.
+„ALADIN“ bezeichnet heute drei verschiedene Dinge:
+
+* das *ALADIN-System*, einen gemeinsamen Code für Regionalmodelle, der sich die Basis mit dem globalen ARPEGE von Météo-France und dem IFS des EZMW teilt ^<<termonia2018>>^,
+* das ehemalige *ALADIN-Konsortium*, das seit 1990 an diesem System arbeitet ^<<termonia2018>>^,
+* die älteste *Modellkonfiguration* dieses Systems, die „ALADIN baseline“.
+
+Veraltet ist nur das Letzte, die hydrostatische Basiskonfiguration für gröbere Gitter.
+Das System selbst kennt drei kanonische Modellkonfigurationen: ALADIN baseline, AROME und ALARO ^<<termonia2018>>^.
+AROME ist die Konfiguration von Météo-France für konvektionsauflösende Gitter, ALARO wurde unter Federführung des ČHMÚ entwickelt ^<<ecmwf-laef>>^.
+
+Der ČHMÚ betreibt unter dem Namen *ALADIN/CHMI* also eigentlich das ALARO-Modell, genauer die Physikversion ALARO-1vB mit nicht-hydrostatischer Dynamik ^<<chmi-asw2026>>^.
+ALARO ist für die sogenannte Grauzone gebaut, also für Maschenweiten, bei denen Konvektion schon teilweise, aber noch nicht vollständig vom Gitter aufgelöst wird.
+Es soll mit derselben Physik von einigen Kilometern bis hinunter in den konvektionsauflösenden Bereich funktionieren.
+
+Die Konsortien ALADIN und HIRLAM sind samt der mitteleuropäischen Gruppe RC LACE im Konsortium *ACCORD* aufgegangen, dessen erste Strategie die Jahre 2021 bis 2025 umfasst ^<<ecmwf-spfracco2022>>^.
+ACCORD pflegt drei kanonische Systemkonfigurationen: AROME, HARMONIE-AROME und ALARO ^<<ecmwf-spfracco2025>>^.
+Der ČHMÚ ist ACCORD-Mitglied und arbeitet innerhalb von RC LACE eng mit GeoSphere Austria und den Wetterdiensten der Nachbarländer zusammen.
+
+Wie aktiv die Entwicklung ist, zeigt der Abschnitt <<entwicklungen>>: neuer Modellzyklus im Dezember 2025, neuer Rechner im März 2026, acht Läufe pro Tag seit Juni 2025 und die Assimilation von Radardaten seit April 2025.
+
+== Kurze Geschichte
+
+[cols="1,4",options="header"]
+|===
+|Zeit |Ereignis
+
+|1990
+|Gründung des ALADIN-Konsortiums unter Führung von Météo-France ^<<termonia2018>>^.
+
+|Okt. 1991
+|Das Projekt erhält den Namen ARPEGE-ALADIN; die mitteleuropäische Kooperation LACE schließt sich an ^<<aladin-history>>^.
+
+|bis 2002
+|Die LACE-Partner rechnen eine gemeinsame ALADIN-Anwendung; seit 1. Jänner 2003 betreibt jedes LACE-Mitglied seine eigene ^<<aladin-history>>^.
+
+|25.10.2010
+|ČHMÚ erhöht die Auflösung auf 4,7 km und 87 Schichten ^<<chmi-poster2011>>^.
+
+|Jänner 2015
+|Die Physik ALARO-1 geht beim ČHMÚ in den Betrieb ^<<lace-phys2014>>^.
+
+|bis 2019
+|Umstellung von 4,7 km auf 2,3 km bei gleicher Gebietsgröße und 87 Schichten, auf dem Poster zum ALADIN-Workshop 2019 als operationelle Änderung geführt ^<<chmi-ahw2019>>^.
+
+|ab 2021
+|ALADIN, HIRLAM und RC LACE arbeiten im Konsortium ACCORD zusammen (erste Strategie 2021–2025) ^<<ecmwf-spfracco2022>>^.
+|===
+
+== Aufbau des Modells
+
+=== Eckdaten der operationellen Konfiguration
+
+Die folgenden Werte stammen vom Länderposter des ČHMÚ beim 6. ACCORD All Staff Workshop im April 2026 ^<<chmi-asw2026>>^.
+
+[cols="2,3",options="header"]
+|===
+|Merkmal |Wert
+
+|Modell
+|ALADIN/CHMI mit ALARO-1vB-Physik, nicht-hydrostatische Dynamik
+
+|Modellzyklus
+|cy48t3 (Variante `48t3mas_op1`), operationell seit 18.12.2025
+
+|Gitter
+|1069 × 853 Punkte, Maschenweite ca. 2,3 km, Lambert-Projektion
+
+|Spektrale Auflösung
+|lineare Truncation E539x431
+
+|Vertikal
+|87 Schichten, Modellobergrenze in ca. 53 km Höhe ^<<chmi-study01>>^
+
+|Orographie
+|mittlere Orographie (mean orography)
+
+|Zeitschema
+|ICI mit einer Iteration, Zeitschritt 90 s
+
+|Randwerte
+|ARPEGE (Météo-France), alle 3 Stunden
+
+|Hauptläufe
+|00, 06, 12, 18 UTC bis +72 h
+
+|Zwischenläufe
+|03, 09, 15, 21 UTC bis zum Ende des Folgetages (seit 10.06.2025)
+
+|Analyse
+|3-stündlicher Assimilationszyklus, zusätzlich stündliches Analysesystem VarCan Pack
+
+|Rechner
+|NEC SX-Aurora TSUBASA, seit 10.03.2026 das neue System mit 56 Knoten
+|===
+
+=== Dynamik
+
+Das Modell rechnet spektral: Ein Teil der Gleichungen wird im Wellenzahlraum gelöst, ein anderer auf dem Gitter.
+Die Helmholtz-Gleichung des semi-impliziten Zeitschritts und die horizontale Diffusion löst es im Spektralraum, Advektion und Physik dagegen auf dem Gitter ^<<smolikova-asw2026>>^.
+Zwischen beiden Räumen transformiert es in jedem Zeitschritt hin und zurück.
+Weil ein Regionalgebiet nicht periodisch ist, wird es dafür um eine Erweiterungszone ergänzt, in der die Felder periodisch fortgesetzt werden.
+
+Die Advektion ist semi-Lagrangesch: Das Modell verfolgt für jeden Gitterpunkt die Trajektorie zurück und interpoliert den Wert am Startpunkt ^<<smolikova-asw2026>>^.
+Das erlaubt lange Zeitschritte, garantiert aber keine Massenerhaltung.
+Das Zeitschema ICI (iterative centred implicit) linearisiert die Gleichungen um einen Referenzzustand, behandelt den linearen Teil implizit und den nichtlinearen Rest iterativ ^<<smolikova-asw2026>>^.
+Der ČHMÚ rechnet mit einer Iteration, also einem Prädiktor-Korrektor-Schritt.
+
+Die Dynamik ist voll elastisch nicht-hydrostatisch ^<<chmi-study01>>^.
+Vertikale Beschleunigungen, wie sie in Gewitteraufwinden oder über steilem Gelände auftreten, werden also explizit gerechnet und nicht wie in hydrostatischen Modellen vernachlässigt.
+
+=== Physik ALARO-1vB
+
+Die Physik besteht aus mehreren Paketen, die gemeinsam für die Grauzone entworfen wurden:
+
+* *3MT* (Modular Multiscale Microphysics and Transport) verbindet Konvektion und Wolkenmikrophysik so, dass der Anteil der parametrisierten Konvektion mit feinerem Gitter von selbst abnimmt.
+  Seit 9. Mai 2022 ist Graupel eine prognostische Variable ^<<chmi-asw2023>>^.
+* *TOUCANS* ist das Turbulenzschema mit prognostischer turbulenter kinetischer Energie.
+  Der ČHMÚ hat 2023 die numerische Behandlung der zwei prognostischen Energien stabilisiert ^<<chmi-asw2023>>^.
+* *ACRANEB2* ist das Strahlungsschema.
+  Es ist auf geringen Rechenaufwand ausgelegt, damit die Strahlung in jedem Zeitschritt aktualisiert werden kann.
+* Die Erdoberfläche rechnet derzeit noch das ältere *ISBA*-Schema direkt im Modell.
+  Die Kopplung an das Oberflächensystem SURFEX ist in Arbeit (siehe <<surfex>>).
+
+=== Datenassimilation
+
+Die Anfangswerte entstehen in zwei Teilen ^<<chmi-asw2026>>^:
+
+* Die *Bodenanalyse* (CANARI) arbeitet mit optimaler Interpolation und korrigiert Bodentemperatur, Bodenfeuchte und Schnee.
+* Die *Höhenanalyse* heißt BlendVar.
+  Zuerst mischt ein digitaler Filter die großen Skalen der ARPEGE-Analyse in den eigenen Vorlauf (spektrales Blending), danach folgt eine 3D-Var-Analyse mit den Beobachtungen.
+
+Der Assimilationszyklus mit langer Wartezeit auf Beobachtungen (long cut-off) läuft seit 6. Februar 2024 alle 3 statt alle 6 Stunden ^<<chmi-aws2024>>^.
+Die eigentlichen Vorhersageläufe starten von einer Analyse mit kurzer Wartezeit (short cut-off), die zusätzlich mit einem inkrementellen digitalen Filter geglättet wird.
+
+Assimiliert werden SYNOP, Radiosonden (TEMP), Flugzeugdaten (AMDAR, Mode-S), Satellitendaten von SEVIRI, Windprofiler, hochaufgelöste Satellitenwinde (HR-AMV), ASCAT-Scatterometerwinde und seit April 2025 Radarreflektivitäten ^<<chmi-asw2026>>^.
+
+=== Ablauf eines Vorhersagezyklus
+
+[plantuml,format=svg]
+----
+@startuml
+skinparam shadowing false
+skinparam defaultFontSize 15
+skinparam ArrowThickness 1.5
+skinparam activity {
+  BackgroundColor #ffffff
+  BorderColor #1d1d1b
+  BorderThickness 1.5
+}
+skinparam partition {
+  BorderColor #1d1d1b
+}
+
+partition "Eingangsdaten" {
+  :ARPEGE-Analyse und -Vorhersage\n(Météo-France);
+  :Beobachtungen\nSYNOP, TEMP, AMDAR, Mode-S,\nSEVIRI, ASCAT, Radar (OPERA);
+}
+partition "Analyse" {
+  :CANARI\nBodenanalyse (OI);
+  :BlendVar\nDF-Blending mit ARPEGE + 3D-Var;
+}
+partition "Vorhersage" {
+  :ALARO-1vB, 2,3 km, 87 Schichten\nRänder von ARPEGE alle 3 h;
+  :Postprocessing (FullPos)\nDruckflächen, Diagnosen, GRIB;
+}
+partition "Verteilung" {
+  :opendata.chmi.cz\nnur 00/06/12/18 UTC, bis +72 h;
+  :Wetterkartenviewer\ndownload_chmi_aladin.py;
+}
+@enduml
+----
+
+[[entwicklungen]]
+== Neueste Entwicklungen
+
+=== Operationelle Änderungen 2022 bis 2026
+
+Der ČHMÚ veröffentlicht seine Änderungen jedes Jahr auf dem Länderposter zum ACCORD All Staff Workshop.
+
+[cols="1,4",options="header"]
+|===
+|Datum |Änderung
+
+|09.05.2022
+|ALARO mit prognostischem Graupel ^<<chmi-asw2023>>^
+
+|15.05.2023
+|neue Diagnosen für Gewitterlagen: Storm Relative Helicity, Updraft- und Downdraft-Spuren, Updraft-Helicity-Spuren ^<<chmi-aws2024>>^
+
+|06.02.2024
+|Assimilationszyklus 3-stündlich, neue Schneebehandlung, neue Verdunstung von Niederschlag nach Lopez, angepasste Autokonversion ^<<chmi-aws2024>>^
+
+|03.09.2024
+|Wasserdampfkanäle von SEVIRI wieder in der Assimilation ^<<chmi-asw2025>>^
+
+|03.10.2024
+|Tropfengrößenverteilung nach Abel und Boutle für die simulierte Radarreflektivität ^<<chmi-asw2025>>^
+
+|06.01.2025
+|18-UTC-Lauf auf +72 h verlängert ^<<chmi-asw2025>>^
+
+|28.04.2025
+|Assimilation von OPERA-Radarreflektivitäten mit 1D+3D-Var ^<<chmi-asw2026>>^
+
+|10.06.2025
+|acht Läufe pro Tag ^<<chmi-asw2026>>^
+
+|23.09.2025
+|zurück zur Tropfengrößenverteilung nach Marshall-Palmer, neue Abstimmung der Mikrophysik und der Bewölkung in der Strahlung ^<<chmi-asw2026>>^
+
+|18.12.2025
+|neuer Modellzyklus cy48t3 ^<<chmi-asw2026>>^
+
+|10.03.2026
+|Umstieg auf den neuen Rechner ^<<chmi-asw2026>>^
+|===
+
+=== Acht Läufe pro Tag
+
+Seit 10. Juni 2025 rechnet der ČHMÚ zusätzlich zu den Hauptläufen um 00, 06, 12 und 18 UTC vier Zwischenläufe um 03, 09, 15 und 21 UTC ^<<chmi-asw2026>>^.
+Sie reichen bis zum Ende des Folgetages.
+Zu diesen Terminen gibt es keine ARPEGE-Analyse, die Zwischenläufe stützen sich daher stärker auf die eigene Assimilation.
+
+NOTE: Auf `opendata.chmi.cz` liegen im Ordner `nwp_aladin/Lambert_2.3km/` am 12.11.2026 nur die Läufe 00, 06, 12 und 18 UTC.
+Die Zwischenläufe sind für den Wetterkartenviewer daher nicht verfügbar.
+
+=== Neuer Modellzyklus und neuer Rechner
+
+Am 18. Dezember 2025 ging der Modellzyklus cy48t3 in Betrieb, davor lief cy46t1 ^<<chmi-asw2026>>^ ^<<chmi-asw2025>>^.
+Die Zyklen folgen den Versionen des gemeinsamen Codes mit ARPEGE und IFS.
+Ein Zykluswechsel bringt vor allem die gemeinsamen Neuerungen aller Partner in den Betrieb.
+
+In cy48t3 sind zum Beispiel die *Sweep-Interpolationen* für die semi-Lagrangesche Advektion verfügbar ^<<smolikova-asw2026>>^.
+Sie wechseln zwischen Vorwärts- und Rückwärtsinterpolation mit je drei Gitterpunkten ab, sodass sich die Fehler aufeinanderfolgender Zeitschritte weitgehend aufheben.
+Das ergibt die Genauigkeit einer Interpolation vierter Ordnung bei rund 40 % weniger Rechenaufwand als die kubische Lagrange-Interpolation ^<<smolikova-asw2026>>^.
+Tests auf dem tschechischen Gebiet im Oktober 2025 zeigten eine ähnliche Güte wie das bisherige Verfahren ^<<smolikova-asw2026>>^.
+
+Seit 10. März 2026 läuft das Modell auf einem neuen NEC SX-Aurora TSUBASA mit 56 Knoten ^<<chmi-asw2026>>^.
+Jeder Knoten hat eine AMD-CPU mit 24 Kernen und acht Vektorprozessoren (NEC Vector Engine), insgesamt 1344 CPU- und 3584 Vektorkerne.
+Das Vorgängersystem hatte 48 Knoten derselben Bauart.
+
+=== Assimilation von Radardaten
+
+Seit 28. April 2025 assimiliert das Modell Radarreflektivitäten aus dem europäischen Radarverbund OPERA ^<<chmi-asw2026>>^.
+Das Verfahren 1D+3D-Var leitet aus der Reflektivität zuerst Feuchteprofile ab und assimiliert diese dann im 3D-Var ^<<chmi-asw2025>>^.
+Schwierig sind Pixel ohne Niederschlag: Sie trockneten die Atmosphäre in ersten Versuchen systematisch zu stark aus.
+Abhilfe schaffen ein größerer angenommener Fehler für diese Beobachtungen und ein Schwellwert, ab dem Reflektivitäten überhaupt verwendet werden ^<<chmi-asw2025>>^.
+
+Für die Kurzfrist bedeutet das: Gewitter und Niederschlagsgebiete, die zur Startzeit schon auf dem Radar sind, sollten in den ersten Vorhersagestunden besser getroffen werden.
+
+=== Feuchte aus ARPEGE und fehlende Gewitter
+
+Im Sommer 2025 meldeten die Prognostiker des ČHMÚ, dass in den ersten Stunden mancher Läufe konvektiver Niederschlag fehlte ^<<chmi-asw2026>>^.
+Ursache ist vermutlich eine zu trockene ARPEGE-Analyse, deren Feuchte über das Blending ins Modell gelangt.
+Versuche ohne Blending der spezifischen Feuchte verbesserten Sommerlagen, verschlechterten aber stabile Winterlagen mit zu geringer relativer Feuchte.
+Am aussichtsreichsten ist, die Feuchte nur in den Vorhersageläufen nicht zu blenden, im Assimilationszyklus aber schon.
+Das ist Stand April 2026 noch nicht operationell.
+
+=== Mikrophysik
+
+Für die simulierte Radarreflektivität war ab Oktober 2024 die Tropfengrößenverteilung nach Abel und Boutle in Betrieb ^<<chmi-asw2025>>^.
+Sie liefert bei leichtem Regen kleinere und bei Starkregen größere Tropfen als die klassische Marshall-Palmer-Verteilung.
+Im September 2025 kehrte der ČHMÚ zu Marshall-Palmer zurück und stimmte zugleich die Mikrophysik und die Bewölkung in der Strahlung neu ab ^<<chmi-asw2026>>^.
+
+In der Forschung arbeitet David Němec an einer *Zweimomenten-Mikrophysik* für ALARO ^<<nemec-asw2026>>^.
+Ein Einmomenten-Schema kennt nur die Masse jeder Niederschlagsart, ein Zweimomenten-Schema zusätzlich die Anzahl der Teilchen.
+Nach dem Regen kommen nun Eis, Schnee und Graupel dazu, mit einer Masse-Durchmesser-Beziehung für Schnee nach Vázquez-Martín et al. (2021).
+Getestet wurde unter anderem am Sturm Boris im September 2024 mit Eiswassergehalten vom Satelliten EarthCARE und an einer Schneelage im Jänner 2026.
+Die simulierten Radarreflektivitäten von Schnee werden damit realistischer.
+
+=== Turbulenz
+
+Mario Hrastinski (DHMZ Kroatien) entwickelt im Rahmen von RC LACE eine neue Mischungsweglänge für TOUCANS, die auf der turbulenten kinetischen Energie beruht ^<<chmi-asw2025>>^.
+Der ČHMÚ hat sie an vier Perioden aus dem Jahr 2024 geprüft: Stratocumulus, Gewitter, Hochwasser im September und stabiles Hochdruckwetter.
+Das Potenzial ist gut, aber die Grenzschicht wird zu wenig befeuchtet, was zu wenig Niederschlag bringt.
+
+=== Schneeanalyse
+
+Gemeinsam mit Florian Meier von GeoSphere Austria hat der ČHMÚ eine Analyse der Schneehöhe untersucht ^<<chmi-asw2026>>^.
+Zwei der drei getesteten Varianten verwenden auch Stationen über 1500 m, die das französische Vorbild verwirft.
+Die Schneehöhenvorhersage wird damit deutlich besser, allerdings werden Temperatur und Feuchte in 2 m in den ersten Stunden zu kalt und zu feucht.
+Vor einer Einführung muss daher der Schneeanteil im Gitterkasten angepasst werden.
+
+[[surfex]]
+=== ALARO mit SURFEX
+
+Kein operationelles ALARO nutzt bisher das Oberflächensystem SURFEX ^<<ecmwf-spcralae2026>>^.
+Genau das soll sich ändern: Der ČHMÚ hat dafür beim EZMW ein Sonderprojekt für 2026 bis 2028 beantragt und im Juni 2025 eine Trainingswoche zu ALARO mit SURFEX ausgerichtet ^<<ecmwf-spcralae2026>>^.
+
+Die Kandidatenkonfiguration verwendet ISBA mit drei Bodenschichten, drei Vegetationsflächen, das Schneeschema D95 und das Stadtmodell TEB ^<<chmi-asw2025>>^.
+Am Prager Wärmeinseleffekt wurde geprüft, was das bringt: Das alte ISBA zeigte gar keine städtische Wärmeinsel, SURFEX mit TEB erfasst etwa die Hälfte davon.
+Geplant sind außerdem die neue Oberflächendatenbank ECOCLIMAP-SG, das Schnee- und das Mehrschicht-Energiebilanzschema (MEB) sowie eine Bodenassimilation in SURFEX ^<<ecmwf-spcralae2026>>^.
+
+Bei Tests mit Aerosolen aus CAMS fiel auf, dass die Globalstrahlung bei klarem Himmel zu hoch ist ^<<chmi-asw2026>>^.
+Beiträge dazu sind eine um 5 W/m² zu hohe Solarkonstante, zu wenig Ozon in der alten Klimatologie und Vereinfachungen bei der Reflexion am Boden.
+Ein Teil davon ist nur mit einer größeren Überarbeitung des kurzwelligen Teils von ACRANEB2 oder mit dem Strahlungsschema ecRad des EZMW zu beheben.
+
+=== GPUs und maschinelles Lernen
+
+ACCORD portiert seinen Code auf Grafikprozessoren ^<<accord-rwp2026>>^.
+Bis Ende 2025 sollten die meisten Rechnungen bis zum Ende der Vorhersage für alle drei Konfigurationen auf GPUs laufen, ab 2026 folgen Diagnosen, Postprocessing und Ein-/Ausgabe.
+ČHMÚ-Mitarbeitende sind im Arbeitsplan 2026 in diesem Arbeitspaket eingetragen.
+
+Maschinelles Lernen kommt im Arbeitsplan 2026 vor allem in Datenassimilation, Ensemble und Nachbearbeitung vor, etwa zur Qualitätskontrolle von Daten privater Wetterstationen ^<<accord-rwp2026>>^.
+Datengetriebene Vorhersagemodelle untersucht ACCORD als Ergänzung im Arbeitsablauf, nicht als Ersatz.
+Ein eigenes KI-Vorhersagemodell des ČHMÚ ist in den gesichteten Quellen nicht erwähnt.
+
+== Bedeutung für den Wetterkartenviewer
+
+* Die App lädt die Läufe 00, 06, 12 und 18 UTC im 2,3-km-Lambert-Gitter bis +72 h, das entspricht der operationellen Hauptkonfiguration.
+* Die Zwischenläufe um 03, 09, 15 und 21 UTC gibt es auf dem Opendata-Server nicht.
+* Seit April 2025 enthalten die ersten Vorhersagestunden Radarinformation; Niederschlag und Gewitter am Laufbeginn sollten dadurch besser zum Radarbild passen.
+* Die Randwerte stammen aus ARPEGE, nicht aus dem IFS.
+  Großräumige Abweichungen zwischen ALADIN und ECMWF in der App können daher schon aus dem antreibenden Globalmodell kommen.
+* Seit Februar 2024 rechnet das Modell mit realistischeren Schneemengen; die dabei auftretenden Fehler (zu viel Wind über verschneitem Wald, zu kalte 2-m-Temperaturen) wurden über Rauigkeit und Schneeanteil ausgeglichen ^<<chmi-aws2024>>^.
+
+<<<
+[bibliography]
+== Literaturverzeichnis
+
+* [[[termonia2018,1]]] Termonia, P. et al.: „The ALADIN System and its canonical model configurations AROME CY41T1 and ALARO CY40T1“. Geoscientific Model Development 11, 257–281, 2018. URL: https://doi.org/10.5194/gmd-11-257-2018 (abgerufen am 12.11.2026).
+* [[[chmi-asw2026,2]]] Brožková, R. et al.: „Numerical Weather Prediction activities at CHMI“. Poster, 6th ACCORD All Staff Workshop, Marrakech, April 2026. URL: https://www.accord-nwp.org/IMG/pdf/asw_cechia_national_poster_alenatrojakova.pdf (abgerufen am 12.11.2026).
+* [[[chmi-asw2025,3]]] Brožková, R. et al.: „Numerical Weather Prediction activities at CHMI“. Poster, 5th ACCORD All Staff Workshop, Zalakaros, 2025. URL: https://www.umr-cnrm.fr/accord/IMG/pdf/chmi_poster_trojakova_asw2025.pdf (abgerufen am 12.11.2026).
+* [[[chmi-aws2024,4]]] Brožková, R. et al.: „Numerical Weather Prediction activities at CHMI“. Poster, 4th ACCORD All Staff Workshop, Norrköping, 2024. URL: https://www.umr-cnrm.fr/accord/IMG/pdf/aws_2024_chmi.pdf (abgerufen am 12.11.2026).
+* [[[chmi-asw2023,5]]] Brožková, R. et al.: „Numerical Weather Prediction activities at CHMI“. Poster, 3rd ACCORD All Staff Workshop, Tallinn, 2023. URL: https://www.umr-cnrm.fr/accord/IMG/pdf/poster_cz_chmi_asw_2023.pdf (abgerufen am 12.11.2026).
+* [[[smolikova-asw2026,6]]] Smolíková, P. et al.: „News in dynamics and coupling for high resolution applications“. Vortrag, 6th ACCORD All Staff Workshop, 2026. URL: https://www.accord-nwp.org/IMG/pdf/asw2026-petrasmolikova-lacedyn.pdf (abgerufen am 12.11.2026).
+* [[[nemec-asw2026,7]]] Němec, D.: „Incorporating Ice-Phase Hydrometeors into the ALARO Double-Moment Microphysics Scheme“. Vortrag, 6th ACCORD All Staff Workshop, 2026. URL: https://www.accord-nwp.org/IMG/pdf/nemec_double_moment_microphysics-2.pdf (abgerufen am 12.11.2026).
+* [[[ecmwf-spcralae2026,8]]] ECMWF: „Request for a Special Project 2026–2028: ALARO with SURFEX“ (spcralae). URL: https://www.ecmwf.int/sites/default/files/special_projects/2026/spcralae-2026-request.pdf (abgerufen am 12.11.2026).
+* [[[accord-rwp2026,9]]] ACCORD: „Rolling Work Plan 2026“, angenommen von der 11. ACCORD-Versammlung am 2.12.2025. URL: https://www.accord-nwp.org/IMG/pdf/rwp2026_adopted.pdf (abgerufen am 12.11.2026).
+* [[[ecmwf-spfracco2022,10]]] ECMWF: „Special Project Request 2022: ACCORD“ (spfracco). URL: https://www.ecmwf.int/sites/default/files/special_projects/2022/spfracco-2022-request_2.pdf (abgerufen am 12.11.2026).
+* [[[ecmwf-spfracco2025,11]]] ECMWF: „Special Project Request 2025: ACCORD“ (spfracco). URL: https://www.ecmwf.int/sites/default/files/special_projects/2025/spfracco-2025-request.pdf (abgerufen am 12.11.2026).
+* [[[ecmwf-laef,12]]] ECMWF: „Mesoscale ensemble prediction system LAEF“. ECMWF Newsletter 172, 2022. URL: https://www.ecmwf.int/sites/default/files/elibrary/2022/20453-mesoscale-ensemble-prediction-system-laef.pdf (abgerufen am 12.11.2026).
+* [[[aladin-history,13]]] ALADIN-Konsortium: historische Berichte und Newsletter. URL: https://www.umr-cnrm.fr/aladin-old/history/rappscien1.html (abgerufen am 12.11.2026).
+* [[[chmi-poster2011,14]]] ČHMÚ: „ALADIN at CHMI“. Poster, 2011. URL: https://www.cnrm.meteo.fr/aladin/IMG/pdf/Poster_CHMI_2011.pdf (abgerufen am 12.11.2026).
+* [[[lace-phys2014,15]]] RC LACE: „Physics report 2014“. URL: https://www.rclace.eu/media/files/Physics/reports/Physics_report_2014.pdf (abgerufen am 12.11.2026).
+* [[[chmi-ahw2019,16]]] ČHMÚ: Länderposter zum ALADIN/HIRLAM-Workshop 2019. URL: https://www.cnrm.meteo.fr/aladin/IMG/pdf/poster_ahw2019_cz.pdf (abgerufen am 12.11.2026).
+* [[[chmi-study01,17]]] ČHMÚ: Studie zur Konfiguration des Modells ALADIN/CZ (tschechisch). URL: https://www.chmi.cz/documents/d/chmi.cz/978-80-7653-063-8-01 (abgerufen am 12.11.2026).
