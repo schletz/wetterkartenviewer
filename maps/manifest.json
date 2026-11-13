@@ -1,5 +1,5 @@
 {
- "run": "2026111212",
+ "run": "2026111300",
  "fps": 10,
  "charts": {
   "opencharts_europe/thickness_mslp": {
@@ -71,7 +71,7 @@
     234,
     240
    ],
-   "run": "2026111212",
+   "run": "2026111300",
    "end": 240
   },
   "opencharts_europe/t500": {
@@ -143,7 +143,7 @@
     234,
     240
    ],
-   "run": "2026111212",
+   "run": "2026111300",
    "end": 240
   },
   "opencharts_europe/z500_t850": {
@@ -215,7 +215,7 @@
     234,
     240
    ],
-   "run": "2026111212",
+   "run": "2026111300",
    "end": 240
   },
   "opencharts_europe/t850_anomaly": {
@@ -287,7 +287,7 @@
     234,
     240
    ],
-   "run": "2026111212",
+   "run": "2026111300",
    "end": 240
   },
   "opencharts_europe/z850_thetae850": {
@@ -359,7 +359,7 @@
     234,
     240
    ],
-   "run": "2026111212",
+   "run": "2026111300",
    "end": 240
   },
   "opencharts_europe/z850_rh700": {
@@ -431,7 +431,7 @@
     234,
     240
    ],
-   "run": "2026111212",
+   "run": "2026111300",
    "end": 240
   },
   "opencharts_europe/z700_t700": {
@@ -503,12 +503,24 @@
     234,
     240
    ],
-   "run": "2026111212",
+   "run": "2026111300",
    "end": 240
   },
   "icon-d2/t2m_wind10m": {
    "file": "icon-d2/t2m_wind10m.mp4",
    "steps": [
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
     18,
     19,
     20,
@@ -545,22 +557,10 @@
     51,
     52,
     53,
-    54,
-    55,
-    56,
-    57,
-    58,
-    59,
-    60,
-    61,
-    62,
-    63,
-    64,
-    65,
-    66
+    54
    ],
    "run": "2026111306",
-   "end": 66
+   "end": 54
   },
   "opencharts_central_europe/t2m_wind10m": {
    "file": "opencharts_central_europe/t2m_wind10m.mp4",
@@ -631,12 +631,24 @@
     234,
     240
    ],
-   "run": "2026111212",
+   "run": "2026111300",
    "end": 240
   },
   "chmi-aladin/t2m_wind10m": {
    "file": "chmi-aladin/t2m_wind10m.mp4",
    "steps": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
     12,
     13,
     14,
@@ -697,26 +709,26 @@
     69,
     70,
     71,
-    72,
-    73,
-    74,
-    75,
-    76,
-    77,
-    78,
-    79,
-    80,
-    81,
-    82,
-    83,
-    84
+    72
    ],
    "run": "2026111300",
-   "end": 84
+   "end": 72
   },
   "icon-d2/mountain_2000": {
    "file": "icon-d2/mountain_2000.mp4",
    "steps": [
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
     18,
     19,
     20,
@@ -753,22 +765,10 @@
     51,
     52,
     53,
-    54,
-    55,
-    56,
-    57,
-    58,
-    59,
-    60,
-    61,
-    62,
-    63,
-    64,
-    65,
-    66
+    54
    ],
    "run": "2026111306",
-   "end": 66
+   "end": 54
   },
   "opencharts_central_europe/mountain_2000": {
    "file": "opencharts_central_europe/mountain_2000.mp4",
@@ -839,12 +839,24 @@
     234,
     240
    ],
-   "run": "2026111212",
+   "run": "2026111300",
    "end": 240
   },
   "icon-d2/weather_summary": {
    "file": "icon-d2/weather_summary.mp4",
    "steps": [
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
     19,
     20,
     21,
@@ -880,22 +892,10 @@
     51,
     52,
     53,
-    54,
-    55,
-    56,
-    57,
-    58,
-    59,
-    60,
-    61,
-    62,
-    63,
-    64,
-    65,
-    66
+    54
    ],
    "run": "2026111306",
-   "end": 66
+   "end": 54
   },
   "opencharts_central_europe/weather_summary": {
    "file": "opencharts_central_europe/weather_summary.mp4",
@@ -965,12 +965,24 @@
     234,
     240
    ],
-   "run": "2026111212",
+   "run": "2026111300",
    "end": 240
   },
   "chmi-aladin/weather_summary": {
    "file": "chmi-aladin/weather_summary.mp4",
    "steps": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
     13,
     14,
     15,
@@ -1030,26 +1042,26 @@
     69,
     70,
     71,
-    72,
-    73,
-    74,
-    75,
-    76,
-    77,
-    78,
-    79,
-    80,
-    81,
-    82,
-    83,
-    84
+    72
    ],
    "run": "2026111300",
-   "end": 84
+   "end": 72
   },
   "icon-d2/wind10m": {
    "file": "icon-d2/wind10m.mp4",
    "steps": [
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
     19,
     20,
     21,
@@ -1085,22 +1097,10 @@
     51,
     52,
     53,
-    54,
-    55,
-    56,
-    57,
-    58,
-    59,
-    60,
-    61,
-    62,
-    63,
-    64,
-    65,
-    66
+    54
    ],
    "run": "2026111306",
-   "end": 66
+   "end": 54
   },
   "opencharts_central_europe/wind10m": {
    "file": "opencharts_central_europe/wind10m.mp4",
@@ -1170,12 +1170,24 @@
     234,
     240
    ],
-   "run": "2026111212",
+   "run": "2026111300",
    "end": 240
   },
   "chmi-aladin/wind10m": {
    "file": "chmi-aladin/wind10m.mp4",
    "steps": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
     13,
     14,
     15,
@@ -1235,22 +1247,10 @@
     69,
     70,
     71,
-    72,
-    73,
-    74,
-    75,
-    76,
-    77,
-    78,
-    79,
-    80,
-    81,
-    82,
-    83,
-    84
+    72
    ],
    "run": "2026111300",
-   "end": 84
+   "end": 72
   },
   "opencharts_central_europe/inversion": {
    "file": "opencharts_central_europe/inversion.mp4",
@@ -1321,12 +1321,24 @@
     234,
     240
    ],
-   "run": "2026111212",
+   "run": "2026111300",
    "end": 240
   },
   "icon-d2/snow_line": {
    "file": "icon-d2/snow_line.mp4",
    "steps": [
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
     19,
     20,
     21,
@@ -1362,22 +1374,10 @@
     51,
     52,
     53,
-    54,
-    55,
-    56,
-    57,
-    58,
-    59,
-    60,
-    61,
-    62,
-    63,
-    64,
-    65,
-    66
+    54
    ],
    "run": "2026111306",
-   "end": 66
+   "end": 54
   },
   "opencharts_central_europe/snow_line": {
    "file": "opencharts_central_europe/snow_line.mp4",
@@ -1448,12 +1448,24 @@
     234,
     240
    ],
-   "run": "2026111212",
+   "run": "2026111300",
    "end": 240
   },
   "chmi-aladin/snow_line": {
    "file": "chmi-aladin/snow_line.mp4",
    "steps": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
     13,
     14,
     15,
@@ -1513,40 +1525,28 @@
     69,
     70,
     71,
-    72,
-    73,
-    74,
-    75,
-    76,
-    77,
-    78,
-    79,
-    80,
-    81,
-    82,
-    83,
-    84
+    72
    ],
    "run": "2026111300",
-   "end": 84
+   "end": 72
   }
  },
  "series": {
   "t850": {
    "file": "austria/t850.json",
-   "version": "2026111212-at-hu"
+   "version": "2026111300-at-hu"
   },
   "t2m": {
    "file": "austria/t2m.json",
-   "version": "2026111212-2026111306-at-hu"
+   "version": "2026111300-2026111306-at-hu"
   },
   "td2m": {
    "file": "austria/td2m.json",
-   "version": "2026111212-at-hu"
+   "version": "2026111300-at-hu"
   },
   "tw2m": {
    "file": "austria/tw2m.json",
-   "version": "2026111212-at-hu"
+   "version": "2026111300-at-hu"
   },
   "heights": {
    "file": "austria/heights.json",
@@ -1554,35 +1554,35 @@
   },
   "thickness": {
    "file": "austria/thickness.json",
-   "version": "2026111212-at-hu"
+   "version": "2026111300-at-hu"
   },
   "t500": {
    "file": "austria/t500.json",
-   "version": "2026111212-at-hu"
+   "version": "2026111300-at-hu"
   },
   "rh850": {
    "file": "austria/rh850.json",
-   "version": "2026111212-at-hu"
+   "version": "2026111300-at-hu"
   },
   "rh700": {
    "file": "austria/rh700.json",
-   "version": "2026111212-at-hu"
+   "version": "2026111300-at-hu"
   },
   "thetae850": {
    "file": "austria/thetae850.json",
-   "version": "2026111212-at-hu"
+   "version": "2026111300-at-hu"
   },
   "gust10m": {
    "file": "austria/gust10m.json",
-   "version": "2026111212-at-hu"
+   "version": "2026111300-at-hu"
   },
   "precip6h": {
    "file": "austria/precip6h.json",
-   "version": "2026111212-at-hu"
+   "version": "2026111300-at-hu"
   },
   "tcc": {
    "file": "austria/tcc.json",
-   "version": "2026111212-at-hu"
+   "version": "2026111300-at-hu"
   },
   "t2m_aladin": {
    "file": "austria/t2m_aladin.json",
