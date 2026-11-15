@@ -120,14 +120,16 @@ All work goes through one `SemaphoreSlim`, so concurrent requests to a new insta
 | `Retention` = 5 days | today, the three full days of the station viewer and one more around midnight |
 | `SynopFilesCover` = 24 h | the span of the files with all stations; a request reaching further back loads the station archive |
 | `ParallelDownloads` = 4 | new instance: 145 files in about 1 s |
+| `ArchiveReloadAfter` = 30 min | least time between two loads of one station archive that left a gap |
+| `_synopSince` | newest slot of the oldest file of the first load; the earliest slot of all rows would not do, as a station may repeat a slot hours old (13.11. 19:50 seen in files of 14.11. 09:00) |
 
 | Method | Summary |
 | --- | --- |
 | `RefreshAsync()` | fetches what is new, drops what is older than `Retention` |
 | `EnsureLoadedAsync()` | fills an empty cache before the first answer; returns at once afterwards |
-| `EnsureHistoryAsync(id, start)` | loads the archive of a station once per instance; a failure logs, the request answers with what there is, the next one retries |
+| `EnsureHistoryAsync(id, start)` | loads the archive of a station once per instance, again if it ended before `_synopSince` − 10 min and the load is `ArchiveReloadAfter` old; a failure logs, the request answers with what there is, the next one retries |
 
-After a restart before about 09:50 UTC the archive ends two days back and the 24 h files reach only to the same time yesterday, so the slots between are null until the instance has lived through them, or for that request only.
+After a restart before about 09:50 UTC the archive ends two days back and the 24 h files reach only to the same time yesterday, so the slots between are null (e.g. 00:00–08:00 of yesterday after a restart at 08:15). Once the archive of the day is written, the next request at least 30 min after the last load of that station loads it again and fills the gap. A load returns the last time stamp of the archive, rows without values included, so a silent station does not count as a gap; an empty archive counts as complete.
 
 ### StationCache (StationCache.cs)
 
